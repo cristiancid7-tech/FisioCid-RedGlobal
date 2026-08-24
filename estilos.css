@@ -1,0 +1,297 @@
+:root {
+    --primary: #0052cc;
+    --secondary: #00b8d9;
+    --bg: #f4f5f7;
+    --text: #172b4d;
+    --white: #ffffff;
+}
+
+/* Base común */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg);
+    margin: 0;
+    color: var(--text);
+    /* Quitamos el flex del body para que el contenido fluya hacia abajo */
+    display: block; 
+    min-height: 100vh;
+}
+
+/* Contenedor para centrar el Login/Registro */
+.flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+
+.card {
+    background: var(--white);
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 1.5rem; /* Espacio entre tarjetas */
+}
+
+/* Títulos de secciones */
+.card h3 {
+    color: var(--primary);
+    border-bottom: 2px solid var(--secondary);
+    padding-bottom: 8px;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+}
+
+/* Inputs y Formulario */
+.form-group { margin-bottom: 1.2rem; }
+
+label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: #6b778c;
+    text-transform: uppercase;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 0.7rem;
+    border: 2px solid #dfe1e6;
+    border-radius: 6px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+/* Forzado de mayúsculas/minúsculas */
+input[type="text"], textarea, select { text-transform: uppercase; }
+input[type="email"] { text-transform: lowercase; }
+input[type="password"] { text-transform: none; }
+
+textarea {
+    height: 120px;
+    resize: vertical;
+}
+
+/* Filas dinámicas */
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Botones */
+button {
+    width: 100%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 1rem;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+
+button:hover { background: #0043a8; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Especial para el botón de "Volver" */
+.btn-secondary {
+    background: var(--secondary);
+    padding: 0.5rem 1rem;
+}
+/* Estilo para el buscador médico */
+#resultados_busqueda {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+    max-height: 250px;
+    overflow-y: auto;
+    display: none; /* Se oculta por defecto */
+}
+
+.item-medico {
+    padding: 12px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.2s;
+}
+
+.item-medico:hover {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.item-medico strong {
+    color: #3b82f6;
+}
+/* Estilo para el fondo oscuro del modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6); /* Oscurece el fondo */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* Contenedor del modal */
+.modal-content {
+    width: 90%;
+    max-width: 400px;
+    padding: 2rem;
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Diseño de cada opción de sede */
+.item-sede {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.item-sede:hover {
+    background: #f0f9ff;
+    border-color: var(--primary);
+}
+
+.item-sede input {
+    margin-right: 15px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Contenedor para agrupar campos pequeños en una línea */
+.fila-compacta {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+/* Ajuste para que los labels no ocupen tanto espacio */
+.form-group-mini {
+    flex: 1;
+    min-width: 120px;
+}
+
+.form-group-mini label {
+    font-size: 0.75rem;
+    margin-bottom: 4px;
+    display: block;
+    color: var(--primary);
+}
+
+/* Inputs más estilizados y menos altos */
+.input-clinico {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+/* Solo aplica a textos generales, áreas de texto y selectores */
+input[type="text"], 
+input[type="search"],
+textarea, 
+select {
+    text-transform: uppercase;
+}
+
+/* Forzamos que el email siempre se vea en minúsculas por claridad */
+input[type="email"], 
+input[type="password"] {
+    text-transform: none;
+}
+
+/* Separador de fecha gris claro */
+.separador-dia-hub {
+    background: #f8fafc;
+    padding: 10px 15px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #64748b;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+/* Tarjeta de la cita */
+.cita-card-hub {
+    background: white;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f1f5f9;
+    transition: all 0.2s;
+}
+
+.cita-card-hub:hover {
+    background: #fdfdfd;
+    padding-left: 20px;
+}
+
+.cita-hora-hub {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.cita-paciente-hub {
+    font-weight: 600;
+    color: #334155;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+}
+
+.cita-modalidad-hub {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.btn-hub-ver {
+    border: none;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.btn-hub-ver:hover {
+    color: #2563eb;
+}
+
+#contenedorCartasHistorial {
+    width: 100%;
+    padding: 10px;
+}

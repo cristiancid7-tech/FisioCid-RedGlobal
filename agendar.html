@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendar Cita | FisioCid</title>
+    
+    <style>
+        :root {
+            --primary: #10b981; 
+            --accent: #f0fdf4;
+            --text: #0f172a;
+            --bg: #f8fafc;
+            --border-color: #e2e8f0;
+        }
+
+        body { 
+            font-family: 'Inter', 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            padding: 15px; 
+            margin: 0;
+        }
+
+        .booking-card {
+            background: white;
+            max-width: 480px;
+            margin: 20px auto;
+            padding: 25px;
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        h2 { 
+            font-size: 1.5rem; 
+            font-weight: 800; 
+            letter-spacing: -0.025em; 
+            margin-bottom: 8px; 
+            color: #1e293b;
+        }
+
+        p { color: #64748b; font-size: 0.95rem; margin-bottom: 20px; }
+
+        /* --- FILTROS EN CASCADA HÍBRIDOS --- */
+        .seccion-filtros-avanzados {
+            text-align: left;
+            margin-bottom: 25px;
+        }
+
+        .form-grupo {
+            margin-bottom: 14px;
+        }
+
+        .form-grupo label {
+            font-size: 0.75rem; 
+            font-weight: 700; 
+            color: #64748b; 
+            display: block; 
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        select {
+            width: 100%; 
+            padding: 14px; 
+            border-radius: 12px; 
+            background: #f8fafc; 
+            border: 1px solid var(--border-color); 
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e293b;
+            box-sizing: border-box;
+            transition: 0.2s ease;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+
+        select:disabled {
+            background: #f1f5f9;
+            color: #94a3b8;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* --- ESTILOS DEL CALENDARIO (DÍAS) --- */
+        .dias-scroll {
+            display: flex; 
+            gap: 12px; 
+            overflow-x: auto; 
+            padding: 10px 5px; 
+            scrollbar-width: none;
+            margin-bottom: 15px;
+        }
+        .dias-scroll::-webkit-scrollbar { display: none; }
+
+        .dia-item {
+            min-width: 65px; 
+            height: 85px; 
+            background: white; 
+            border: 1.5px solid var(--border-color);
+            border-radius: 16px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center; 
+            transition: 0.2s; 
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .dia-item span { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+        .dia-item strong { font-size: 1.3rem; color: #1e293b; }
+        
+        .dia-item.activo { 
+            background: var(--primary); 
+            border-color: var(--primary); 
+            transform: scale(1.05); 
+        }
+        .dia-item.activo span, .dia-item.activo strong { color: white; }
+        
+        .dia-item.cerrado {
+            opacity: 0.5;
+            background: #f1f5f9;
+            cursor: not-allowed;
+            border: none;
+        }
+        .dia-item.cerrado small {
+            font-size: 9px;
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        /* --- ESTILOS DE HORAS --- */
+        .horas-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 10px; 
+        }
+        .hora-btn {
+            padding: 14px; 
+            border-radius: 12px; 
+            border: 1px solid #f1f5f9; 
+            background: #f8fafc;
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: 0.2s;
+            font-size: 0.95rem;
+            color: #334155;
+        }
+        .hora-btn.disponible:hover { 
+            background: var(--accent); 
+            color: var(--primary); 
+            border-color: var(--primary); 
+        }
+        .hora-btn.ocupado { 
+            background: #fff1f2; 
+            color: #fb7185; 
+            text-decoration: line-through; 
+            cursor: not-allowed; 
+            border: none; 
+        }
+
+        /* --- ESTILOS DEL FORMULARIO --- */
+        .row { display: flex; gap: 10px; }
+        
+        input { 
+            width: 100%; 
+            padding: 14px; 
+            margin: 8px 0; 
+            border: 1px solid var(--border-color); 
+            border-radius: 12px; 
+            background: #f8fafc; 
+            box-sizing: border-box;
+            font-size: 14px;
+            color: #1e293b;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+        }
+
+        #btnConfirmar { 
+            width: 100%; 
+            background: var(--text); 
+            color: white; 
+            padding: 16px; 
+            border-radius: 14px; 
+            font-weight: 700; 
+            border: none; 
+            margin-top: 15px; 
+            cursor: pointer; 
+            transition: 0.3s;
+            font-size: 1rem;
+        }
+        #btnConfirmar:hover { background: #1e293b; transform: translateY(-2px); }
+
+        .btn-link {
+            background: #f1f5f9;
+            border: none;
+            color: #475569;
+            padding: 10px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: inline-flex;
+            transition: 0.2s;
+        }
+        .btn-link:hover { background: #e2e8f0; color: #1e293b; }
+
+        /* MAYÚSCULAS AUTOMÁTICAS PARA NOMBRES Y CURP */
+        #nombre, #apellidoP, #apellidoM, #curp {
+            text-transform: uppercase;
+        }
+        #email {
+            text-transform: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="booking-card">
+        <h2>📅 Reserva tu sesión</h2>
+        <p>Selecciona un horario y completa tus datos.</p>
+
+        <div class="seccion-filtros-avanzados">
+            
+            <div class="form-grupo">
+                <label for="filtro-estado">1. UBICACIÓN (ESTADO / REGIÓN):</label>
+                <select id="filtro-estado">
+                    <option value="">-- Selecciona tu Estado --</option>
+                    <option value="PUEBLA">PUEBLA</option>
+                    <option value="TABASCO">TABASCO</option>
+                    <option value="BAJA_CALIFORNIA">BAJA CALIFORNIA</option>
+                </select>
+            </div>
+
+            <div class="form-grupo">
+                <label for="filtro-especialidad">2. ¿QUÉ SERVICIO O ESPECIALIDAD BUSCAS?:</label>
+                <select id="filtro-especialidad" disabled>
+                    <option value="">Selecciona primero tu estado...</option>
+                </select>
+            </div>
+
+            <div class="form-grupo">
+                <label for="filtro-ubicacion">3. SUCURSAL / CLÍNICA FISIOCID:</label>
+                <select id="filtro-ubicacion" disabled>
+                    <option value="">Selecciona primero una especialidad...</option>
+                </select>
+            </div>
+
+            <div class="form-grupo">
+                <label for="filtro-especialista">4. ESPECIALISTA DISPONIBLE:</label>
+                <select id="filtro-especialista" disabled>
+                    <option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="step1" style="display:none;">
+            <div id="calendario-dias" class="dias-scroll"></div>
+            <div id="grid-horas" class="horas-grid"></div>
+        </div>
+
+        <div id="step2" style="display:none;">
+            <button onclick="regresarAPaso1()" class="btn-link">← Elegir otro horario</button>
+            <form id="formRegistro">
+                <input type="text" id="nombre" placeholder="Nombre(s)" required>
+                <div class="row">
+                    <input type="text" id="apellidoP" placeholder="Ap. Paterno" required>
+                    <input type="text" id="apellidoM" placeholder="Ap. Materno" required>
+                </div>
+                <input type="tel" id="telefono" placeholder="WhatsApp (10 dígitos)" required maxlength="10">
+                <input type="email" id="email" placeholder="Correo electrónico" required>
+                
+                <input type="text" id="curp" placeholder="CURP (Opcional - Agiliza tu registro)" maxlength="18">
+                
+                <p id="error-msg" style="color:#ef4444; display:none; font-size: 13px; margin-top: 10px; font-weight: 600;"></p>
+                <button type="submit" id="btnConfirmar">Enviar Solicitud ⚡</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/booking.js"></script>
+</body>
+</html>

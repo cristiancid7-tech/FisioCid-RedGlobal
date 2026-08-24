@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FisioCid - Gestión de Staff</title>
+    <link rel="stylesheet" href="estilos.css">
+    <style>
+        /* Estilos para los estados en la tabla */
+        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
+        .status-pendiente { background: #fef3c7; color: #92400e; }
+        .status-aceptada { background: #dcfce7; color: #166534; }
+        
+        /* Efecto hover en pestañas */
+        .tab-btn { transition: all 0.3s ease; }
+    </style>
+</head>
+<body>
+      <button id="btnCerrarSesion"
+
+    style="background:#fff1f2; color:#be123c; border:none; padding:5px 12px; border-radius:8px; cursor:pointer; font-size: 0.75rem; margin-left: auto; font-weight: bold; width: auto;">
+
+    Cerrar Sesión 🚪
+
+</button>
+    
+
+    <div class="container">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <div>
+                <h2 style="margin: 0; color: var(--primary);">FISIOCID</h2>
+                <p style="margin: 0; color: #64748b; font-weight: bold; font-size: 0.9rem;">GESTOR DE EQUIPO</p>
+            </div>
+            <button onclick="location.href='dashboard.html'" 
+                    style="background: #f1f5f9; color: #64748b; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                ⬅️ VOLVER
+            </button>
+        </header>
+
+        <div class="card" style="max-width: 800px; margin: 0 auto; border-top: 5px solid var(--primary);">
+            <h3 style="color: var(--primary); text-align: center; margin-top: 0;">👥 VINCULAR PROFESIONAL</h3>
+            <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">
+                Envía una invitación para que un colega se una a tu clínica.
+            </p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 25px; background: #f8fafc; padding: 5px; border-radius: 12px;">
+                <button onclick="cambiarMetodo('email')" id="tabEmail" class="tab-btn" 
+                        style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: var(--primary); color: white; cursor: pointer; font-weight: bold;">
+                    📧 POR CORREO
+                </button>
+                <button onclick="cambiarMetodo('whatsapp')" id="tabWA" class="tab-btn" 
+                        style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: transparent; color: #64748b; cursor: pointer; font-weight: bold;">
+                    📱 POR WHATSAPP
+                </button>
+            </div>
+
+            <form id="formInvitar">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 0.8rem; font-weight: bold; color: #475569; margin-bottom: 5px;">NOMBRE DEL PROFESIONAL</label>
+                    <input type="text" id="nombreInvitado" placeholder="EJ: LFT. ANA GARCÍA" required 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; outline: none;">
+                </div>
+                
+                <div id="campoContacto" style="margin-bottom: 15px;">
+                    <label id="labelContacto" style="display: block; font-size: 0.8rem; font-weight: bold; color: #475569; margin-bottom: 5px;">CORREO ELECTRÓNICO</label>
+                    <input type="email" id="datoContacto" placeholder="doctor@ejemplo.com" required 
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; outline: none;">
+                </div>
+
+         <div class="form-group" style="margin-bottom: 20px;">
+    <label style="display: block; font-size: 0.8rem; font-weight: bold; color: #475569; margin-bottom: 5px;">
+        ÁREA / ROL ASIGNADO:
+    </label>
+    <select id="rolAsignado" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--primary); background: white; outline: none; cursor: pointer; font-weight: bold;">
+        <option value="ESPECIALISTA">🩺 ESPECIALISTA CLÍNICO (Médico, Fisio, Nutri, Psicólogo)</option>
+        <option value="DIAGNOSTICO">🔬 AUXILIAR DE DIAGNÓSTICO (Radiólogo, Laboratorista)</option>
+        <option value="GESTION">📋 GESTIÓN Y RECEPCIÓN (Agenda, Cobros, Farmacia)</option>
+        <option value="ADMINISTRATIVO">🔑 ADMINISTRADOR DE SEDE (Gestión Total)</option>
+        <option value="PASANTE">🎓 COLABORADOR EN FORMACIÓN (Acceso de apoyo)</option>
+    </select>
+</div>
+
+                <button type="submit" id="btnAccionInvitar" 
+                        style="width: 100%; background: var(--primary); color: white; padding: 14px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                    ENVIAR INVITACIÓN 📩
+                </button>
+            </form>
+
+            <hr style="margin: 40px 0; opacity: 0.1;">
+
+            <h3 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                📊 ESTADO DE INVITACIONES
+            </h3>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="text-align: left; background: #f8fafc; color: #64748b; border-bottom: 2px solid #f1f5f9;">
+                            <th style="padding: 12px;">PROFESIONAL</th>
+                            <th style="padding: 12px;">MÉTODO</th>
+                            <th style="padding: 12px; text-align: center;">ESTADO</th>
+                            <th style="padding: 12px; text-align: right;">ACCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaEstadosInvitaciones">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/registro-colaborador.js"></script>
+    <script src="js/utils.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const colorClinica = localStorage.getItem('clinica_color') || '#2563eb';
+            document.documentElement.style.setProperty('--primary', colorClinica);
+        });
+
+        function cambiarMetodo(tipo) {
+            const input = document.getElementById('datoContacto');
+            const label = document.getElementById('labelContacto');
+            const tabEmail = document.getElementById('tabEmail');
+            const tabWA = document.getElementById('tabWA');
+            const color = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+
+            if (tipo === 'whatsapp') {
+                input.type = 'tel';
+                input.placeholder = 'Número a 10 dígitos';
+                label.innerText = 'NÚMERO DE WHATSAPP';
+                
+                tabWA.style.background = 'var(--primary)';
+                tabWA.style.color = 'white';
+                tabEmail.style.background = 'transparent';
+                tabEmail.style.color = '#64748b';
+            } else {
+                input.type = 'email';
+                input.placeholder = 'doctor@ejemplo.com';
+                label.innerText = 'CORREO ELECTRÓNICO';
+
+                tabEmail.style.background = 'var(--primary)';
+                tabEmail.style.color = 'white';
+                tabWA.style.background = 'transparent';
+                tabWA.style.color = '#64748b';
+            }
+        }
+    </script>
+</body>
+</html>

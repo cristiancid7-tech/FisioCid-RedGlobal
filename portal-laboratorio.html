@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Laboratorio | FisioCid</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --color-camaleon: #00cfd5; /* Se sincroniza por JS */
+        }
+
+        /* Reutilizamos tu estilo de tarjeta profesional */
+        .card-fisiocid {
+            background: white;
+            border-radius: 15px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .header-fisiocid {
+            border-left: 5px solid var(--color-camaleon);
+            background: #f8fafc;
+            padding: 15px 20px;
+            font-weight: 800;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .form-fisiocid {
+            border: 2px solid #f1f5f9;
+            border-radius: 10px;
+            padding: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .form-fisiocid:focus {
+            border-color: var(--color-camaleon);
+            box-shadow: 0 0 0 3px rgba(0, 207, 213, 0.1);
+            outline: none;
+        }
+
+        /* Estilo para los parámetros de laboratorio */
+        .input-parametro {
+            border-radius: 0 10px 10px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar border-bottom p-3 bg-white shadow-sm">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <span class="h4 mb-0 fw-black" style="letter-spacing: -1px;">
+            <i class="fas fa-shield-alt" style="color: var(--color-camaleon);"></i> 
+            FisioCid <span id="especialidad-medico" style="color: var(--color-camaleon);">Laboratorio</span>
+        </span>
+        
+        <div id="info-emisor" class="text-end small">
+            <i class="fas fa-user-md me-1 text-muted"></i><span class="text-muted italic">Doctor Solicitante: Cargando...</span>
+        </div>
+    </div>
+</nav>
+
+<main class="container mt-4">
+
+   
+<section class="card-fisiocid mb-4 animate__animated animate__fadeIn">
+    <div class="header-fisiocid">
+        <span><i class="fas fa-user-circle"></i> Identidad del Paciente</span>
+    </div>
+    
+    <div class="p-4">
+        <div id="vista-manual" class="row g-3">
+        <div class="col-md-6">
+            <label class="label-fisiocid" style="color: var(--color-camaleon); font-weight: 800;">Folio de Expediente Sede</label>
+            <div class="input-group">
+                <span class="input-group-text bg-light"><i class="fas fa-folder-open text-secondary"></i></span>
+                <input type="text" id="inputFolioExpediente" class="form-control form-fisiocid bg-light fw-bold" readonly placeholder="Calculando consecutivo...">
+            </div>
+            <small id="statusFolio" class="fw-bold text-muted mt-1 d-block" style="font-size: 0.65rem; letter-spacing: 0.3px;"></small>
+        </div>
+            <div class="row g-2">
+                <div class="col-md-4 position-relative">
+                    <label class="label-fisiocid">Nombre(s)</label>
+                    <input type="text" id="valNombre" class="form-control form-fisiocid" autocomplete="off">
+                    <div id="sugerencias-laboratorio" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1000; top: 100%;"></div>
+                </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid">Apellido Paterno</label>
+                    <input type="text" id="valPaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid">Apellido Materno</label>
+                    <input type="text" id="valMaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                </div>
+            </div>
+
+            <!-- Fila 2: Nacimiento y Género -->
+            <div class="col-md-3">
+                <label class="label-fisiocid">Fecha Nac.</label>
+                <input type="date" id="valFecha" class="form-control form-fisiocid" onchange="actualizarInterfazEdad()">
+            </div>
+            <div class="col-md-3">
+                <label class="label-fisiocid">Género</label>
+                <select id="genero-manual" class="form-select form-fisiocid" onchange="procesarCurp()">
+                    <option>SELECCION</option>
+                    <option value="HOMBRE">HOMBRE</option>
+                    <option value="MUJER">MUJER</option>
+                    <option value="NO BINARIO">NO BINARIO</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+        <label class="label-fisiocid" style="color: var(--color-camaleon); font-weight: 800;">Estado de Nacimiento</label>
+        <select id="valEstado" class="form-select form-fisiocid">
+            <option value="">SELECCIONAR ESTADO</option>
+            <option value="AS">AGUASCALIENTES</option><option value="BC">BAJA CALIFORNIA</option>
+            <option value="BS">BAJA CALIFORNIA SUR</option><option value="CC">CAMPECHE</option>
+            <option value="CL">COAHUILA</option><option value="CM">COLIMA</option>
+            <option value="CS">CHIAPAS</option><option value="CH">CHIHUAHUA</option>
+            <option value="DF">CIUDAD DE MÉXICO</option><option value="DG">DURANGO</option>
+            <option value="GT">GUANAJUATO</option><option value="GR">GUERRERO</option>
+            <option value="HG">HIDALGO</option><option value="JC">JALISCO</option>
+            <option value="MC">MÉXICO</option><option value="MN">MICHOACÁN</option>
+            <option value="MS">MORELOS</option><option value="NT">NAYARIT</option>
+            <option value="NL">NUEVO LEÓN</option><option value="OC">OAXACA</option>
+            <option value="PL">PUEBLA</option><option value="QT">QUERÉTARO</option>
+            <option value="QR">QUINTANA ROO</option><option value="SP">SAN LUIS POTOSÍ</option>
+            <option value="SL">SINALOA</option><option value="SR">SONORA</option>
+            <option value="TC">TABASCO</option><option value="TS">TAMAULIPAS</option>
+            <option value="TL">TLAXCALA</option><option value="VZ">VERACRUZ</option>
+            <option value="YN">YUCATÁN</option><option value="ZS">ZACATECAS</option>
+            <option value="NE">EXTRANJERO</option>
+        </select>
+    </div>
+
+        
+
+            <!-- Llave Maestra CURP -->
+            <div class="col-12">
+                <div class="label-fisiocid text-primary mb-1">CURP (Llave Maestra FisioCid)</div>
+                <div class="input-group">
+                    <input type="text" id="curp-parte1" class="form-control fw-bold bg-light" style="width: 45%;" readonly>
+                    <input type="text" id="curp-estado" class="form-control fw-bold text-center border-primary" placeholder="--" maxlength="2" style="width: 15%; color: #0d6efd;" oninput="saltarAHomoclave(this)">
+                    <div class="input-group-text p-0" style="width: 40%;">
+                        <input type="text" id="curp-consonantes" class="form-control border-0 bg-light fw-bold" style="width: 60%;" readonly>
+                        <input type="text" id="curp-homo" class="form-control border-0 fw-bold text-center" placeholder="--" maxlength="2" style="width: 40%; color: #0d6efd;">
+                    </div>
+                </div>
+            </div>
+
+            
+        </div>
+
+         <div class="row g-3 mt-2">
+                <!-- BLOQUE ADULTO -->
+                <div id="bloque-contacto-adulto" class="col-12 row g-3 m-0 p-0">
+                    <div class="col-md-6">
+                        <label class="label-fisiocid text-success">Teléfono del Paciente</label>
+                        <input type="tel" id="tel-manual" class="form-control form-fisiocid" placeholder="10 dígitos">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="label-fisiocid text-success">Correo Electrónico</label>
+                        <input type="email" id="valEmail" class="form-control form-fisiocid" placeholder="paciente@ejemplo.com">
+                    </div>
+                </div>
+
+                <!-- BLOQUE TUTOR (Modo Pediatría) -->
+                <div id="seccion-tutor" class="col-12 d-none animate__animated animate__fadeInDown">
+                    <div class="p-3 border rounded-3" style="background: rgba(0, 207, 213, 0.05); border: 1px solid var(--color-camaleon) !important;">
+                        <h6 class="fw-bold mb-3" style="color: var(--color-camaleon); font-size: 0.8rem;">
+                            <i class="fas fa-shield-alt me-2"></i>RESPONSABLE LEGAL (MENOR DE EDAD)
+                        </h6>
+                        <div class="row g-2">
+                            <div class="col-md-5">
+                                <label class="small fw-bold text-muted">Nombre del Responsable</label>
+                                <input type="text" id="tutor-nombre" class="form-control form-control-sm text-uppercase" placeholder="NOMBRE COMPLETO">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="small fw-bold text-muted">Parentesco</label>
+                                <input type="text" id="tutor-parentesco" class="form-control form-control-sm text-uppercase" placeholder="EJ. PADRE">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="small fw-bold text-muted">Teléfono del Tutor</label>
+                                <input type="tel" id="tutor-tel" class="form-control form-control-sm" placeholder="10 DÍGITOS">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+
+    
+</section>
+
+    <!-- 2. DATOS DEL ANÁLISIS (Diferente a Gabinete) -->
+
+<section class="card-fisiocid mt-4">
+    <div class="header-fisiocid">
+        <i class="fas fa-tasks"></i> Gestión de Diagnóstico y Laboratorio
+    </div>
+
+    <div class="p-4">
+        <div class="row g-3 mb-4">
+           <div class="col-md-6 position-relative">
+    <label class="fw-bold text-primary">Doctor que refiere:</label>
+    <input type="text" id="buscador-doctor" class="form-control" placeholder="Escriba el nombre del doctor..." autocomplete="off">
+    <div id="sugerencias-doctores" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+    <input type="hidden" id="id-doctor-referente-final">
+</div>
+
+<div class="col-md-6 position-relative">
+    <label class="fw-bold text-primary">Químico/a Asignado:</label>
+    <input type="text" id="buscador-quimico" class="form-control" placeholder="Escriba el nombre del químico..." autocomplete="off">
+    <div id="sugerencias-quimicos" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+    <input type="hidden" id="id-quimico-asignado-final">
+</div>
+        </div>
+
+        <p class="small text-muted mb-3">Seleccione los estudios solicitados:</p>
+        
+         <div class="row g-3" id="contenedor-checkboxes">
+    <div class="col-md-4">
+        <h6 class="fw-bold small text-primary"><i class="fas fa-vial me-1"></i> BIOQUÍMICA</h6>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="2" id="chkQS">
+            <label class="form-check-label small" for="chkQS">Química Sanguínea</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="3" id="chkBH">
+            <label class="form-check-label small" for="chkBH">Biometría Hemática</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="4" id="chkLipidos">
+            <label class="form-check-label small" for="chkLipidos">Perfil de Lípidos</label>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <h6 class="fw-bold small text-primary"><i class="fas fa-microscope me-1"></i> GENERALES</h6>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="5" id="chkEGO">
+            <label class="form-check-label small" for="chkEGO">Examen Gral. de Orina (EGO)</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="6" id="chkPerfilT">
+            <label class="form-check-label small" for="chkPerfilT">Perfil Tiroideo</label>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <h6 class="fw-bold small text-primary"><i class="fas fa-tint me-1"></i> OTROS</h6>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="7" id="chkGlucosa">
+            <label class="form-check-label small" for="chkGlucosa">Glucosa</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="8" id="chkRh">
+            <label class="form-check-label small" for="chkRh">Grupo y Rh</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="9" id="chkTiempos">
+            <label class="form-check-label small" for="chkTiempos">Tiempos de Coagulación</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input check-estudio" type="checkbox" value="10" id="chkCopro">
+            <label class="form-check-label small" for="chkCopro">Coproparasitoscópico</label>
+        </div>
+        <div class="mt-2">
+            <input type="text" id="otro-estudio" class="form-control form-control-sm" placeholder="Otro estudio (ID 11)">
+        </div>
+    </div>
+</div>
+<div class="card p-3 border-dashed mt-3">
+    <label class="fw-bold mb-2 text-primary">
+        <i class="fas fa-notes-medical me-1"></i> OBSERVACIONES CLÍNICAS (Ayuno, condiciones, etc.)
+    </label>
+    <textarea id="observaciones-laboratorio" class="form-control" rows="3" 
+              placeholder="Ejemplo: Paciente no presentó ayuno de 8 horas, paciente refiere toma de medicamentos..."></textarea>
+</div>
+        <div class="mt-4 p-4 text-center" id="zona-carga-pdf" style="border: 2px dashed #cbd5e1; border-radius: 15px; cursor: pointer;" onclick="document.getElementById('file-pdf').click()">
+            <i class="fas fa-file-pdf fa-3x mb-2 text-danger"></i>
+            <h6 class="fw-bold">Cargar Reporte de Laboratorio (PDF)</h6>
+            <p class="small text-muted">Si no, el químico lo subirá después desde sus pendientes.</p>
+            <input type="file" id="file-pdf" multiple accept="application/pdf" style="display:none;">
+        </div>
+    </div>
+</section>
+
+    <!-- 3. ACCIÓN FINAL -->
+    <footer class="mt-5 text-center pb-5">
+        <button id="btn-finalizar-laboratorio" 
+                class="btn btn-lg px-5 shadow-lg" 
+                onclick="guardarEstudioLaboratorio(event)"
+                style="background-color: var(--color-camaleon); border: none; border-radius: 50px; padding: 15px; font-weight: 900; color: white;">
+            <i class="fas fa-save me-2"></i> REGISTRAR RESULTADOS EN RED FISIOCID
+        </button>
+    </footer>
+
+</main>
+
+    <!-- Scripts de Configuración (Los mismos que Gabinete) -->
+     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/portal-laboratorio.js"></script>
+
+
+<!-- Cambia 'offcanvas-bottom' por 'offcanvas-end' -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasHistorial" aria-labelledby="offcanvasHistorialLabel" style="width: 400px; border-left: 2px solid var(--color-camaleon);">
+    
+    <div class="offcanvas-header bg-light border-bottom">
+        <h5 class="offcanvas-title fw-bold" id="offcanvasHistorialLabel">
+            <i class="fas fa-scroll me-2 text-success"></i>Estudios FisioCid
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+
+    <div class="p-3 border-bottom bg-white">
+        <!-- Buscador -->
+        <div class="input-group input-group-sm mb-2">
+            <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="busquedaHistorial" class="form-control border-start-0" placeholder="Buscar paciente..." onkeyup="filtrarHistorial()">
+        </div>
+        <!-- Botón de comparativa -->
+        <button class="btn btn-primary btn-sm w-100 shadow-sm" onclick="iniciarComparativa()">
+            <i class="fas fa-columns me-1"></i> Comparar Seleccionados
+        </button>
+    </div>
+
+    <div class="offcanvas-body p-0">
+        <div id="lista-historial-gabinete" class="list-group list-group-flush">
+            <!-- Aquí caen los estudios -->
+        </div>
+    </div>
+</div>
+    <button class="btn btn-dark shadow-sm position-fixed" 
+        style="bottom: 20px; right: 20px; z-index: 1050; border-radius: 50px;" 
+        type="button" 
+        data-bs-toggle="offcanvas" 
+        data-bs-target="#offcanvasHistorial" 
+        onclick="cargarHistorialLaboratorio()">
+    <i class="fas fa-history me-2"></i> Mi Historial
+</button>
+
+<div class="modal fade" id="modalDictaminacion" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="fas fa-microscope me-2"></i> MÓDULO DE DICTAMINACIÓN FISIOCID</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="row h-100">
+                    <div class="col-md-3 border-end p-3">
+                        <h6 class="text-uppercase fw-bold text-muted border-bottom pb-2">Estudios Solicitados</h6>
+                        <div id="lista-estudios-dictamen" class="list-group">
+                            </div>
+                    </div>
+
+                  <div id="columna-captura" class="col-md-6 p-4 bg-light">
+                     <h6 class="text-uppercase fw-bold text-muted border-bottom pb-2">Captura de Resultados</h6> 
+                         <div id="contenedor-campos-dinamicos" class="mt-3">
+                            <div class="text-center text-muted mt-5">Selecciona un estudio a la izquierda para empezar.</div>
+                        </div>
+                    </div>
+
+                  <div class="col-md-3 p-3" id="columna-documentacion">
+    <h6 class="text-uppercase fw-bold text-muted border-bottom pb-2">Documentación</h6>
+    
+    <div id="visor-pdf-dictamen" class="h-50 border rounded bg-dark mb-3 d-flex align-items-center justify-content-center">
+        <span class="text-white small">Visor de PDF</span>
+    </div>
+
+    <div id="panel-flujo-externo" class="d-none"> 
+        <div class="mt-2 p-3 text-center border border-dashed rounded bg-white" 
+             style="border: 2px dashed #cbd5e1; cursor: pointer;" 
+             onclick="document.getElementById('file-pdf').click()">
+            <i class="fas fa-file-pdf fa-2x mb-2 text-danger"></i>
+            <p class="small fw-bold mb-0">Cargar PDF Externo</p>
+            <input type="file" id="file-pdf" multiple accept="application/pdf" style="display:none;">
+        </div>
+        <div id="lista-pdfs-cargados" class="mt-2 text-start small"></div>
+    </div>
+
+    <div class="card bg-light border-0 mb-3 mt-3">
+        <div class="card-body p-2">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="checkDictamenExterno">
+                <label class="form-check-label fw-bold small text-primary" for="checkDictamenExterno" style="font-size: 0.75rem;">
+                    Dictamen Externo
+                </label>
+            </div>
+        </div>
+    </div>
+    </div>
+   
+                </div>
+                     <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+    <button id="btn-preguardar" class="btn btn-outline-warning">Pre-guardar (Bloquear)</button>
+    <button id="btn-finalizar-todo" class="btn btn-success fw-bold d-none">GUARDAR TODO (IRREVERSIBLE)</button>
+</div>
+            </div>
+            
+        </div>
+        
+    </div>
+
+</div>
+</body>
+</html>

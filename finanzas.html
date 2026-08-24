@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FisioCid Global - Control Financiero</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    
+    <style>
+        :root {
+            --primary: #10b981; /* Se sobreescribirá dinámicamente con el color de la sucursal */
+            --dark-slate: #0f172a;
+            --bg-light: #f8fafc;
+        }
+        body {
+            background-color: var(--bg-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+        .main-content {
+            margin-left: 260px; /* Ajusta según el ancho de tu barra lateral actual */
+            padding: 30px;
+            transition: all 0.3s ease;
+        }
+        .kpi-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+            transition: transform 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+        }
+        .table-container {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+        }
+        .badge-ingreso {
+            background-color: #dcfce7;
+            color: #15803d;
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-content">
+        
+        <div class="d-flex justify-content-between align-items-center mb-4 animate__animated animate__fadeIn">
+            <div>
+                <h2 class="fw-extrabold text-dark" style="font-weight: 800; letter-spacing: -0.5px;" id="txtSaludo">
+                    CONTROL CONTABLE Y CAJA 📊
+                </h2>
+                <p class="text-muted small mb-0" id="sedeActivaTexto">🔄 CARGANDO CONTEXTO DE SEDE...</p>
+            </div>
+            <div class="d-flex gap-2">
+                <input type="date" id="filtroFechaFinanzas" class="form-control" style="font-weight: 700; color: #334155;">
+                <button onclick="exportarReporteExcel()" class="btn btn-outline-secondary fw-bold">
+                    <i class="bi bi-file-earmark-excel-fill text-success"></i> Exportar
+                </button>
+            </div>
+        </div>
+
+        <hr class="border-secondary-subtle my-3">
+
+        <div class="row g-3 mb-4 animate__animated animate__fadeInUp">
+            <div class="col-md-4">
+                <div class="kpi-card d-flex align-items-center justify-content-between">
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Corte Total del Día</small>
+                        <h3 class="fw-black text-dark mb-0 mt-1" style="font-weight: 900;" id="montoCorteDia">$0.00</h3>
+                    </div>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: #e6f4ea; color: #10b981;">
+                        <i class="bi bi-cash-coin fs-4"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="kpi-card d-flex align-items-center justify-content-between">
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Fondos en Efectivo</small>
+                        <h3 class="fw-black text-primary mb-0 mt-1" style="font-weight: 900; color: var(--primary);" id="montoEfectivo">$0.00</h3>
+                    </div>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: #fffbeb; color: #d97706;">
+                        <i class="bi bi-wallet2 fs-4"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="kpi-card d-flex align-items-center justify-content-between">
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Bancos (Tarjeta / Transf)</small>
+                        <h3 class="fw-black text-info mb-0 mt-1" style="font-weight: 900;" id="montoBancos">$0.00</h3>
+                    </div>
+                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: #e8f0fe; color: #3b82f6;">
+                        <i class="bi bi-credit-card-2-front fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container animate__animated animate__fadeInUp" style="animation-delay: 0.1s;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-dark" style="font-size: 1rem;">🧾 REGISTRO DE INGRESOS Y FLUJO</h5>
+                <span class="badge bg-secondary-subtle text-secondary fw-bold" id="contadorTransacciones">0 Transacciones</span>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-light text-muted fw-bold">
+                        <tr>
+                            <th style="border-top-left-radius: 10px;">FECHA / HORA</th>
+                            <th>PACIENTE</th>
+                            <th>CONCEPTO / DESCRIPCIÓN</th>
+                            <th class="text-center">MÉTODO</th>
+                            <th class="text-end">IVA (16%)</th>
+                            <th class="text-end" style="border-top-right-radius: 10px;">TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaCuerpoFinanzas">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin text-primary me-2"></i> Consultando registros contables en la base de datos...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script> 
+    <script src="js/finanzas.js"></script>
+</body>
+</html>

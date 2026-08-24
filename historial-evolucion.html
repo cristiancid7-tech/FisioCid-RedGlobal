@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial - FISIOCID</title>
+    
+    <link rel="stylesheet" href="estilos.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            /* Estas variables se sobreescriben por JS según la sede */
+            --primary: #1e293b; 
+            /* Creamos una variante suave del color primario para fondos */
+            --primary-soft: color-mix(in srgb, var(--primary), transparent 92%);
+            --primary-border: color-mix(in srgb, var(--primary), transparent 80%);
+        }
+
+        /* 🩺 DATOS DE SIGNOS VITALES */
+        .dato-vitals { 
+            background: white; 
+            padding: 8px; 
+            border-radius: 10px; 
+            text-align: center; 
+            border: 1px solid #e2e8f0; 
+            transition: 0.3s;
+        }
+        .dato-vitals:hover { border-color: var(--primary); }
+        .dato-vitals small { display: block; font-size: 0.65rem; color: #64748b; font-weight: bold; }
+        .dato-vitals span { font-weight: 800; font-size: 0.95rem; color: #1e293b; }
+
+        /* 🖼️ BANNER DEL PACIENTE (Ahora más limpio) */
+        .banner-paciente {
+            background: white !important; /* Fondo limpio */
+            border-left: 6px solid var(--primary) !important;
+            padding: 1.5rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* Sombra suave */
+        }
+
+        /* ✨ BADGES PARA TABS (Camaleónicos) */
+        .badge-tab {
+            cursor: pointer;
+            padding: 12px 18px;
+            border-radius: 12px;
+            flex: 1;
+            text-align: center;
+            transition: all 0.3s ease;
+            opacity: 0.7;
+            background: #f8fafc; /* Fondo neutro cuando no está activo */
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        .badge-tab.active {
+            opacity: 1;
+            transform: translateY(-2px); /* Pequeño salto al estar activo */
+            background: var(--primary-soft) !important;
+            color: var(--primary) !important;
+            border: 2px solid var(--primary) !important;
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--primary), transparent 85%);
+        }
+
+        /* 🔘 BOTONES PRINCIPALES */
+        .btn-principal {
+            background: var(--primary) !important;
+            color: white !important;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            letter-spacing: 0.5px;
+        }
+        .btn-principal:hover { 
+            filter: brightness(1.1); 
+            transform: scale(1.02);
+            box-shadow: 0 4px 10px color-mix(in srgb, var(--primary), transparent 70%);
+        }
+
+        /* 🏷️ TÍTULOS */
+        h2, h3 { color: #1e293b !important; } /* Nombre en color fuerte para lectura */
+        
+        /* 📊 TABLAS */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; border-radius: 10px; overflow: hidden; }
+        th { 
+            background: #f8fafc; 
+            color: #64748b; 
+            padding: 12px; 
+            text-align: center; 
+            border-bottom: 2px solid #e2e8f0; 
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+        }
+        td { padding: 12px; text-align: center; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        tr:hover { background: #fcfcfc; }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav style="display: flex; justify-content: space-between; align-items: center; padding: 20px 40px; background: transparent; margin-bottom: 1rem; position: relative;">
+    <div style="display: flex; align-items: center; z-index: 2;">
+        <button id="btnCerrarSesion" 
+                style="background: #fee2e2; color: #ef4444; border: none; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i class="fas fa-power-off"></i> SALIR
+        </button>
+    </div>
+
+    <div style="position: absolute; left: 50%; transform: translateX(-50%); text-align: center; width: auto; pointer-events: none;">
+        <h2 style="margin: 0; font-size: 1rem; color: #94a3b8; letter-spacing: 2px; font-weight: 700; text-transform: uppercase; white-space: nowrap;">
+            Historial de Evolución
+        </h2>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 20px; z-index: 2;">
+        <span style="font-size: 0.7rem; color: #cbd5e1; font-weight: 800; letter-spacing: 1px;">SESIÓN ACTIVA</span>
+        <button onclick="location.href='lista-pacientes.html'" 
+                style="background: white; color: #64748b; border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+            <i class="fas fa-chevron-left"></i> VOLVER
+        </button>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="card banner-paciente" style="
+        border: none; 
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); 
+        border-radius: 16px; 
+        padding: 25px; 
+        background: #ffffff;
+        position: relative;
+        overflow: hidden;
+    ">
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 5px; background: var(--primary); opacity: 0.8;"></div>
+
+        <h3 id="nombre" style="
+            margin: 0; 
+            border: none; 
+            font-size: 1.6rem; 
+            color: #1e293b; 
+            font-weight: 800;
+        ">CARGANDO...</h3>
+        
+        <p id="datosBase" style="margin: 8px 0 18px 0; color: #64748b; font-size: 0.95rem; font-weight: 500;"></p>
+        
+        <div style="display: flex; gap: 15px; font-size: 0.75rem; font-weight: bold; align-items: center; width: 100%; margin-top: 10px;">
+            <span style="
+                color: var(--primary); 
+                background: color-mix(in srgb, var(--primary), transparent 90%); 
+                padding: 6px 14px; 
+                border-radius: 10px;
+                border: 1px solid color-mix(in srgb, var(--primary), transparent 80%);
+            ">
+                TOTAL DE NOTAS: <span id="totalNotas" style="color: #1e293b; margin-left: 5px;">0</span>
+            </span>
+
+            <span style="
+                color: var(--primary); 
+                background: color-mix(in srgb, var(--primary), transparent 90%); 
+                padding: 6px 14px; 
+                border-radius: 10px;
+                border: 1px solid color-mix(in srgb, var(--primary), transparent 80%);
+            ">
+                ÚLTIMA NOTA: <span id="ultimaFecha" style="color: #1e293b; margin-left: 5px;">--</span>
+            </span>
+
+            <button type="button" id="btnGestionarPortal" data-bs-toggle="modal" data-bs-target="#modalPortalPaciente" style="
+                margin-left: auto;
+                width: max-content;
+                color: var(--primary); 
+                background: color-mix(in srgb, var(--primary), transparent 90%); 
+                padding: 6px 14px; 
+                border-radius: 10px;
+                border: 1px solid color-mix(in srgb, var(--primary), transparent 80%);
+                font-size: 0.75rem;
+                font-weight: bold;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-family: inherit;
+                transition: all 0.2s ease-in-out;
+            " onmouseenter="this.style.background='color-mix(in srgb, var(--primary), transparent 75%)'; this.style.transform='scale(1.03)'" 
+              onmouseleave="this.style.background='color-mix(in srgb, var(--primary), transparent 90%)'; this.style.transform='scale(1)'">
+                <i class="fas fa-user-shield" style="color: #ecc94b;"></i> 
+                PORTAL DEL PACIENTE
+            </button>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 2rem; border-top: 4px solid var(--primary); padding: 1.5rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <h4 style="margin-top: 0; color: #64748b; font-size: 0.8rem; text-transform: uppercase;"><i class="fas fa-chart-line"></i> Análisis de Progreso</h4>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div id="tabFisio" onclick="cambiarTabEvolucion('fisio')" class="badge-tab active" style="background: #fee2e2; border: 1px solid #fecaca; color: #991b1b;">
+                <strong style="display: block; font-size: 0.65rem;">📊 DOLOR</strong>
+                <span style="font-size: 0.75rem; font-weight: bold;">SINTOMÁTICO</span>
+            </div>
+            
+            <div id="tabMed" onclick="cambiarTabEvolucion('medica')" class="badge-tab" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569;">
+                <strong style="display: block; font-size: 0.65rem;">🩺 VITALES</strong>
+                <span style="font-size: 0.75rem; font-weight: bold;">CONSTANTES</span>
+            </div>
+
+            <div id="tabNutri" onclick="cambiarTabEvolucion('nutri')" class="badge-tab" style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;">
+                <strong style="display: block; font-size: 0.65rem;">🍎 PESO / IMC</strong>
+                <span style="font-size: 0.75rem; font-weight: bold;">ANTROPOMETRÍA</span>
+            </div>
+        </div>
+
+        <div id="tablaEvolucionDinamica" style="overflow-x: auto; min-height: 100px;"></div>
+    </div>
+
+    <div class="card" style="display: flex; gap: 15px; margin-bottom: 2rem; align-items: flex-end; padding: 1.5rem; border-radius: 12px; background: white;">
+        <div class="form-group" style="flex: 1; margin: 0;">
+            <label style="font-size: 0.75rem; font-weight: bold; color: #64748b;">DESDE:</label>
+            <input type="date" id="fechaDesde" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+            <label style="font-size: 0.75rem; font-weight: bold; color: #64748b;">HASTA:</label>
+            <input type="date" id="fechaHasta" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        </div>
+        <button onclick="filtrarHistorial()" class="btn-principal">🔍 FILTRAR</button>
+    </div>
+
+    <div id="contenedorLineaTiempoHistorial" style="max-height: 75vh; overflow-y: auto; padding-right: 5px;">
+        </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/historial-evolucion.js"></script>
+<script src="js/pdf-generator.js"></script>
+
+<div id="modalPortalPaciente" style="
+    display: none; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.75); 
+    backdrop-filter: blur(5px); 
+    z-index: 99999;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, -apple-system, sans-serif;
+">
+    <div style="
+        background-color: #1a202c; 
+        border: 1px solid #2d3748; 
+        color: #f7fafc; 
+        border-radius: 14px; 
+        width: 100%; 
+        max-width: 440px; 
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+        overflow: hidden;
+        animation: scaleIn 0.2s ease-out;
+    ">
+        <div style="background-color: #1e293b; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2d3748;">
+            <h5 style="color: #ecc94b; font-weight: 700; font-size: 1rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-shield-alt"></i> Seguridad y Acceso al Portal
+            </h5>
+            <button type="button" onclick="document.getElementById('modalPortalPaciente').style.display='none'" style="background: transparent; border: none; color: #a0aec0; cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 0;">&times;</button>
+        </div>
+        
+        <div style="padding: 20px; background-color: #1a202c;">
+            <p style="color: #a0aec0; font-size: 0.8rem; margin: 0 0 16px 0; line-height: 1.4;">
+                Gestión de credenciales para el Portal del Paciente e interoperabilidad familiar en la red FisioCid.
+            </p>
+            
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 600; display: block; margin-bottom: 6px;">
+                    <i class="fas fa-envelope" style="color: var(--primary);"></i> Correo de Acceso (Usuario Maestro)
+                </label>
+                <input type="text" id="portalEmail" readonly 
+                       style="
+                            background-color: #2d3748; 
+                            border: 1px solid #4a5568; 
+                            color: #cbd5e1; 
+                            font-size: 0.85rem; 
+                            border-radius: 6px; 
+                            width: 100%; 
+                            padding: 8px 12px; 
+                            box-sizing: border-box; 
+                            outline: none;
+                            text-transform: lowercase !important;
+                       ">
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 600; display: block; margin-bottom: 6px;">
+                    <i class="fas fa-phone" style="color: var(--primary);"></i> Teléfono Destino (Verificación OTP)
+                </label>
+                <input type="text" id="portalTel" readonly style="background-color: #2d3748; border: 1px solid #4a5568; color: #cbd5e1; font-size: 0.85rem; border-radius: 6px; width: 100%; padding: 8px 12px; box-sizing: border-box; outline: none;">
+            </div>
+            
+            <div id="wrapperAccionesPortal"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+</style>
+</body>
+</html>

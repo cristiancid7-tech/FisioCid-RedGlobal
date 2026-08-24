@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuevo Expediente | FisioCid</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body { background-color: #f8fafc; }</style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="card shadow-lg border-0" id="cardRegistro" style="border-radius: 20px; border-top: 8px solid #ccc !important;">
+          <div class="card-header bg-white border-0 pt-4 pb-0 text-center">
+    <h3 class="fw-bold mb-1">
+        <i class="fas fa-user-plus text-primary"></i> Nuevo Expediente
+    </h3>
+    
+    <div class="d-flex flex-column align-items-center mb-2">
+        <p class="text-muted small mb-1" id="lblSedeRegistro">Cargando sede...</p>
+        
+ <div class="px-3 py-1 border rounded-pill bg-light d-inline-flex align-items-center justify-content-center" 
+     style="border: 1px solid var(--primary) !important; min-width: 200px; width: auto;">
+    
+    <i class="fas fa-fingerprint text-primary me-2" style="font-size: 0.8rem;"></i>
+    
+    <input type="text" id="inputFolioExpediente" 
+           class="form-control form-control-sm border-0 bg-transparent fw-bold p-0 text-center" 
+           style="color: var(--primary); font-size: 0.9rem; width: auto; min-width: 150px; pointer-events: none; box-shadow: none;" 
+           value="GENERANDO..." readonly>
+</div>
+        <div id="statusFolio" class="text-primary fw-bold mt-1" style="font-size: 0.6rem; letter-spacing: 1px;">
+            <i class="fas fa-circle-notch fa-spin"></i> SINCRONIZANDO
+        </div>
+    </div>
+
+    <ul class="nav nav-pills nav-justified mt-4 mb-3" id="stepperRegistro" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold" id="tab-identidad" data-bs-toggle="pill" data-bs-target="#paso1" type="button">1. Identidad</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold" id="tab-clinico" data-bs-toggle="pill" data-bs-target="#paso2" type="button">2. Clínico</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold" id="tab-contacto" data-bs-toggle="pill" data-bs-target="#paso3" type="button">3. Contacto</button>
+        </li>
+    </ul>
+</div>
+
+            <div class="card-body p-4">
+                <form id="formRegistroPaciente">
+                    <div class="tab-content" id="pills-tabContent">
+                        
+                        <div class="tab-pane fade show active" id="paso1" role="tabpanel">
+                            <div class="row g-3 position-relative">
+                                
+                                <div class="col-md-4 position-relative">
+                                    <label class="form-label small fw-bold">Nombre(s) *</label>
+                                    <input type="text" class="form-control" name="nombre" id="valNombre" autocomplete="off" required>
+                                    <div id="listaCitas" class="position-absolute w-100 bg-white shadow rounded mt-1" style="display:none; z-index: 1000; max-height: 200px; overflow-y: auto;"></div>
+                                </div>
+
+                                <div class="col-md-4"><label class="form-label small fw-bold">A. Paterno *</label><input type="text" class="form-control" name="apellido_paterno" id="valPaterno" required></div>
+                                <div class="col-md-4"><label class="form-label small fw-bold">A. Materno</label><input type="text" class="form-control" name="apellido_materno" id="valMaterno"></div>
+                                
+                                <div class="col-md-4"><label class="form-label small fw-bold">Fecha de Nacimiento</label><input type="date" class="form-control" name="fecha_nacimiento" id="valFecha" onchange="actualizarInterfazEdad()"></div>
+                                <div class="col-md-4"><label class="form-label small fw-bold">Género</label>
+                                    <select class="form-select" name="genero" id="valGenero">
+                                        <option value="HOMBRE">HOMBRE</option><option value="MUJER">MUJER</option><option value="NO BINARIO">NO BINARIO</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4"><label class="form-label small fw-bold">Estado Nacimiento</label>
+                                    <select id="valEstado" class="form-select" name="estado_nacimiento">
+                                       <option value="">-- SELECCIONAR ESTADO --</option>
+    <option value="AS">AGUASCALIENTES</option>
+    <option value="BC">BAJA CALIFORNIA</option>
+    <option value="BS">BAJA CALIFORNIA SUR</option>
+    <option value="CC">CAMPECHE</option>
+    <option value="CL">COAHUILA</option>
+    <option value="CM">COLIMA</option>
+    <option value="CS">CHIAPAS</option>
+    <option value="CH">CHIHUAHUA</option>
+    <option value="DF">CIUDAD DE MÉXICO</option>
+    <option value="DG">DURANGO</option>
+    <option value="GT">GUANAJUATO</option>
+    <option value="GR">GUERRERO</option>
+    <option value="HG">HIDALGO</option>
+    <option value="JC">JALISCO</option>
+    <option value="MC">MÉXICO (ESTADO DE)</option>
+    <option value="MN">MICHOACÁN</option>
+    <option value="MS">MORELOS</option>
+    <option value="NT">NAYARIT</option>
+    <option value="NL">NUEVO LEÓN</option>
+    <option value="OC">OAXACA</option>
+    <option value="PL">PUEBLA</option>
+    <option value="QT">QUERÉTARO</option>
+    <option value="QR">QUINTANA ROO</option>
+    <option value="SP">SAN LUIS POTOSÍ</option>
+    <option value="SL">SINALOA</option>
+    <option value="SR">SONORA</option>
+    <option value="TC">TABASCO</option>
+    <option value="TS">TAMAULIPAS</option>
+    <option value="TL">TLAXCALA</option>
+    <option value="VZ">VERACRUZ</option>
+    <option value="YN">YUCATÁN</option>
+    <option value="ZS">ZACATECAS</option>
+    <option value="NE">NACIDO EN EL EXTRANJERO</option>
+                                        </select>
+                                </div>
+
+                                <div class="col-md-8">
+                                    <label class="form-label small fw-bold text-primary">CURP Autogenerada</label>
+                                    <input type="text" class="form-control bg-light text-primary fw-bold" id="curpAuto" readonly>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold text-danger">Homoclave * <a href="#" id="btnAyudaCurp" class="ms-2 text-primary text-decoration-none">¿Ayuda?</a></label>
+                                    <input type="text" class="form-control border-danger" id="curpHomo" name="homoclave_curp" maxlength="2" required>
+                                </div>
+
+                                <div class="col-md-6"><label class="form-label small fw-bold">Ocupación</label><input type="text" class="form-control" name="ocupacion" id="valOcupacion"></div>
+                                
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Convenio / Aseguradora</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control bg-white" id="valConvenio" placeholder="PARTICULAR" readonly>
+                                        <button class="btn btn-outline-primary" type="button" id="btnVerConvenios">🔎 Elegir</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end mt-4">
+                                <button type="button" class="btn btn-secondary btn-camaleon-outline" onclick="siguientePaso('tab-clinico')">Siguiente <i class="fas fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="paso2" role="tabpanel">
+                            <div class="alert alert-danger d-flex align-items-center p-2 mb-4 border-0" style="background: #fee2e2; color: #991b1b;">
+                                <i class="fas fa-biohazard fs-4 me-3"></i>
+                                <div class="flex-grow-1">
+                                    <label class="fw-bold small mb-0">BANDERAS ROJAS / ALERTAS</label>
+                                    <input type="text" class="form-control form-control-sm border-danger text-danger fw-bold" name="alertas_seguridad" placeholder="Ej: Marcapasos, Alergia severa..." style="background: transparent;">
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-4"><label class="form-label small fw-bold">Tipo Sangre</label>
+                                    <select class="form-select" name="tipo_sangre">
+                                        <option value="NO SABE">No sabe</option>
+                                         <option value="O+">O+</option><option value="O-">O-</option>
+                <option value="A+">A+</option><option value="A-">A-</option>
+                <option value="B+">B+</option><option value="B-">B-</option>
+                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                                    
+                                    </select>
+                                </div>
+                                <div class="col-md-4"><label class="form-label small fw-bold">Lateralidad</label>
+                                    <select class="form-select" name="lateralidad"><option value="DIESTRO">Diestro</option><option value="ZURDO">Zurdo</option></select>
+                                </div>
+                                <div class="col-md-4"><label class="form-label small fw-bold text-danger">Alergias Conocidas</label><input type="text" class="form-control" name="alergias"></div>
+                                
+                                <div class="col-md-6"><label class="form-label small fw-bold">Heredofamiliares</label><textarea class="form-control" name="antecedentes_heredofamiliares" rows="2"></textarea></div>
+                                <div class="col-md-6"><label class="form-label small fw-bold">Patológicos (Crónicos)</label><textarea class="form-control" name="antecedentes_patologicos" rows="2"></textarea></div>
+                                <div class="col-md-6"><label class="form-label small fw-bold">No Patológicos (Hábitos)</label><textarea class="form-control" name="antecedentes_no_patologicos" rows="2"></textarea></div>
+                                <div class="col-md-6"><label class="form-label small fw-bold">Farmacología Activa</label><textarea class="form-control" name="farmacologia_activa" rows="2"></textarea></div>
+                                <div class="col-md-12"><label class="form-label small fw-bold">Antecedentes Quirúrgicos</label><input type="text" class="form-control" name="antecedentes_quirurgicos"></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-4">
+                                <button type="button" class="btn btn-light" onclick="siguientePaso('tab-identidad')"><i class="fas fa-arrow-left"></i> Atrás</button>
+                                <button type="button" class="btn btn-secondary btn-camaleon-outline" onclick="siguientePaso('tab-contacto')">Siguiente <i class="fas fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="paso3" role="tabpanel">
+                         <div class="row g-3">
+    <div id="bloque-contacto-adulto" class="col-12 row g-3 m-0 p-0">
+        <div class="col-md-6">
+            <label class="form-label small fw-bold">Teléfono Celular *</label>
+            <input type="tel" class="form-control" name="telefono" id="valTelefono">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label small fw-bold">Correo Electrónico</label>
+            <input type="email" class="form-control" name="correo_electronico" id="valemail">
+        </div>
+    </div>
+
+    <div id="seccion-tutor" class="col-12 d-none">
+        <div class="p-3 border rounded-3 mb-3" style="background: rgba(var(--primary-rgb), 0.05); border: 1px solid var(--primary) !important;">
+            <h6 class="fw-bold mb-3" style="color: var(--primary); font-size: 0.8rem;">
+                <i class="fas fa-shield-alt me-2"></i>RESPONSABLE LEGAL (MENOR DE EDAD)
+            </h6>
+            <div class="row g-2">
+            
+                <div class="position-relative mb-3">
+                    <label class="form-label font-weight-bold">Nombre del Responsable:</label>
+                    <input type="text" id="tutor-nombre" class="form-control" autocomplete="off" placeholder="ESCRIBE PARA BUSCAR UN TUTOR...">
+                    <input type="hidden" id="idTutorSeleccionado" name="id_tutor">
+                    <div id="listaTutores" class="lista-sugerencias-flotante" style="display:none;"></div>
+                </div>
+                <div class="col-md-3">
+                    <label class="small fw-bold text-muted">Parentesco</label>
+                    <input type="text" id="tutor-parentesco" name="parentesco_tutor" class="form-control form-control-sm text-uppercase" placeholder="EJ. MADRE">
+                </div>
+                <div class="col-md-4">
+                    <label class="small fw-bold text-muted">Teléfono del Tutor</label>
+                    <input type="tel" id="tutor-tel" name="telefono_tutor" class="form-control form-control-sm" placeholder="10 DÍGITOS">
+                </div>
+                <div class="col-md-5">
+                    <label class="small fw-bold text-muted">Correo del Responsable (Acceso al Portal)</label>
+                    <input type="email" id="correo-tutor" name="correo_tutor" class="form-control form-control-sm" placeholder="correo@ejemplo.com">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-12">
+        <label class="form-label small fw-bold">Dirección Completa</label>
+        <input type="text" class="form-control" name="direccion_completa" id="valDireccion">
+    </div>
+    
+    <div class="col-12 mt-4 d-flex justify-content-between align-items-center border-bottom pb-2">
+        <h6 class="fw-bold text-muted mb-0">Contacto de Emergencia</h6>
+        <button type="button" id="btnCopiarTutor" class="btn btn-sm btn-outline-primary d-none" 
+                style="font-size: 0.6rem; border-radius: 20px;" onclick="copiarDatosTutor()">
+            <i class="fas fa-copy me-1"></i> ¿ES EL MISMO QUE EL RESPONSABLE?
+        </button>
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label small fw-bold">Nombre</label>
+        <input type="text" class="form-control" name="contacto_emergencia_nombre" id="valEmergenciaNom">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-bold">Parentesco</label>
+        <input type="text" class="form-control" name="contacto_emergencia_parentesco" id="valEmergenciaPar">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-bold">Teléfono</label>
+        <input type="tel" class="form-control" name="contacto_emergencia_tel" id="valEmergenciaTel">
+    </div>
+</div>
+
+                            <div class="card mt-4 border-0 shadow-sm" style="background: #f8fafc; border-radius: 15px; border-left: 5px solid var(--primary);">
+    <div class="card-body">
+        <div class="form-check mb-4">
+           <input class="form-check-input" type="checkbox" id="checkConsentimiento" name="checkConsentimiento" style="transform: scale(1.2);" required>
+            <label class="form-check-label fw-bold" for="checkConsentimiento" style="color: #0f172a; cursor: pointer;">
+                🌐 Acepto el 
+                <a href="#" onclick="alert('Aquí mostrarás tu Aviso de Privacidad en un modal...'); return false;" class="text-primary text-decoration-underline">Aviso de Privacidad</a> 
+                y autorizo la interoperabilidad de mis datos clínicos en la red FisioCid.
+            </label>
+        </div>
+        
+        <label class="form-label small fw-bold">Observaciones Clínicas Relevantes</label>
+        <textarea class="form-control border-0 shadow-sm" name="notas_precaucion" rows="3" placeholder="Anotaciones importantes, hallazgos físicos o notas adicionales del paciente..."></textarea>
+    </div>
+</div>
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <button type="button" class="btn btn-light" onclick="siguientePaso('tab-clinico')"><i class="fas fa-arrow-left"></i> Atrás</button>
+                                <button type="submit" class="btn btn-primary btn-camaleon-solid btn-lg shadow px-5" id="idBtnGuardarReal"><i class="fas fa-save"></i> GUARDAR EXPEDIENTE</button>
+                            </div>
+                        </div>
+
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="js/supabase-config.js"></script> 
+    <script src="js/nuevo-paciente.js"></script>  
+
+    <div id="modalRenapo" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:white; width:400px; padding:30px; border-radius:20px; text-align:center;">
+            <div style="font-size: 3rem; margin-bottom: 10px;">🔍</div>
+            <h3 style="color:var(--primary); margin-bottom: 10px; font-weight: bold;">CONSULTA OFICIAL</h3>
+            <p style="font-size: 0.9rem; color: #64748b;">Verifica la homoclave en el portal de SEGOB.</p>
+            <button id="abrirVentanaOficial" style="background:var(--primary); color:white; border:none; padding:12px 20px; border-radius:10px; font-weight:bold; width:100%; margin-bottom: 10px;">🌐 ABRIR PORTAL</button>
+            <button id="cerrarRenapo" style="background:#f1f5f9; color:#64748b; border:none; padding:10px; border-radius:10px; width:100%;">CANCELAR</button>
+        </div>
+    </div>
+
+    <div id="modalConvenios" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:white; width:450px; padding:30px; border-radius:20px;">
+            <h3 style="color:var(--primary); text-align:center; font-weight: bold;">🤝 CONVENIOS</h3>
+            <p style="text-align:center; color:#64748b;">Selecciona el convenio aplicable.</p>
+            
+            <div id="contenedorListaConvenios" style="max-height: 250px; overflow-y: auto; margin: 20px 0;">
+             <button class="btn btn-outline-secondary w-100 mb-2 text-start" onclick="seleccionarConvenio('', 'PARTICULAR')">
+    ❌ SIN CONVENIO / PARTICULAR
+</button>
+                </div>
+            
+            <button id="cerrarConvenios" style="background:#f1f5f9; color:#64748b; border:none; padding:10px; border-radius:10px; width:100%;">CERRAR</button>
+        </div>
+    </div>
+
+</body>
+</html>

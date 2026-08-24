@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FisioCid | Mi Expediente Digital</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-cid: #00cfd5; /* Tu verde camaleón */
+            --primary-dark: #008f94;
+            --bg-app: #f8fafc; /* Un gris azulado muy suave y limpio */
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --radius-xl: 24px;
+            --radius-lg: 16px;
+            --shadow-soft: 0 4px 6px -1px rgba(0,0,0,0.03), 0 2px 4px -1px rgba(0,0,0,0.02);
+        }
+
+        body {
+            background-color: var(--bg-app);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-dark);
+            padding-bottom: 40px;
+        }
+
+        /* 🏛️ Navbar Estilo Apple */
+        .navbar-custom {
+            background-color: white;
+            box-shadow: var(--shadow-soft);
+            padding: 15px 0;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .navbar-brand {
+            font-weight: 800;
+            font-size: 1.4rem;
+            color: var(--text-dark);
+            letter-spacing: -0.5px;
+        }
+        .brand-icon {
+            background-color: var(--primary-cid);
+            color: white;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-right: 12px;
+        }
+
+        /* 👤 Selector de Perfil (Dropdown Pro) */
+        .profile-dropdown .btn {
+            background-color: #f1f5f9;
+            color: var(--text-dark);
+            border: none;
+            border-radius: 50px;
+            padding: 8px 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .profile-dropdown .btn:hover {
+            background-color: #e2e8f0;
+        }
+        .dropdown-menu {
+            border: none;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            margin-top: 10px !important;
+        }
+        .dropdown-item {
+            padding: 10px 20px;
+            font-weight: 500;
+            color: var(--text-dark);
+            border-radius: 8px;
+            margin: 0 5px;
+        }
+        .dropdown-item:hover, .dropdown-item.active {
+            background-color: var(--bg-app);
+            color: var(--primary-dark);
+        }
+
+        /* 🎯 Tarjeta de Bienvenida */
+        .welcome-banner {
+            background: linear-gradient(135deg, var(--primary-cid) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: var(--radius-xl);
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px -5px rgba(0, 207, 213, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        .welcome-banner h3 { font-weight: 800; letter-spacing: -1px; }
+        .welcome-banner p { opacity: 0.9; font-weight: 300; max-width: 60%; }
+        .banner-icon {
+            position: absolute;
+            right: -30px;
+            bottom: -30px;
+            font-size: 150px;
+            opacity: 0.1;
+            transform: rotate(-15deg);
+        }
+
+        /* 🔘 Tabs (Pestañas Superiores) */
+        .nav-pills {
+            background: white;
+            padding: 8px;
+            border-radius: 50px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid #e2e8f0;
+            display: inline-flex; /* Para que no ocupe todo el ancho */
+            margin-bottom: 30px;
+        }
+        .nav-pills .nav-link {
+            color: var(--text-muted);
+            font-weight: 600;
+            border-radius: 40px;
+            padding: 12px 30px;
+            transition: all 0.3s;
+            border: none;
+        }
+        .nav-pills .nav-link:hover { background-color: #f1f5f9; }
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-cid);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 207, 213, 0.3);
+        }
+
+        /* 🔍 Panel de Filtros */
+        .filter-panel {
+            background: white;
+            border-radius: var(--radius-xl);
+            padding: 20px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
+        }
+        .form-control, .form-select {
+            border: 1px solid #e2e8f0;
+            border-radius: 50px; /* Inputs súper redondeados */
+            padding: 12px 20px;
+            font-size: 0.9rem;
+            background-color: #f8fafc;
+            color: var(--text-dark);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-cid);
+            box-shadow: 0 0 0 3px rgba(0, 207, 213, 0.1);
+            background-color: white;
+        }
+        .btn-share {
+            border-radius: 50px;
+            padding: 12px 25px;
+            font-weight: 600;
+            background-color: #f1f5f9;
+            color: var(--text-dark);
+            border: none;
+        }
+        .btn-share:hover { background-color: #e2e8f0; color: var(--primary-dark); }
+
+        /* 📄 Tarjetas de Contenido (Notas, Estudios) */
+        .record-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+        }
+        .record-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border-color: transparent;
+        }
+        .record-date {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            background: var(--bg-app);
+            padding: 5px 12px;
+            border-radius: 20px;
+        }
+        .record-doctor { font-weight: 700; color: var(--text-dark); margin-top: 5px; margin-bottom: 0; }
+        .record-spec { font-size: 0.8rem; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+        .record-summary { font-size: 0.95rem; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+        
+        /* Iconos de tipo de registro */
+        .icon-note { color: var(--primary-cid); }
+        .icon-lab { color: #f59e0b; } /* Ámbar */
+        .icon-img { color: #3b82f6; } /* Azul */
+
+        /* 🔐 Modal OTP */
+        .modal-content {
+            border: none;
+            border-radius: var(--radius-xl);
+            padding: 20px;
+        }
+        .modal-header { border: none; padding-bottom: 0; }
+        .modal-footer { border: none; }
+        .btn-cid-primary {
+            background-color: var(--primary-cid);
+            color: white;
+            border-radius: 50px;
+            padding: 12px 30px;
+            font-weight: 700;
+            border: none;
+        }
+        .btn-cid-primary:hover { background-color: var(--primary-dark); color: white; }
+        .otp-display { font-size: 3rem; font-weight: 800; color: var(--primary-dark); letter-spacing: 5px; background: var(--bg-app); padding: 15px; border-radius: var(--radius-lg); margin: 20px 0; }
+
+        /* Utilidades */
+        .fw-800 { font-weight: 800; }
+        .gap-10 { gap: 10px; }
+        /* Animación sutil de carga */
+        .fade-in { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+    <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+            <div class="brand-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <span>Fisio<span class="text-muted fw-normal">Cid</span></span>
+        </a>
+        
+        <div class="d-flex align-items-center gap-10">
+            <div class="dropdown profile-dropdown">
+                <button class="btn dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-user-circle me-2 text-primary"></i> <span id="nombreUserActivo">Cargando...</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg p-2" aria-labelledby="dropdownMenuButton1">
+                    <li><h6 class="dropdown-header text-uppercase text-muted" style="font-size: 0.7rem;">Cuenta Principal</h6></li>
+                    <li><a class="dropdown-item active" href="#" onclick="seleccionarPerfil('tutor')"><i class="fas fa-user me-2"></i> <span id="nombreTutorMenu">...</span></a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header text-uppercase text-muted" style="font-size: 0.7rem;">Pacientes a Cargo</h6></li>
+                    <div id="listaFamiliaresMenu">
+                        <div class="text-center text-muted small py-2">Sin familiares vinculados</div>
+                    </div>
+                </ul>
+            </div>
+            
+            <button class="btn btn-link text-muted p-0" onclick="cerrarSesion()">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    
+    <div class="welcome-banner animate__animated animate__fadeIn">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h3 id="txtSaludo">¡Hola!</h3>
+                <p class="lead mt-3">Bienvenido a tu Centro de Salud Digital. Aquí puedes consultar tu historial médico, estudios y citas de forma segura.</p>
+            </div>
+        </div>
+        <i class="fas fa-notes-medical banner-icon"></i>
+    </div>
+
+    <div class="text-center">
+        <ul class="nav nav-pills mb-5" id="pills-tab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pills-notas-tab" data-bs-toggle="pill" data-bs-target="#pills-notas" type="button" role="tab" aria-controls="pills-notas" aria-selected="true">
+                    <i class="fas fa-file-medical me-2"></i>Notas Clínicas
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pills-estudios-tab" data-bs-toggle="pill" data-bs-target="#pills-estudios" type="button" role="tab" aria-controls="pills-estudios" aria-selected="false">
+                    <i class="fas fa-microscope me-2"></i>Estudios y Gabinete
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pills-citas-tab" data-bs-toggle="pill" data-bs-target="#pills-citas" type="button" role="tab" aria-controls="pills-citas" aria-selected="false">
+                    <i class="fas fa-calendar-check me-2"></i>Mis Citas
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="filter-panel">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <select id="filtroEspecialidad" class="form-select rounded-pill" onchange="aplicarFiltros()">
+                    <option value="">Todas las Especialidades</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="date" id="filtroFecha" class="form-control rounded-pill" onchange="aplicarFiltros()">
+            </div>
+            <div class="col-md-4">
+                <input type="text" id="filtroDoctor" class="form-control rounded-pill" placeholder="Buscar doctor..." onkeyup="aplicarFiltros()">
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-content" id="pills-tabContent">
+        <div class="tab-pane fade show active" id="pills-notas"><div id="listaNotas"></div></div>
+        <div class="tab-pane fade" id="pills-estudios"><div id="listaEstudios"></div></div>
+        <div class="tab-pane fade" id="pills-citas"><div id="listaCitas"></div></div>
+    </div>
+</div>
+<!-- 🔐 OVERLAY / LOGIN OTP DE ACCESO AL PORTAL DE PACIENTES -->
+<!-- BANNER DE SOLICITUD DE ACCESO EN VIVO -->
+<div id="cardSolicitudActiva" class="card border-primary shadow-lg mb-4 fade-in" style="display: none; border-radius: var(--radius-xl); background: #f0fdf4; border: 2px solid #22c55e;">
+    <div class="card-body p-4">
+        <div class="d-flex align-items-center mb-3">
+            <div class="rounded-circle bg-success text-white p-3 me-3">
+                <i class="fas fa-user-shield fa-2x"></i>
+            </div>
+            <div>
+                <h5 class="fw-800 text-success mb-0">🔒 Solicitud de Acceso Médico Detectada</h5>
+                <p class="text-muted small mb-0">El <strong id="lblNombreDoctorSolicitante">Dr. Cristian</strong> solicita consultar tu información clínica.</p>
+            </div>
+        </div>
+
+        <div class="bg-white p-3 rounded-lg mb-3 border">
+            <label class="fw-bold small text-muted mb-2">SELECCIONA QUÉ DESEAS COMPARTIR:</label>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="chkPermisoNotas" checked>
+                <label class="form-check-label font-weight-bold" for="chkPermisoNotas">
+                    📄 Notas Clínicas y Diagnósticos
+                </label>
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="chkPermisoEstudios" checked>
+                <label class="form-check-label font-weight-bold" for="chkPermisoEstudios">
+                    🔬 Estudios y Gabinete (Radiografías / Análisis)
+                </label>
+            </div>
+        </div>
+
+        <div class="row align-items-center text-center">
+            <div class="col-md-6 mb-2 mb-md-0">
+                <span class="text-muted small d-block">TU CÓDIGO DE AUTORIZACIÓN:</span>
+                <div id="lblCodigoOTPPaciente" class="fw-800 text-success" style="font-size: 2.2rem; letter-spacing: 4px;">000 000</div>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-success w-100 fw-bold py-2 rounded-pill shadow" onclick="aprobarAccesoDoctor()">
+                    ✅ AUTORIZAR Y DAR ACCESO
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 1. Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- 2. Cliente JS de Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- 3. Tu conexión global a Supabase (Donde inicializas fisioNet) -->
+<script src="js/supabase-config.js"></script> 
+
+<!-- 4. Tu script del portal -->
+<script src="js/portal-paciente.js"></script>
+
+</body>
+</html>

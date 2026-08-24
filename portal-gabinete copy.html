@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Especialista | FisioCid</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --color-camaleon: #00cfd5;
+        }
+
+        /* Estilos generales */
+        .card-fisiocid { background: white; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 20px; }
+        
+        .header-fisiocid { border-left: 5px solid var(--color-camaleon); background: #f8fafc; padding: 15px 20px; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 10px; text-transform: uppercase; font-size: 0.85rem; }
+        
+        #imgIzquierda { max-width: 100%; max-height: 100%; object-fit: contain; margin: 0 auto !important; }
+        
+        .form-fisiocid { border: 2px solid #f1f5f9; border-radius: 10px; padding: 12px; transition: all 0.3s ease; }
+        .form-fisiocid:focus { border-color: var(--color-camaleon); box-shadow: 0 0 0 3px rgba(0, 207, 213, 0.1); outline: none; }
+
+        #visorComparativa {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(10, 10, 10, 0.98) !important;
+            z-index: 2000 !important; /* Capa base del visor negro */
+            overflow: hidden !important;
+            pointer-events: auto !important;
+        }
+
+        #panel-dictamen-radiologo {
+            position: fixed !important;
+            top: 60px !important; /* Ajustado milimétricamente abajo de la barra superior */
+            right: 0 !important;
+            width: 350px !important;
+            height: calc(100vh - 60px) !important;
+            z-index: 3000 !important; /* Flota holgadamente arriba del visor (2000) */
+            background: rgba(26, 32, 44, 0.98) !important;
+            border-left: 2px solid #2d3748 !important;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5) !important;
+            pointer-events: auto !important;
+            overflow-y: auto !important;
+        }
+
+textarea#descripcion-hallazgos-pacs, 
+textarea#conclusion-estudio-pacs {
+    pointer-events: auto !important;
+    cursor: text !important;
+    
+    /* Obligamos al navegador a permitir texto */
+    user-select: text !important;
+    -webkit-user-select: auto !important; 
+    
+    /* ⚡ EL DESFIBRILADOR: Obliga a la tarjeta gráfica a pintar el cursor */
+    transform: translateZ(0) !important; 
+    
+    caret-color: #00cfd5 !important;
+    border: 1px solid #4a5568 !important;
+}
+
+
+
+/* Fuerza total de ocultamiento en estado inicial */
+#offcanvasHistorial {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* Solo cuando tenga la clase 'show', se muestra */
+#offcanvasHistorial.show {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+    </style>
+</head>
+<body class="bg-light text-dark" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6;">
+
+<nav class="navbar border-bottom p-3 bg-white shadow-sm">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <span class="h4 mb-0 fw-black" style="letter-spacing: -1px;">
+            <i class="fas fa-shield-alt" style="color: var(--color-camaleon);"></i> 
+            FisioCid <span style="color: var(--color-camaleon);">Especialistas</span>
+        </span>
+        <div id="info-emisor" class="text-end small">
+            <span class="text-muted italic">Doctor Solicitante: Cargando...</span>
+        </div>
+    </div>
+</nav>
+
+<main class="container mt-4">
+    <section class="card-fisiocid mb-4 animate__animated animate__fadeIn">
+        <div class="header-fisiocid justify-content-between">
+            <span><i class="fas fa-user-circle"></i> Identidad del Paciente</span>
+        </div>
+        
+        <div class="p-4">
+            <div id="vista-manual" class="row g-3">
+                <div class="col-md-6">
+                    <label class="label-fisiocid" style="color: var(--color-camaleon); font-weight: 800;">Folio de Expediente Sede</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fas fa-folder-open text-secondary"></i></span>
+                        <input type="text" id="inputFolioExpediente" class="form-control form-fisiocid bg-light fw-bold" readonly placeholder="Calculando consecutivo...">
+                    </div>
+                    <small id="statusFolio" class="fw-bold text-muted mt-1 d-block" style="font-size: 0.65rem; letter-spacing: 0.3px;"></small>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6 position-relative">
+                        <label class="label-fisiocid">Nombre(s) <span class="text-primary">*</span></label>
+                       <input type="text" id="valNombre" class="form-control form-fisiocid" oninput="procesarCurp()" placeholder="Escribe para buscar...">
+                        <div id="sugerencias-gabinete" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1050; top: 100%;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="label-fisiocid">Apellido Paterno</label>
+                        <input type="text" id="valPaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="label-fisiocid">Apellido Materno</label>
+                        <input type="text" id="valMaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="label-fisiocid">Fecha Nac.</label>
+                    <input type="date" id="valFecha" class="form-control form-fisiocid" oninput="procesarCurp(); actualizarInterfazEdad();">
+                </div>
+                <div class="col-md-3">
+                    <label class="label-fisiocid">Género</label>
+                    <select id="genero-manual" class="form-select form-fisiocid" onchange="procesarCurp()">
+                        <option>SELECCION</option>
+                        <option value="HOMBRE">HOMBRE</option>
+                        <option value="MUJER">MUJER</option>
+                        <option value="NO BINARIO">NO BINARIO</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid" style="color: var(--color-camaleon); font-weight: 800;">Estado de Nacimiento</label>
+                    <select id="valEstado" class="form-select form-fisiocid" onchange="procesarCurp()">
+                        <option value="">SELECCIONAR ESTADO</option>
+                        <option value="AS">AGUASCALIENTES</option><option value="BC">BAJA CALIFORNIA</option>
+                        <option value="BS">BAJA CALIFORNIA SUR</option><option value="CC">CAMPECHE</option>
+                        <option value="CL">COAHUILA</option><option value="CM">COLIMA</option>
+                        <option value="CS">CHIAPAS</option><option value="CH">CHIHUAHUA</option>
+                        <option value="DF">CIUDAD DE MÉXICO</option><option value="DG">DURANGO</option>
+                        <option value="GT">GUANAJUATO</option><option value="GR">GUERRERO</option>
+                        <option value="HG">HIDALGO</option><option value="JC">JALISCO</option>
+                        <option value="MC">MÉXICO</option><option value="MN">MICHOACÁN</option>
+                        <option value="MS">MORELOS</option><option value="NT">NAYARIT</option>
+                        <option value="NL">NUEVO LEÓN</option><option value="OC">OAXACA</option>
+                        <option value="PL">PUEBLA</option><option value="QT">QUERÉTARO</option>
+                        <option value="QR">QUINTANA ROO</option><option value="SP">SAN LUIS POTOSÍ</option>
+                        <option value="SL">SINALOA</option><option value="SR">SONORA</option>
+                        <option value="TC">TABASCO</option><option value="TS">TAMAULIPAS</option>
+                        <option value="TL">TLAXCALA</option><option value="VZ">VERACRUZ</option>
+                        <option value="YN">YUCATÁN</option><option value="ZS">ZACATECAS</option>
+                        <option value="NE">EXTRANJERO</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <div class="label-fisiocid text-primary mb-1">CURP (Llave Maestra FisioCid)</div>
+                    <div class="input-group">
+                        <input type="text" id="curp-parte1" class="form-control fw-bold bg-light" style="width: 45%;" readonly>
+                        <input type="text" id="curp-estado" class="form-control fw-bold text-center border-primary" placeholder="--" maxlength="2" style="width: 15%; color: #0d6efd;" oninput="saltarAHomoclave(this)">
+                        <div class="input-group-text p-0" style="width: 40%;">
+                            <input type="text" id="curp-consonantes" class="form-control border-0 bg-light fw-bold" style="width: 60%;" readonly>
+                            <input type="text" id="curp-homo" class="form-control border-0 fw-bold text-center" placeholder="--" maxlength="2" style="width: 40%; color: #0d6efd;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row g-3 mt-2">
+                <div id="bloque-contacto-adulto" class="col-12 row g-3 m-0 p-0">
+                    <div class="col-md-6">
+                        <label class="label-fisiocid text-success">Teléfono del Paciente</label>
+                        <input type="tel" id="tel-manual" class="form-control form-fisiocid" placeholder="10 dígitos">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="label-fisiocid text-success">Correo Electrónico</label>
+                        <input type="email" id="valEmail" class="form-control form-fisiocid" placeholder="paciente@ejemplo.com">
+                    </div>
+                </div>
+
+                <div id="seccion-tutor" class="col-12 d-none animate__animated animate__fadeInDown">
+                    <div class="p-3 border rounded-3" style="background: rgba(0, 207, 213, 0.05); border: 1px solid var(--color-camaleon) !important;">
+                        <h6 class="fw-bold mb-3" style="color: var(--color-camaleon); font-size: 0.8rem;">
+                            <i class="fas fa-shield-alt me-2"></i>RESPONSABLE LEGAL (MENOR DE EDAD)
+                        </h6>
+                        <div class="row g-2">
+                            <div class="col-md-5">
+                                <label class="small fw-bold text-muted">Nombre del Responsable</label>
+                                <input type="text" id="tutor-nombre" class="form-control form-control-sm text-uppercase" placeholder="NOMBRE COMPLETO">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="small fw-bold text-muted">Parentesco</label>
+                                <input type="text" id="tutor-parentesco" class="form-control form-control-sm text-uppercase" placeholder="EJ. PADRE">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="small fw-bold text-muted">Teléfono del Tutor</label>
+                                <input type="tel" id="tutor-tel" class="form-control form-control-sm" placeholder="10 DÍGITOS">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card-fisiocid mb-4 animate__animated animate__fadeInLeft">
+        <div class="header-fisiocid">
+            <i class="fas fa-microscope"></i> Especificaciones de la Orden
+        </div>
+        <div class="p-4">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="label-fisiocid mb-1">📍 Zona Anatómica</label>
+                    <input type="text" id="zona-estudio" class="form-control form-fisiocid" placeholder="Ej: Columna Lumbar, Hombro Derecho..." style="border-left: 5px solid var(--color-camaleon);">
+                </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid mb-1">📋 Tipo de Estudio</label>
+                    <select id="tipo-estudio" class="form-select form-fisiocid">
+                        <option value="">Seleccione Modalidad...</option>
+                        <option value="USG">Ultrasonido (USG)</option>
+                        <option value="RX">Radiografía (RX)</option>
+                        <option value="RM">Resonancia Magnética (RM)</option>
+                        <option value="TAC">Tomografía (TAC)</option>
+                        <option value="EMG">Electromiografía</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3 pt-2 border-top">
+                <small class="text-muted italic" style="font-size: 0.7rem;">
+                    * Seleccione la modalidad para habilitar los protocolos específicos de interpretación.
+                </small>
+            </div>
+        </div>
+    </section>
+
+    <section class="row g-4 animate__animated animate__fadeInUp">
+        <div class="col-md-6">
+            <div class="card-fisiocid h-100">
+                <div class="header-fisiocid">
+                    <i class="fas fa-images"></i> Carga de Imágenes / Reporte PDF
+                </div>
+                <div class="p-4">
+                    <div id="dropzone-gabinete" class="dropzone-custom text-center p-5 mb-3" onclick="document.getElementById('archivos-gabinete').click()">
+                        <div class="py-3">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3" style="color: var(--color-camaleon); opacity: 0.7;"></i>
+                            <h6 class="fw-bold mb-1">Arrastre archivos aquí</h6>
+                            <p class="text-secondary small">o haga clic para explorar su equipo</p>
+                            <span class="badge bg-light text-dark border">JPG, PNG o PDF</span>
+                        </div>
+                        <input type="file" id="archivos-gabinete" multiple class="d-none" accept="image/*,application/pdf">
+                    </div>
+                    <div id="carril-imagen" class="row g-2 mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card-fisiocid h-100">
+                <div class="header-fisiocid">
+                    <i class="fas fa-pen-nib"></i> Reporte e Interpretación
+                </div>
+                <div class="p-4">
+                    <div class="mb-3">
+                        <label class="label-fisiocid">✍️ CARGE LAS IMAGENES DEL ESTUDIO A LA IZQUIERDA, Y SELECCIONE A SU MEDICO RADIOLOGO</label>
+                      
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold text-primary"><i class="fas fa-user-md"></i> ASIGNAR MÉDICO RADIÓLOGO</label>
+                        <select id="select-radiologo-asignado" class="form-select" required>
+                            <option value="" disabled selected>SELECCIONE RADIÓLOGO PARA DICTAMEN...</option>
+                        </select>
+                    </div>
+    
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="mt-5 text-center pb-5">
+        <button id="btn-finalizar" class="btn btn-lg px-5 shadow-lg animate__animated animate__pulse animate__infinite" onclick="guardarEstudioGabinete(event)" style="background-color: var(--color-camaleon); border: none; border-radius: 50px; padding: 18px; font-weight: 900; color: white; margin-bottom: 15px;">
+            <i class="fas fa-check-circle me-2"></i> INTEGRAR A EXPEDIENTE FISIOCID
+        </button>
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+            <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">
+                <span style="color: var(--color-camaleon, #00cfd5); font-weight: 800;">FisioCid</span> Red Global © 2026
+            </span>
+            <small style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 0.3px; max-width: 400px; line-height: 1.3;">
+                Infraestructura digital blindada para interoperabilidad clínica.
+            </small>
+        </div>
+    </footer>
+</main>
+
+<div id="visorComparativa" class="d-none">
+    <div class="d-flex justify-content-between align-items-center p-2 text-white border-bottom border-secondary" style="background: #0a0a0a; height: 50px;">
+        <h5 class="m-0 fw-bold d-flex align-items-center" style="font-size: 0.9rem; letter-spacing: 0.5px;">
+            <i class="fas fa-satellite-dish text-info me-2"></i> FISIOCID PACS | 
+            <span id="pacs-nombre-paciente" class="text-warning ms-2" style="font-size: 0.8rem;">Cargando paciente...</span>
+        </h5>
+        <div class="d-flex gap-2">
+            <button id="btn-toggle-historial-pacs" class="btn btn-outline-info btn-sm fw-bold px-3" style="font-size: 0.72rem; border-radius: 6px;" onclick="toggleSidebarPACS()">
+                <i class="fas fa-history me-1"></i> MOSTRAR HISTORIAL
+            </button>
+        
+          <button id="btn-toggle-dictamen" class="btn btn-info btn-sm fw-bold px-3" 
+        style="font-size: 0.72rem; border-radius: 6px; background-color: var(--color-camaleon, #00cfd5); border: none; color: #000;" 
+        onclick="togglePanelDictamen()">
+    <i class="fas fa-eye-slash me-1"></i> OCULTAR DICTAMEN
+</button>
+       <button id="btn-reset-zoom" class="btn btn-outline-light ...">RESET ZOOM</button>
+<button id="btn-cerrar-visor" class="btn btn-danger ...">CERRAR VISOR</button>
+        </div>
+    </div>
+    
+    <div class="d-flex w-100" style="height: calc(100vh - 50px); overflow: hidden; background: #000;">
+        
+        <div id="sidebarHistorialPACS" class="border-end border-secondary d-flex flex-column d-none" style="width: 250px; background: #121212; z-index: 10; transition: all 0.3s ease;">
+            <div class="p-2 bg-dark text-center border-bottom border-secondary">
+                <span class="text-white fw-bold" style="font-size: 0.75rem;"><i class="fas fa-folder-open text-warning me-1"></i> LÍNEA DE TIEMPO</span>
+            </div>
+            <div id="pacs-linea-tiempo" class="overflow-auto p-2" style="flex: 1;">
+                <div class="text-center text-muted mt-3 small"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+            </div>
+        </div>
+
+        <div class="d-flex flex-grow-1 position-relative" id="zona-visores-pacs">
+            
+            <div id="panelIzquierdoVisor" class="w-100 h-100 position-relative d-flex align-items-center justify-content-center border-end border-secondary" style="background: #000; overflow: hidden;">
+                <span id="badgeContadorTomasVisorA" class="badge bg-dark position-absolute top-0 start-0 m-3 opacity-85 fw-bold" style="z-index: 10; border: 1px solid #444; font-size: 0.6rem;">Toma 1</span>
+                
+                <div id="div-zoom-izq" class="w-100 h-100 d-flex align-items-center justify-content-center" style="position: absolute; top: 0; left: 0;">
+                    <img id="imgIzquierda" src="" style="max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.1s ease;">
+                </div>
+                
+                <button type="button" id="btnFlechaVisorIzqA" class="btn btn-dark position-absolute start-0 top-50 translate-middle-y ms-2 rounded-circle d-none" onclick="cambiarTomaPACS('A', -1)" style="z-index: 10; width: 35px; height: 35px; background: rgba(15,15,15,0.8); border: 1px solid #444;"><i class="fas fa-chevron-left text-white" style="font-size: 0.8rem;"></i></button>
+                <button type="button" id="btnFlechaVisorDerA" class="btn btn-dark position-absolute end-0 top-50 translate-middle-y me-2 rounded-circle d-none" onclick="cambiarTomaPACS('A', 1)" style="z-index: 10; width: 35px; height: 35px; background: rgba(15,15,15,0.8); border: 1px solid #444;"><i class="fas fa-chevron-right text-white" style="font-size: 0.8rem;"></i></button>
+                
+    
+                <span class="badge bg-dark position-absolute bottom-0 start-50 translate-middle-x mb-2 opacity-85 fw-bold text-info" id="lblTagPanelIzq" style="font-size: 0.6rem; border: 1px solid #00cfd5; z-index: 10;">ESTUDIO EN DICTAMEN</span>
+            </div>
+
+            <div id="panelDerechoVisor" class="w-50 h-100 position-relative d-flex align-items-center justify-content-center d-none" style="background: #000; overflow: hidden;">
+                <button type="button" id="btnCerrarComparativa" class="btn btn-outline-danger position-absolute top-0 end-0 m-2 rounded-circle" 
+    onclick="cerrarModoComparativa()" 
+    style="z-index: 20; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; background: rgba(255, 96, 96, 0.85); border: 1px solid rgba(255, 255, 255, 0.5);"
+    title="Quitar comparativa">
+    <i class="fas fa-times" style="font-size: 0.85rem;"></i>
+</button>
+                <span id="badgeContadorTomasVisorB" class="badge bg-dark position-absolute top-0 start-0 m-3 opacity-85 fw-bold" style="z-index: 10; border: 1px solid #444; font-size: 0.6rem;">Toma 1</span>
+                
+                <div id="div-zoom-der" class="w-100 h-100 d-flex align-items-center justify-content-center" style="position: absolute; top: 0; left: 0;">
+                    <img id="imgDerecha" src="" style="max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.1s ease;">
+                </div>
+                
+              <button type="button" id="btnFlechaVisorIzqB" class="btn btn-dark position-absolute start-0 top-50 translate-middle-y ms-2 rounded-circle d-none" onclick="cambiarTomaPACS('B', -1)" style="z-index: 10; width: 35px; height: 35px; background: rgba(15,15,15,0.8); border: 1px solid #444;"><i class="fas fa-chevron-left text-white" style="font-size: 0.8rem;"></i></button>
+
+              <button type="button" id="btnFlechaVisorDerB" class="btn btn-dark position-absolute end-0 top-50 translate-middle-y me-2 rounded-circle d-none" onclick="cambiarTomaPACS('B', 1)" style="z-index: 10; width: 35px; height: 35px; background: rgba(15,15,15,0.8); border: 1px solid #444;"><i class="fas fa-chevron-right text-white" style="font-size: 0.8rem;"></i></button>
+
+                <span class="badge bg-dark position-absolute bottom-0 start-50 translate-middle-x mb-2 opacity-85 fw-bold text-warning" id="lblTagPanelDer" style="font-size: 0.6rem; border: 1px solid #ffc107; z-index: 10;">ESTUDIO PREVIO (COMPARATIVA)</span>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<div id="panel-dictamen-radiologo" class="d-none animate__animated animate__slideInRight" style="display: none !important;">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+        <span class="fw-bold text-white small text-uppercase" style="letter-spacing: 0.5px; font-size: 0.72rem;"><i class="fas fa-file-signature text-warning me-1"></i> Dictamen Digital</span>
+        <span class="badge bg-dark text-info border border-info-subtle fw-bold" id="badge-estudio-activo" style="font-size: 0.55rem;">EXAMEN</span>
+    </div>
+
+    <div class="mb-3 text-start">
+        <label class="form-label fw-bold text-light opacity-90 mb-1" style="font-size: 0.68rem; letter-spacing: 0.3px;">
+            <i class="fas fa-microscope text-info"></i> DESCRIPCIÓN DE HALLAZGOS Y TÉCNICA
+        </label>
+        <textarea id="descripcion-hallazgos-pacs" class="form-control text-white border-secondary bg-dark p-2" rows="6" 
+                  style="font-size: 0.75rem; border-radius: 8px; line-height: 1.4; font-family: monospace; text-transform: uppercase;"
+                  placeholder="ESCRIBA EL ANALISIS MINUCIOSO..."></textarea>
+    </div>
+
+    <div class="mb-3 text-start">
+        <label class="form-label fw-bold text-light opacity-90 mb-1" style="font-size: 0.68rem; letter-spacing: 0.3px;">
+            <i class="fas fa-brain text-danger"></i> CONCLUSIÓN DIAGNÓSTICA (RESUMEN)
+        </label>
+        <textarea id="conclusion-estudio-pacs" class="form-control text-white border-secondary bg-dark p-2" rows="2" 
+                  style="font-size: 0.75rem; border-radius: 8px; line-height: 1.3; text-transform: uppercase;"
+                  placeholder="EJ: HERNIA DISCAL..."></textarea>
+    </div>
+
+    <div class="form-check form-switch p-2 rounded bg-dark border border-secondary mb-3 text-start">
+        <input class="form-check-input bg-danger border-danger ms-1" type="checkbox" id="es-urgente-pacs" style="cursor: pointer;">
+        <label class="form-check-label fw-bold text-warning cursor-pointer ps-2" for="es-urgente-pacs" style="font-size: 0.65rem; vertical-align: middle;">
+            ⚠️ HALLAZGO URGENTE
+        </label>
+    </div>
+
+<div class="pt-1">
+    <div id="contenedor-btn-integrar"></div>
+</div>
+
+    <div id="lista-historial-gabinete-pacs" class="mt-4 pt-3 border-top border-secondary text-start"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+
+<script src="js/supabase-config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/protocolos.js"></script>
+<script src="js/portal-gabinete.js"></script>
+
+<button class="btn btn-dark shadow-sm position-fixed" style="bottom: 20px; right: 20px; z-index: 1050; border-radius: 50px;" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasHistorial">
+    <i class="fas fa-history me-2"></i> Mi Historial
+</button>
+
+<div class="offcanvas offcanvas-end" data-bs-scroll="true" data-bs-backdrop="false" tabindex="-1" id="offcanvasHistorial" aria-labelledby="offcanvasHistorialLabel">
+    <div class="offcanvas-header bg-light border-bottom d-flex flex-column align-items-start gap-2">
+        <div class="d-flex w-100 justify-content-between align-items-center">
+            <h5 class="offcanvas-title" id="offcanvasHistorialLabel">📜 Historial de Gabinete</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="w-100 mt-1">
+            <div class="input-group">
+                <span class="input-group-text bg-white border-end-0 text-muted" style="border-radius: 8px 0 0 8px;">
+                    <i class="fas fa-search"></i>
+                </span>
+                <input type="text" id="busquedaHistorialGabinete" class="form-control border-start-0" placeholder="Buscar por Nombre o CURP..." style="border-radius: 0 8px 8px 0; font-size: 0.85rem;" oninput="filtrarHistorialGabineteRealTime()">
+            </div>
+        </div>
+        <button class="btn btn-primary btn-sm w-100 shadow-sm mt-1" onclick="iniciarComparativa()" style="border-radius: 8px;">
+            <i class="fas fa-columns"></i> Comparar Seleccionados
+        </button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div id="lista-historial-gabinete" class="list-group list-group-flush">
+            <div class="p-4 text-center text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Cargando historial...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// 🛡️ ESCUDO DE PROTECCIÓN ABSOLUTA PARA EL DICTAMEN PACS (FISIOCID 2026)
+// ============================================================================
+const inputsFisioCidPacs = [
+    'descripcion-hallazgos-pacs',
+    'conclusion-estudio-pacs'
+];
+
+inputsFisioCidPacs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        // DETENCIÓN EN FASE DE CAPTURA (Corta el flujo antes de que llegue al Visor)
+        el.addEventListener('mousedown', (e) => { e.stopPropagation(); }, { capture: true });
+        el.addEventListener('click', (e) => { e.stopPropagation(); }, { capture: true });
+        el.addEventListener('pointerdown', (e) => { e.stopPropagation(); }, { capture: true });
+        
+        // Evita que el teclado active atajos de Panzoom o del Visor Negro
+        el.addEventListener('keydown', (e) => { e.stopPropagation(); }, { capture: true });
+        el.addEventListener('keyup', (e) => { e.stopPropagation(); }, { capture: true });
+
+        // Forzar el foco limpio eliminando cualquier intento de expulsión
+        el.addEventListener('focus', (e) => {
+            el.style.borderColor = '#00cfd5';
+            el.style.boxShadow = '0 0 0 3px rgba(0, 207, 213, 0.2)';
+        });
+    }
+});
+</script>
+</body>
+</html>

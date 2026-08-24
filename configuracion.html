@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración de Perfil - FisioCid</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root { --primary: #10b981; }
+        
+        #previewLogo {
+            transition: all 0.3s ease;
+            object-fit: contain;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+
+        /* 🟢 REGLA DE MAYÚSCULAS AUTOMÁTICAS */
+        input[type="text"], input[type="tel"], textarea, select {
+            text-transform: uppercase;
+        }
+
+        /* 🔴 EXCEPCIÓN PARA CORREOS Y URLS */
+        input[type="email"], input[type="url"], .no-caps {
+            text-transform: none !important;
+        }
+
+        .btn-primary { background-color: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { filter: brightness(0.9); }
+
+        .dato-fijo {
+            background-color: #f1f5f9;
+            color: #475569;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 0.9rem;
+            cursor: not-allowed;
+            user-select: none;
+            font-weight: bold;
+        }
+        
+        .card-seccion {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-end mb-3">
+        <button id="btnCerrarSesion" class="btn btn-sm" style="background:#fff1f2; color:#be123c; font-weight: bold; border-radius: 8px;">
+            Cerrar Sesión 🚪
+        </button>
+    </div>
+
+    <div class="card p-4 shadow-sm border-0" style="border-radius: 15px;">
+        <header class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h3 style="margin: 0; color: var(--primary); font-weight: bold;">
+                    <i class="bi bi-gear-fill"></i> CONFIGURACIÓN DE MI CLÍNICA
+                </h3>
+                <p class="text-muted mb-0">Personaliza tu identidad visual y credenciales profesionales.</p>
+            </div>
+            <button type="button" onclick="location.href='dashboard.html'" class="btn btn-light border" style="font-weight: bold; color: #64748b;">
+                ⬅️ VOLVER
+            </button>
+        </header>
+
+        <form id="formConfiguracion">
+            
+            <div class="card-seccion">
+                <h5 class="mb-3 text-secondary" style="font-size: 0.9rem;"><i class="bi bi-person-badge"></i> DATOS DEL PROFESIONAL</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">NOMBRE REAL (TÍTULO PROFESIONAL)</label>
+                        <input type="text" id="nombreProfesional" class="form-control" placeholder="EJ: LFT. CRISTIAN CID" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">TELÉFONO (WHATSAPP)</label>
+                        <input type="tel" id="telefonoContacto" class="form-control" placeholder="2381234567">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">INSTITUCIÓN DE EGRESO</label>
+                    <input type="text" id="institucionEgreso" class="form-control" placeholder="UNIVERSIDAD DE PROCEDENCIA">
+                </div>
+            </div>
+
+            <div class="card-seccion" style="border-left: 5px solid var(--primary);">
+                <h5 class="mb-3 text-secondary" style="font-size: 0.9rem;"><i class="bi bi-shield-check"></i> CREDENCIALES PROFESIONALES</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">CÉDULA PROFESIONAL PRINCIPAL</label>
+                        <div class="input-group">
+                            <input type="text" id="cedulaProf" class="form-control" placeholder="NÚMERO DE CÉDULA" required>
+                            <button class="btn btn-dark btn-sm" type="button" onclick="verificarEnSep()">🔍 VALIDAR</button>
+                        </div>
+                    </div>
+<div class="col-md-6 mb-3">
+    <label class="form-label small fw-bold">ESPECIALIDAD MÉDICA</label>
+    <select id="especialidad" class="form-select" required>
+        <option value="" disabled selected>SELECCIONE ESPECIALIDAD...</option>
+        
+        <optgroup label="MÉDICOS ESPECIALISTAS">
+            <option value="INTERNISTA">MÉDICO INTERNISTA</option>
+            <option value="CARDIOLOGO">MÉDICO CARDIÓLOGO</option>
+            <option value="TRAUMATOLOGO/ORTOPEDISTA">MÉDICO TRAUMATÓLOGO Y ORTOPEDISTA</option>
+            <option value="GINECOLOGO/OBSTETRA">MÉDICO GINECÓLOGO Y OBSTETRA</option>
+            <option value="PEDIATRA">MÉDICO PEDIATRA</option>
+            <option value="ANESTESIOLOGO">MÉDICO ANESTESIÓLOGO</option>
+            <option value="CIRUJANO_GENERAL">MÉDICO CIRUJANO GENERAL</option>
+            <option value="NEUROCIRUJANO">MÉDICO NEUROCIRUJANO</option>
+            <option value="NEUROLOGO">MÉDICO NEURÓLOGO</option>
+            <option value="NEUMOLOGO">MÉDICO NEUMÓLOGO</option>
+            <option value="GASTROENTERÓLOGO">MÉDICO GASTROENTERÓLOGO</option>
+            <option value="URGENCIÓLOGO">MÉDICO URGENCIÓLOGO</option>
+            <option value="ONCOLOGO">MÉDICO ONCÓLOGO</option>
+            <option value="DERMATOLOGO">MÉDICO DERMATÓLOGO</option>
+            <option value="ENDOCRINOLOGO">MÉDICO ENDOCRINÓLOGO</option>
+            <option value="NEFROLOGO">MÉDICO NEFRÓLOGO</option>
+            <option value="REUMATOLOGO">MÉDICO REUMATÓLOGO</option>
+            <option value="OFTALMOLOGO">MÉDICO OFTALMÓLOGO</option>
+            <option value="OTORRINOLARINGOLOGO">MÉDICO OTORRINOLARINGÓLOGO</option>
+            <option value="REHABILITADOR">MÉDICO REHABILITADOR / FISIATRA</option>
+            <option value="GENERAL">MÉDICO GENERAL</option>
+        </optgroup>
+
+        <optgroup label="NUTRICIÓN, ODONTOLOGÍA Y SALUD MENTAL">
+            <option value="NUTRIOLOGO">NUTRIÓLOGO</option>
+            <option value="ODONTOLOGO">ODONTÓLOGO</option>
+            <option value="PSICOLOGO CLÍNICO">PSICÓLOGO CLÍNICO</option>
+            <option value="PSICOTERAPEUTA">PSICOTERAPEUTA</option>
+            <option value="PSIQUIATRA">PSIQUIATRA</option>
+        </optgroup>
+
+        <optgroup label="REHABILITACIÓN Y TERAPIA">
+            <option value="FISIOTERAPEUTA">FISIOTERAPEUTA</option>
+            <option value="REHABILITADOR_FISICO">REHABILITADOR FÍSICO</option>
+            <option value="TERAPISTA_OCUPACIONAL">TERAPISTA OCUPACIONAL</option>
+            <option value="TERAPISTA_LENGUAJE">TERAPISTA DE LENGUAJE</option>
+            <option value="ESPECIALISTA_PELVICO">ESPECIALISTA EN PISO PÉLVICO</option>
+            <option value="INHALOTERAPEUTA">INHALOTERAPEUTA</option>
+            <option value="PODOLOGO">PODÓLOGO</option>
+            </optgroup>
+             <optgroup label="GABINETE"></optgroup>
+             <option value="MEDICO-RADIOLOGO">MÉDICO RADIÓLOGO</option>
+             <option value="TECNICO_RADIOLOGO">TÉCNICO RADIÓLOGO</option>
+             </optgroup>
+
+           <optgroup label="ENFERMERÍA Y APOYO">
+            <option value="JEFE_ENFERMERIA">JEFE DE ENFERMERÍA</option>
+            <option value="SUPERVISOR_ENFERMERÍA">SUPERVISOR DE ENFERMERÍA</option>
+            <option value="ENFERMERO_STAFF">ENFERMERO DE STAFF</option>
+            <option value="ENFERMERO_ESPECIALISTA">ENFERMERO ESPECIALISTA</option>
+            <option value="AUXILIAR_ENFERMERÍA">AUXILIAR DE ENFERMERÍA</option>
+            <option value="CAMILLERO">CAMILLERO</option>
+            <option value="PARAMEDICO">PARAMÉDICO</option>
+             </optgroup>
+
+             <optgroup label="LABORATORIO"></optgroup>
+            <option value="QUIMICO">BIOQUÍMICO</option>
+            <option value="QUIMICO">PATÓLOGO</option>
+            <option value="QUIMICO">MICROBIÓLOGO</option>
+            <option value="MUESTRISTA">TÉCNICO MUESTRISTA</option>
+            </optgroup>
+
+        <optgroup label="PASANTES Y FORMACIÓN">
+            <option value="PASANTE_MEDICINA">PASANTE DE MEDICINA</option>
+            <option value="MIP">MÉDICO INTERNO PREGRADO</option>
+            <option value="RESIDENTE_R1">RESIDENTE MEDICINA 1ER AÑO</option>
+            <option value="RESIDENTE_R2">RESIDENTE MEDICINA 2DO AÑO</option>
+            <option value="RESIDENTE_R3">RESIDENTE MEDICINA 3ER AÑO</option>
+            <option value="RESIDENTE_R4">RESIDENTE MEDICINA 4TO AÑO</option>
+            <option value="ADSCRITO">MÉDICO ADSCRITO/TRATANTE</option>
+            <option value="PASANTE_FISIOTERAPIA">PASANTE DE FISIOTERAPIA</option>
+            <option value="PASANTE_ENFERMERIA">PASANTE DE ENFERMERÍA</option>
+            <option value="PASANTE DE NUTRICIÓN">PASANTE DE NUTRICIÓN</option>
+            <option value="PASANTE DE PSICOLOGÍA">PASANTE DE PSICOLOGÍA</option>
+            <option value="ESTUDIANTE EN PRÁCTICAS">ESTUDIANTE EN PRÁCTICAS</option>
+        </optgroup>
+
+        <optgroup label="OTRA PROFESIÓN NO REGISTRADA">
+            <option value="OTRO">OTRO</option>
+        </optgroup>
+    </select>
+</div>
+                </div>
+
+                <div id="listaEspecialidades" class="mb-3">
+                    </div>
+                <button type="button" onclick="agregarCampoEspecialidad()" class="btn btn-sm btn-outline-secondary w-100 mb-3">
+                    + AGREGAR OTRA CÉDULA / ESPECIALIDAD
+                </button>
+
+                <div class="p-3 rounded border" style="background: #fff1f2; border-color: #fecaca !important;">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="checkDeslinde">
+                        <label class="form-check-label small text-danger fw-bold" for="checkDeslinde">
+                            DECLARACIÓN JURADA: MANIFIESTO BAJO PROTESTA DE DECIR VERDAD QUE LAS CÉDULAS PROPORCIONADAS SON VERÍDICAS. FISIOCID-APP SE DESLINDA DE RESPONSABILIDAD LEGAL POR EL MAL USO DE CREDENCIALES.
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-seccion">
+                <h5 class="mb-3 text-secondary" style="font-size: 0.9rem;"><i class="bi bi-palette"></i> IDENTIDAD VISUAL DE LA CLÍNICA</h5>
+               <div class="mb-3">
+    <label class="form-label small fw-bold">NOMBRE DE LA CLÍNICA / MARCA</label>
+    <input type="text" id="nombreClinica" class="form-control text-uppercase" placeholder="EJ: FISIOCID" required>
+</div>
+
+<div class="mb-3">
+    <label class="form-label small fw-bold">DOMINIO EMPRESA</label>
+    <div class="input-group">
+        <span class="input-group-text bg-light text-muted fw-bold">@</span>
+        <input type="text" id="dom-empresa" class="form-control" 
+               placeholder="fisiocid.com" required 
+               style="text-transform: lowercase;">
+    </div>
+    <div class="form-text text-muted" style="font-size: 0.7rem;">
+        Solo usa letras minúsculas, números y puntos (ej: tuclinica.com o consultorio.net).
+    </div>
+</div>
+
+               <div class="card shadow-sm mb-4">
+    <div class="card-header text-white" id="headerFolio" style="background-color: var(--primary);">
+        <h5 class="mb-0">📄 Formato de Expediente Clínico</h5>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted">Define cómo quieres que se generen automáticamente tus folios legales.</p>
+        
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Prefijo</label>
+                <input type="text" id="conf_prefijo" class="form-control" placeholder="Ej: FC">
+            </div>
+            
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Sede/Siglas</label>
+                <input type="text" id="conf_sede" class="form-control" placeholder="Ej: MIA">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Separador</label>
+                <select id="conf_separador" class="form-select">
+                    <option value="-">- (Guion)</option>
+                    <option value="/">/ (Diagonal)</option>
+                    <option value=".">. (Punto)</option>
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Vista Previa del Folio</label>
+                <div id="previewFolio" class="form-control bg-light fw-bold text-primary text-center">
+                    FC-MIA-2026-0001
+                </div>
+            </div>
+        </div>
+    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold d-block mb-2">TIPO DE PROFESIONAL (SISTEMA)</label>
+                    <div class="dato-fijo">ADMIN_DUENO</div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label small fw-bold">COLOR TEMA</label>
+                   <input type="color" id="colorTema" class="form-control form-control-color" 
+                    oninput="aplicarColorEnVivo(this.value)">
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label small fw-bold">LOGOTIPO (LINK URL)</label>
+                        <div class="text-center mb-2">
+                            <img id="previewLogo" src="" alt="PREVISUALIZACIÓN" class="d-none" style="max-height: 80px;">
+                        </div>
+                        <input type="url" id="logoUrl" class="form-control no-caps" placeholder="https://tuweb.com/logo.png">
+                    </div>
+                </div>
+
+                  <div class="mb-3">
+                   <label class="form-label small fw-bold">ENTIDAD FEDERATIVA</label>
+                    <select id="entidadfederativa" class="form-select form-fisiocid">
+    <option value="">SELECCIONAR ESTADO</option>
+    <option value="AGUASCALIENTES">AGUASCALIENTES</option>
+    <option value="BAJA CALIFORNIA">BAJA CALIFORNIA</option>
+    <option value="BAJA CALIFORNIA SUR">BAJA CALIFORNIA SUR</option>
+    <option value="CAMPECHE">CAMPECHE</option>
+    <option value="COAHUILA">COAHUILA</option>
+    <option value="COLIMA">COLIMA</option>
+    <option value="CHIAPAS">CHIAPAS</option>
+    <option value="CHIHUAHUA">CHIHUAHUA</option>
+    <option value="CIUDAD DE MEXICO">CIUDAD DE MÉXICO</option>
+    <option value="DURANGO">DURANGO</option>
+    <option value="GUANAJUATO">GUANAJUATO</option>
+    <option value="GUERRERO">GUERRERO</option>
+    <option value="HIDALGO">HIDALGO</option>
+    <option value="JALISCO">JALISCO</option>
+    <option value="MEXICO">MÉXICO</option>
+    <option value="MICHOACAN">MICHOACÁN</option>
+    <option value="MORELOS">MORELOS</option>
+    <option value="NAYARIT">NAYARIT</option>
+    <option value="NUEVO LEON">NUEVO LEÓN</option>
+    <option value="OAXACA">OAXACA</option>
+    <option value="PUEBLA">PUEBLA</option> <option value="QUERETARO">QUERÉTARO</option>
+    <option value="QUINTANA ROO">QUINTANA ROO</option>
+    <option value="SAN LUIS POTOSI">SAN LUIS POTOSÍ</option>
+    <option value="SINALOA">SINALOA</option>
+    <option value="SONORA">SONORA</option>
+    <option value="TABASCO">TABASCO</option>
+    <option value="TAMAULIPAS">TAMAULIPAS</option>
+    <option value="TLAXCALA">TLAXCALA</option>
+    <option value="VERACRUZ">VERACRUZ</option>
+    <option value="YUCATAN">YUCATÁN</option>
+    <option value="ZACATECAS">ZACATECAS</option>
+    <option value="EXTRANJERO">EXTRANJERO</option>
+</select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">DIRECCIÓN FÍSICA</label>
+                    <input type="text" id="direccionConsultorio" class="form-control" placeholder="AV. NACIONAL SUR #35...">
+                </div>
+        
+               
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mt-2 py-3 fw-bold" id="btnGuardarConfig">
+                <i class="bi bi-save"></i> GUARDAR Y APLICAR CONFIGURACIÓN
+            </button>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="js/supabase-config.js"></script> 
+<script src="js/configuracion.js"></script>
+<script src="js/utils.js"></script>
+
+</body>
+</html>

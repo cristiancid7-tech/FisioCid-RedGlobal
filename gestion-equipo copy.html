@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FisioCid Pro | Gestión Institucional</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #0f172a; 
+            --accent-color: #2563eb;
+            --bg-body: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--bg-body) 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            margin: 0;
+            color: #1e293b;
+        }
+
+        /* FUERZA VISUAL DE MAYÚSCULAS (EXCEPTO EMAIL) */
+        input, select { text-transform: uppercase; }
+        #emailInvitar { text-transform: none; }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .glass-section {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 28px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.05);
+            border: 1px solid rgba(255,255,255,1);
+        }
+
+        h2, h3 {
+            margin: 0 0 1.5rem 0;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 14px;
+            border-radius: 16px;
+            border: 2px solid #f1f5f9;
+            font-weight: 600;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        #btnEnviarInv {
+            width: 100%;
+            padding: 1.2rem;
+            border-radius: 20px;
+            border: none;
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+            color: white;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s;
+        }
+
+        #btnEnviarInv:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 30px -5px var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div id="clinicaBrand" style="font-weight: 800; font-size: 1.2rem;">FISIOCID PRO</div>
+        <button id="btnCerrarSesion" style="background: #fee2e2; color: #ef4444; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 700; cursor: pointer;">SALIR 🚪</button>
+    </nav>
+
+    <div class="container">
+        <header>
+            <h2>GESTOR INSTITUCIONAL</h2>
+            <p style="color: #64748b;">Estructura de personal y red de jerarquías.</p>
+        </header>
+
+        <section class="glass-section">
+            <h3>➕ RECLUTAMIENTO</h3>
+            
+            <div class="form-grid">
+                <div class="input-group" style="grid-column: span 2;">
+                    <label>Email del Profesional (MINÚSCULAS)</label>
+                    <input type="email" id="emailInvitar" placeholder="ejemplo@fisiocid.com" oninput="this.value = this.value.toLowerCase().trim()">
+                </div>
+                <div class="input-group">
+                    <label>Rol de Sistema (Permisos)</label>
+                    <select id="rolInvitar">
+                        <option value="ADMIN_SISTEMA">ADMINISTRADOR</option>
+                        <option value="STAFF_CLINICO">STAFF CLÍNICO</option>
+                        <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
+                        <option value="OPERATIVO">OPERATIVO</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="input-group">
+                    <label>Cargo Clínico (Identidad)</label>
+                    <select id="cargoInvitar" required>
+                        <option value="" disabled selected>SELECCIONE...</option>
+                        <optgroup label="DIRECCIÓN Y ADMINISTRACIÓN">
+                            <option value="DIRECTOR MEDICO">DIRECTOR MÉDICO</option>
+                            <option value="ADMINISTRADOR_CLINICA">ADMINISTRADOR DE CLÍNICA</option>
+                            <option value="RECEPCIONISTA">RECEPCIONISTA / CONTROL DE CAJA</option>
+                            <option value="AUXILIAR_ADMIN">AUXILIAR ADMINISTRATIVO</option>
+                            <option value="JEFE_ALMACEN / INSUMOS">JEFE DE ALMACÉN / INSUMOS</option>
+                            <option value="ENCARGADO_FARMACIA">ENCARGADO DE FARMACIA</option>
+                
+                        </optgroup>
+                           
+                            <optgroup label="MÉDICOS ESPECIALISTAS">
+                                <option value="INTERNISTA">MÉDICO INTERNISTA</option>
+                                <option value="CARDIOLOGO">MÉDICO CARDIÓLOGO</option>
+                                <option value="TRAUMATOLOGO/ORTOPEDISTA">MÉDICO TRAUMATÓLOGO Y ORTOPEDISTA</option>
+                                <option value="GINECOLOGO/OBSTETRA">MÉDICO GINECÓLOGO Y OBSTETRA</option>
+                                <option value="PEDIATRA">MÉDICO PEDIATRA</option>
+                                <option value="ANESTESIOLOGO">MÉDICO ANESTESIÓLOGO</option>
+                                <option value="CIRUJANO_GENERAL">MÉDICO CIRUJANO GENERAL</option>
+                                <option value="NEUROCIRUJANO">MÉDICO NEUROCIRUJANO</option>
+                                <option value="NEUROLOGO">MÉDICO NEURÓLOGO</option>
+                                <option value="RADIOLOGO">MÉDICO RADIÓLOGO</option>
+                                <option value="NEUMOLOGO">MÉDICO NEUMÓLOGO</option>
+                                <option value="GASTROENTERÓLOGO">MÉDICO GASTROENTERÓLOGO</option>
+                                <option value="URGENCIÓLOGO">MÉDICO URGENCIÓLOGO</option>
+                                <option value="ONCOLOGO">MÉDICO ONCÓLOGO</option>
+                                <option value="DERMATOLOGO">MÉDICO DERMATÓLOGO</option>
+                                <option value="ENDOCRINOLOGO">MÉDICO ENDOCRINÓLOGO</option>
+                                <option value="NEFROLOGO">MÉDICO NEFRÓLOGO</option>
+                                <option value="REUMATOLOGO">MÉDICO REUMATÓLOGO</option>
+                                <option value="OFTALMOLOGO">MÉDICO OFTALMÓLOGO</option>
+                                <option value="OTORRINOLARINGOLOGO">MÉDICO OTORRINOLARINGÓLOGO</option>
+                                <option value="REHABILITADOR">MÉDICO REHABILITADOR / FISIATRA</option>
+                                <option value="GENERAL">MÉDICO GENERAL</option>
+                            </optgroup>
+                            <optgroup label="NUTRICIÓN, ODONTOLOGÍA Y SALUD MENTAL">
+                                <option value="NUTRIOLOGO">NUTRIÓLOGO</option>
+                                <option value="ODONTOLOGO">ODONTOLOGO</option>
+                                <option value="PSICOLOGO CLÍNICO">PSICÓLOGO CLÍNICO</option>
+                                <option value="PSICOTERAPEUTA">PSICOTERAPEUTA</option>
+                                <option value="PSIQUIATRA">PSIQUIATRA</option>
+                            </optgroup>
+                            <optgroup label="REHABILITACIÓN Y TERAPIA">
+                                <option value="FISIOTERAPEUTA">FISIOTERAPEUTA</option>
+                                <option value="REHABILITADOR_FISICO">REHABILITADOR FÍSICO</option>
+                                <option value="TERAPISTA_OCUPACIONAL">TERAPISTA OCUPACIONAL</option>
+                                <option value="TERAPISTA_LENGUAJE">TERAPISTA DE LENGUAJE</option>
+                                <option value="ESPECIALISTA_PELVICO">ESPECIALISTA EN PISO PÉLVICO</option>
+                                <option value="INHALOTERAPEUTA">INHALOTERAPEUTA</option>
+                                <option value="PODOLOGO">PODÓLOGO</option>
+                            </optgroup>
+                            <optgroup label="ENFERMERÍA Y APOYO">
+                                <option value="JEFE_ENFERMERIA">JEFE DE ENFERMERÍA</option>
+                                <option value="SUPERVISOR_ENFERMERÍA">SUPERVISOR DE ENFERMERÍA</option>
+                                <option value="ENFERMERO_STAFF">ENFERMERO DE STAFF</option>
+                                <option value="ENFERMERO_ESPECIALISTA">ENFERMERO ESPECIALISTA</option>
+                                <option value="AUXILIAR_ENFERMERÍA">AUXILIAR DE ENFERMERÍA</option>
+                                <option value="CAMILLERO">CAMILLERO</option>
+                                <option value="PARAMEDICO">PARAMÉDICO</option>
+                            </optgroup>
+                            <optgroup label="PASANTES Y FORMACIÓN">
+                                <option value="PASANTE_MEDICINA">PASANTE DE MEDICINA</option>
+                                <option value="MIP">MEDICO INTERNO PREGRADO</option>
+                                <option value="RESIDENTE_R1">RESIDENTE MEDICINA 1ER AÑO</option>
+                                <option value="RESIDENTE_R2">RESIDENTE MEDICINA 2DO AÑO</option>
+                                <option value="RESIDENTE_R3">RESIDENTE MEDICINA 3ER AÑO</option>
+                                <option value="RESIDENTE_R4">RESIDENTE MEDICINA 4TO AÑO</option>
+                                 <option value="ADSCRITO">MEDICO ADSCRITO/TRATANTE</option>
+                                <option value="PASANTE_FISIOTERAPIA">PASANTE DE FISIOTERAPIA</option>
+                                <option value="PASANTE_ENFERMERIA">PASANTE DE ENFERMERÍA</option>
+                                <option value="PASANTE DE NUTRICIÓN">PASANTE DE NUTRICIÓN</option>
+                                <option value="PASANTE DE PSICOLOGÍA">PASANTE DE PSICOLOGÍA</option>
+                                <option value="MÉDICO INTERNO DE PREGRADO">MÉDICO INTERNO DE PREGRADO</option>
+                                <option value="ESTUDIANTE EN PRÁCTICAS">ESTUDIANTE EN PRÁCTICAS</option>
+                            </optgroup>
+                            <optgroup label="OTRA PROFESION NO REGISTRADA">
+                                <option value="OTRO">OTRO</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Área / Ubicación (MAYÚSCULAS)</label>
+                    <input type="text" id="areaInvitar" placeholder="EJ: PISO 2" oninput="this.value = this.value.toUpperCase()">
+                </div>
+                <div class="input-group">
+                    <label>Turno</label>
+                    <select id="turnoInvitar">
+                        <option value="MATUTINO">MATUTINO (09:00 - 14:00)</option>
+                        <option value="VESPERTINO">VESPERTINO (14:00 - 19:00)</option>
+                        <option value="COMPLETO">JORNADA COMPLETA</option>
+                        <option value="PARTIDO">HORARIO PARTIDO (MAÑANA Y TARDE)</option>
+                        <option value="24X24">GUARDIA 24x24</option>
+                        <option value="NOCTURNO">NOCTURNO / VELADA</option>
+                        <option value="PERSONALIZADO">DEFINIR EN TABLA DE HORARIOS...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="input-group" style="grid-column: span 3;">
+                    <label>Reporta a (Superior Directo):</label>
+                    <select id="superiorInvitar">
+                        <option value="">DIRECCIÓN GENERAL (SIN JEFE INTERMEDIO)</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="btnEnviarInv">Mandar Solicitud Rango 100</button>
+        </section>
+
+        <section class="glass-section">
+            <h3>👥 RED ACTUAL</h3>
+            <div id="listaRedActual">
+                <p style="text-align: center; color: #94a3b8;">Cargando red profesional...</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/gestion-equipo.js"></script>
+</body>
+</html>

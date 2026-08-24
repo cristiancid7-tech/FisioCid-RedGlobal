@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FisioCid - La Red para Fisioterapeutas</title>
+    <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+    <div class="container" style="max-width: 800px; margin: 0 auto; padding: 2rem;">
+        
+        <header style="text-align: center; margin-bottom: 3rem;">
+            <h1 style="color: var(--primary); font-size: 2.5rem; margin-bottom: 0.5rem;">FISIOCID</h1>
+            <p style="color: #64748b; font-size: 1.1rem;">Únete a la red profesional de gestión clínica.</p>
+        </header>
+
+      <div class="card" id="cardRegistro">
+    <div id="paso1">
+        <h3 style="text-align: center; margin-bottom: 1.5rem;">¿CÓMO USARÁS LA PLATAFORMA?</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <button class="btn-perfil" onclick="seleccionarPerfil('DUEÑO')" 
+                    style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
+                <span style="font-size: 2rem;">🏢</span><br>
+                <strong>DUEÑO DE CLÍNICA</strong><br>
+                <small style="color: #94a3b8;">TENGO EQUIPO Y SUCURSAL.</small>
+            </button>
+            <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')" 
+                    style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
+                <span style="font-size: 2rem;">🩺</span><br>
+                <strong>INDEPENDIENTE</strong><br>
+                <small style="color: #94a3b8;">GESTIÓN PERSONAL.</small>
+            </button>
+        </div>
+    </div>
+
+    <form id="formRegistroNuevo" style="display: none; margin-top: 1rem;">
+        <input type="hidden" id="tipoPerfil">
+        
+        <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 1.5rem; text-align: center; text-transform: uppercase;"></h4>
+
+        <div class="form-group">
+            <label>NOMBRE COMPLETO (REAL)</label>
+            <input type="text" id="regNombre" placeholder=" " required>
+        </div>
+
+        <div class="form-group" id="grupoClinica">
+            <label id="labelClinica">NOMBRE DE TU CLÍNICA / CONSULTORIO</label>
+            <input type="text" id="regNombreClinica" placeholder=" " required>
+        </div>
+
+        <div class="form-group">
+            <label>TELÉFONO CELULAR (10 DÍGITOS)</label>
+            <input type="tel" id="regTelefono" placeholder="2381234567" required pattern="[0-9]{10}">
+        </div>
+
+        <div class="form-group">
+            <label>CORREO ELECTRÓNICO</label>
+            <input type="email" id="regEmail" placeholder="correo@ejemplo.com" required>
+        </div>
+
+        <div class="form-group">
+            <label>CONTRASEÑA</label>
+            <input type="password" id="regPass" placeholder="MÍNIMO 6 CARACTERES" required>
+        </div>
+
+        <button type="submit" style="width: 100%; margin-top: 1rem; padding: 12px; font-weight: bold;">CREAR MI CUENTA PROFESIONAL</button>
+        
+        <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer;">← VOLVER</button>
+    </form>
+</div>
+
+        <p style="text-align: center; margin-top: 2rem;">
+            ¿Ya tienes cuenta? <a href="login.html" style="color: var(--primary); font-weight: bold; text-decoration: none;">Inicia Sesión aquí</a>
+        </p>
+    </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<script src="js/supabase-config.js"></script>
+
+<script src="js/registro-nuevo.js"></script>
+
+<script>
+  function seleccionarPerfil(tipo) {
+    document.getElementById('tipoPerfil').value = tipo;
+    document.getElementById('paso1').style.display = 'none';
+    document.getElementById('formRegistroNuevo').style.display = 'block';
+    
+    const txt = document.getElementById('txtBienvenida');
+    const labelClinica = document.getElementById('labelClinica');
+    const inputClinica = document.getElementById('regNombreClinica');
+    
+    if(tipo === 'DUEÑO') {
+        txt.innerText = "🏢 REGISTRO PARA DUEÑO DE CLÍNICA";
+        labelClinica.innerText = "NOMBRE DE TU CLÍNICA O EMPRESA";
+        inputClinica.placeholder = "EJ. FISIOCID MATRIZ";
+        // Si es dueño, nos aseguramos que el campo esté habilitado para escribir
+        inputClinica.readOnly = false;
+        inputClinica.style.backgroundColor = "#ffffff";
+    } else {
+        txt.innerText = "🩺 REGISTRO PARA FISIOTERAPEUTA INDEPENDIENTE";
+        labelClinica.innerText = "NOMBRE DE TU CONSULTORIO PERSONAL";
+        // Si es independiente, activamos el modo auto-relleno
+        inputClinica.readOnly = true;
+        inputClinica.style.backgroundColor = "#f8fafc";
+        inputClinica.placeholder = "SE GENERARÁ AUTOMÁTICAMENTE";
+    }
+}
+</script>
+
+</body>
+</html>
