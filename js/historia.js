@@ -237,13 +237,42 @@ if (formHistoria) {
 
         try {
             const { data: { user } } = await fisioNet.auth.getUser();
-            if (!user) throw new Error("Sesión expirada");
+            if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
 
-            const specialty = localStorage.getItem('especialidadUsuario');
-            const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
-            
-            if (!specialty || !idClinica) {
-                throw new Error("Falta configuración de especialidad o sede. Por favor, regresa al Dashboard.");
+            // 🛡️ 1. AUTO-RECUPERACIÓN DE SEDE
+            let idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+            if (!idClinica) {
+                // Si no está en memoria, la recuperamos directo de la BD
+                const { data: colab } = await fisioNet
+                    .from('colaboradores_clinica')
+                    .select('id_clinica')
+                    .eq('id_profesional', user.id)
+                    .eq('estado', 'ACTIVO')
+                    .limit(1)
+                    .maybeSingle();
+                
+                idClinica = colab?.id_clinica;
+                if (idClinica) {
+                    localStorage.setItem('id_clinica_activa', idClinica);
+                    localStorage.setItem('clinica_activa_id', idClinica);
+                }
+            }
+
+            // 🛡️ 2. AUTO-RECUPERACIÓN DE ESPECIALIDAD (Con fallback por defecto 'FISIOTERAPIA GENERAL')
+            let specialty = localStorage.getItem('especialidadUsuario');
+            if (!specialty) {
+                const { data: perfilDoc } = await fisioNet
+                    .from('perfiles_profesionales')
+                    .select('especialidad')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                specialty = perfilDoc?.especialidad || 'FISIOTERAPIA GENERAL';
+                localStorage.setItem('especialidadUsuario', specialty);
+            }
+
+            if (!idClinica) {
+                throw new Error("No se detectó una sede vinculada activa para tu usuario.");
             }
             await fisioNet.from('pacientes_maestros').update({
                 alergias: document.getElementById('alergias').value,
