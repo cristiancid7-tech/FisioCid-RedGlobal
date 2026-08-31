@@ -149,40 +149,62 @@ async function procesarLoginPaciente(event) {
         const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email: emailInput, password: pass });
         if (authError) throw authError;
 
-        console.log("🔎 [PORTAL] Buscando expediente clínico para el correo:", user.email);
+        console.log("🔎 [PORTAL] Usuario Auth verificado. ID:", user.id, "Correo:", user.email);
 
-        // 2. Buscamos por correo_electronico (o id_usuario_auth si ya estaba vinculado)
-        let { data: pacienteData, error: pacError } = await fisioNet
+        // 🚨 2. DIAGNÓSTICO PROFUNDO CON CONSOLE LOGS
+        // Intento A: Por ID de Usuario Auth
+        const resAuth = await fisioNet
             .from('pacientes_maestros')
             .select('id, nombre, apellido_paterno, id_usuario_auth')
-            .or(`correo_electronico.ilike.${user.email},id_usuario_auth.eq.${user.id}`)
+            .eq('id_usuario_auth', user.id)
             .maybeSingle();
+        console.log("🔍 [LOG 1] Búsqueda por id_usuario_auth ->", resAuth);
 
-        if (pacError) throw pacError;
+        // Intento B: Por correo_electronico (Adulto)
+        const resCorreo = await fisioNet
+            .from('pacientes_maestros')
+            .select('id, nombre, apellido_paterno, id_usuario_auth')
+            .ilike('correo_electronico', user.email.trim())
+            .maybeSingle();
+        console.log("🔍 [LOG 2] Búsqueda por correo_electronico ->", resCorreo);
 
+        // Intento C: Por correo_tutor (Menor de edad)
+        const resTutor = await fisioNet
+            .from('pacientes_maestros')
+            .select('id, nombre, apellido_paterno, id_usuario_auth')
+            .ilike('correo_tutor', user.email.trim())
+            .maybeSingle();
+        console.log("🔍 [LOG 3] Búsqueda por correo_tutor ->", resTutor);
+
+        // Evaluamos cuál devolvió datos exitosos
+        let pacienteData = resAuth.data || resCorreo.data || resTutor.data;
+
+        // Si no encontró nada en ninguna de las 3 opciones:
         if (!pacienteData) {
-            alert("⚠️ Credenciales válidas, pero no existe un expediente clínico maestro asociado a este correo (" + user.email + ") en la base de datos.");
+            alert("⚠️ Credenciales válidas en Auth, pero no se encontró la ficha en 'pacientes_maestros'. Revisa los [LOGS] en la consola.");
             await fisioNet.auth.signOut();
             if (btn) { btn.disabled = false; btn.innerText = "INGRESAR AL PORTAL"; }
             return;
         }
 
-        // 3. AUTO-VÍNCULO: Si el expediente no tenía el id_usuario_auth guardado, lo enlazamos en este milisegundo
+        // 3. AUTO-VÍNCULO: Asignamos el id_usuario_auth si aún estaba vacío
         if (!pacienteData.id_usuario_auth) {
-            console.log("🔗 Enlazando expediente clínico maestro con el acceso Auth del paciente...");
-            await fisioNet
+            console.log("🔗 Enlazando expediente clínico maestro ID:", pacienteData.id, "con user.id de Auth...");
+            const { error: errUpdate } = await fisioNet
                 .from('pacientes_maestros')
                 .update({ id_usuario_auth: user.id })
                 .eq('id', pacienteData.id);
+            
+            if (errUpdate) console.error("⚠️ Error en auto-vínculo (revisar RLS Update):", errUpdate);
         }
 
-        // 4. Configuración limpia de sesión para el portal de pacientes
+        // 4. Configuración de sesión para el portal
         localStorage.setItem('rol_actual', 'PACIENTE');
         localStorage.setItem('nombre_completo', `${pacienteData.nombre} ${pacienteData.apellido_paterno}`.toUpperCase());
         localStorage.setItem('usuarioId', user.id);
         localStorage.setItem('paciente_maestro_id', pacienteData.id);
         
-        console.log("🚀 Redirección inmediata a portal-paciente.html");
+        console.log("🚀 Acceso concedido. Redirigiendo a portal-paciente.html");
         window.location.href = 'portal-paciente.html';
 
     } catch (err) {
@@ -194,7 +216,6 @@ async function procesarLoginPaciente(event) {
         }
     }
 }
-
 function mostrarSelectorSedes(sedes, datosPaciente) {
     // 1. Limpiar si ya existe uno
     const old = document.getElementById('selectorSedesOverlay');
