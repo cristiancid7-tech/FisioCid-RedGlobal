@@ -136,43 +136,62 @@ async function procesarLoginDoctor(event) {
 async function procesarLoginPaciente(event) {
     event.preventDefault();
     const btn = document.getElementById('btnEntrarPac');
-    const email = document.getElementById('pacEmail').value.trim().toLowerCase();
+    const emailInput = document.getElementById('pacEmail').value.trim().toLowerCase();
     const pass = document.getElementById('pacPass').value;
 
-    btn.disabled = true;
-    btn.innerText = "CONECTANDO CON EL PORTAL...";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "CONECTANDO CON EL PORTAL...";
+    }
 
     try {
-        const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email, password: pass });
+        // 1. Autenticación en Supabase Auth
+        const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email: emailInput, password: pass });
         if (authError) throw authError;
 
-        console.log("🔎 [PORTAL] Extrayendo ficha médica del paciente maestro:", user.id);
-        const { data: pacienteData, error: pacError } = await fisioNet
+        console.log("🔎 [PORTAL] Buscando expediente clínico para el correo:", user.email);
+
+        // 2. Buscamos por correo_electronico (o id_usuario_auth si ya estaba vinculado)
+        let { data: pacienteData, error: pacError } = await fisioNet
             .from('pacientes_maestros')
-            .select('id, nombre, apellido_paterno')
-            .eq('id_usuario_auth', user.id)
+            .select('id, nombre, apellido_paterno, id_usuario_auth')
+            .or(`correo_electronico.ilike.${user.email},id_usuario_auth.eq.${user.id}`)
             .maybeSingle();
 
         if (pacError) throw pacError;
 
         if (!pacienteData) {
-            alert("⚠️ Credenciales válidas, pero no existe un expediente clínico maestro asociado a este correo en la base de datos.");
+            alert("⚠️ Credenciales válidas, pero no existe un expediente clínico maestro asociado a este correo (" + user.email + ") en la base de datos.");
             await fisioNet.auth.signOut();
-            btn.disabled = false; btn.innerText = "INGRESAR AL PORTAL";
+            if (btn) { btn.disabled = false; btn.innerText = "INGRESAR AL PORTAL"; }
             return;
         }
 
-        // Configuración directa y limpia de sesión para el portal de pacientes
+        // 3. AUTO-VÍNCULO: Si el expediente no tenía el id_usuario_auth guardado, lo enlazamos en este milisegundo
+        if (!pacienteData.id_usuario_auth) {
+            console.log("🔗 Enlazando expediente clínico maestro con el acceso Auth del paciente...");
+            await fisioNet
+                .from('pacientes_maestros')
+                .update({ id_usuario_auth: user.id })
+                .eq('id', pacienteData.id);
+        }
+
+        // 4. Configuración limpia de sesión para el portal de pacientes
         localStorage.setItem('rol_actual', 'PACIENTE');
-        localStorage.setItem('nombre_completo', `${pacienteData.nombre} ${pacienteData.apellido_paterno}`);
+        localStorage.setItem('nombre_completo', `${pacienteData.nombre} ${pacienteData.apellido_paterno}`.toUpperCase());
         localStorage.setItem('usuarioId', user.id);
+        localStorage.setItem('paciente_maestro_id', pacienteData.id);
         
         console.log("🚀 Redirección inmediata a portal-paciente.html");
         window.location.href = 'portal-paciente.html';
 
     } catch (err) {
+        console.error("❌ Error en acceso Paciente:", err);
         alert("Error de acceso al portal: " + err.message);
-        btn.disabled = false; btn.innerText = "INGRESAR AL PORTAL";
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "INGRESAR AL PORTAL";
+        }
     }
 }
 
