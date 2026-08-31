@@ -67,6 +67,7 @@ async function iniciarSesion(email, password) {
         document.getElementById('btnConfirmarSede').onclick = () => {
             const seleccionado = document.querySelector('input[name="sede"]:checked');
             if (seleccionado) {
+                localStorage.setItem('id_clinica_activa', seleccionado.value);
                 localStorage.setItem('clinica_activa_id', seleccionado.value);
                 if(!config || !config.nombre_clinica) localStorage.setItem('nombre_clinica', seleccionado.dataset.nombre.toUpperCase());
                 window.location.href = 'dashboard.html';
@@ -75,7 +76,9 @@ async function iniciarSesion(email, password) {
             }
         };
     } else {
-        localStorage.setItem('clinica_activa_id', colaboraciones[0].id_clinica);
+       
+localStorage.setItem('id_clinica_activa', colaboraciones[0].id_clinica);
+localStorage.setItem('clinica_activa_id', colaboraciones[0].id_clinica);
         if(!config || !config.nombre_clinica) localStorage.setItem('nombre_clinica', colaboraciones[0].clinicas.nombre_clinica.toUpperCase());
         window.location.href = 'dashboard.html';
     }
@@ -197,3 +200,44 @@ const salir = async () => {
     sessionStorage.clear();
     window.location.href = 'index.html';
 };
+// 🛡️ MOTOR AUTO-SANABLE DE CLÍNICA (Evita que el ID quede nulo o a la deriva)
+async function asegurarClinicaActiva() {
+    let idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+    if (!idClinica) {
+        console.log("🔍 id_clinica no detectado en memoria. Consultando a Supabase...");
+        const { data: { user } } = await fisioNet.auth.getUser();
+        
+        if (user) {
+            // Buscamos la relación del usuario en la tabla de colaboradores
+            const { data: colab } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('id_clinica')
+                .eq('id_profesional', user.id)
+                .eq('estado', 'ACTIVO')
+                .limit(1)
+                .maybeSingle();
+
+            if (colab?.id_clinica) {
+                idClinica = colab.id_clinica;
+            } else {
+                // Si es un dueño nuevo que apenas creó su cuenta, tomamos la clínica que le pertenece
+                const { data: clinicaDueno } = await fisioNet
+                    .from('clinicas')
+                    .select('id')
+                    .eq('id_dueno', user.id)
+                    .limit(1)
+                    .maybeSingle();
+                
+                idClinica = clinicaDueno?.id;
+            }
+
+            if (idClinica) {
+                localStorage.setItem('id_clinica_activa', idClinica);
+                localStorage.setItem('clinica_activa_id', idClinica);
+                console.log("✅ ID de Clínica auto-recuperado y fijado:", idClinica);
+            }
+        }
+    }
+    return idClinica;
+}

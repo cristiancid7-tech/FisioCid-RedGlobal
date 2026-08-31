@@ -566,6 +566,8 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         emailAdulto = emailAdulto.toLowerCase();
 
         console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
+// 1. Obtenemos el UUID del tutor guardado en el input hidden
+        const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
         const payload = {
             ...datos,
@@ -575,7 +577,10 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             id_clinica: clinicaId, 
             id_clinica_origen: clinicaId,
             nombre_clinica: localStorage.getItem('nombre_clinica'),
+
             es_menor_edad: esMenor,
+            id_tutor: esMenor ? uuidTutorSeleccionado : null, // 👈 Si es menor lleva su UUID; si es adulto va NULL limpio.
+
             nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
             telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
             parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
@@ -585,6 +590,13 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             acceso_red_activo: accesoRed,
           notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null,
         };
+
+        const payloadSanitizado = Object.fromEntries(
+            Object.entries(payload).map(([clave, valor]) => [
+                clave, 
+                (typeof valor === 'string' && valor.trim() === '') ? null : valor
+            ])
+        );
 
         let resultado;
         const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
@@ -654,7 +666,7 @@ if (esPacienteExistente) {
             // 🆕 PACIENTE NUEVO ABSOLUTO
             console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO. Ejecutando insert en pacientes_maestros...");
             payload.fecha_registro = new Date().toISOString();
-            
+            console.log("📦 PAYLOAD EXACTO A ENVIAR:", payload);
             resultado = await fisioNet.from('pacientes_maestros').insert([payload]).select();
             console.log("📡 [LOG 10B] Respuesta cruda recibida de pacientes_maestros:", resultado);
             
