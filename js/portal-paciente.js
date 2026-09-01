@@ -353,10 +353,19 @@ function aplicarFiltros() {
     renderizarNotas(filtradas);
 }
 
-function cerrarSesion() {
+async function cerrarSesion() {
     if (confirm("¿Deseas salir de tu expediente digital?")) {
-        localStorage.removeItem('paciente_maestro_id');
-        localStorage.removeItem('paciente_sesion_id');
-        window.location.href = 'login.html';
+        try {
+            // 1. Cerrar la sesión activa en Supabase Auth
+            await fisioNet.auth.signOut();
+        } catch (err) {
+            console.error("Error al cerrar sesión en Supabase:", err);
+        } finally {
+            // 2. Limpiar todo el almacenamiento local
+            localStorage.clear();
+
+            // 3. Redirigir al inicio de sesión
+            window.location.href = 'login.html';
+        }
     }
 }
