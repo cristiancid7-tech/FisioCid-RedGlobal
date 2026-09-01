@@ -2,35 +2,29 @@
 // 🚀 VARIABLES GLOBALES
 // ==========================================
 let notasGlobales = [];
+let estudiosGlobales = [];
 let perfilActivoId = null;
 let pacienteLogueadoData = null;
 let listaFamiliares = [];
 let idSolicitudActiva = null;
 
 // ==========================================
-// ⚡ INICIALIZACIÓN
-// ==========================================
-// ==========================================
 // ⚡ INICIALIZACIÓN CON AUTO-RECUPERACIÓN
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // 1. Buscamos primero en el LocalStorage
         let idPaciente = localStorage.getItem('paciente_maestro_id') || localStorage.getItem('paciente_sesion_id');
         
-        // 2. Si no hay en localStorage, buscamos si viene en la URL (?id=UUID)
         if (!idPaciente) {
             const urlParams = new URLSearchParams(window.location.search);
             idPaciente = urlParams.get('id');
         }
 
-        // 3. AUTO-RECUPERACIÓN DESDE AUTH: Si sigue nulo, le preguntamos directo a Supabase Auth quién está logueado
         if (!idPaciente) {
             console.log("🔍 Intentando auto-recuperar ID desde la sesión activa de Supabase Auth...");
             const { data: { user } } = await fisioNet.auth.getUser();
             
             if (user) {
-                // Buscamos el expediente maestro asociado a este usuario de Auth
                 const { data: pac } = await fisioNet
                     .from('pacientes_maestros')
                     .select('id')
@@ -44,7 +38,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // 4. EVALUACIÓN FINAL DE IDENTIDAD
         if (idPaciente) {
             console.log("✅ Paciente identificado con éxito ID:", idPaciente);
             localStorage.setItem('paciente_maestro_id', idPaciente);
@@ -68,7 +61,6 @@ async function cargarExpedienteCompleto(pacienteId) {
     try {
         console.log("⏳ Cargando expediente familiar para ID:", pacienteId);
 
-        // Consultamos al paciente principal y sus hijos (vinculados por id_tutor)
         const { data: familia, error } = await fisioNet
             .from('pacientes_maestros')
             .select('*')
@@ -79,17 +71,14 @@ async function cargarExpedienteCompleto(pacienteId) {
         if (familia && familia.length > 0) {
             listaFamiliares = familia;
             
-            // Definir titular
             const titular = familia.find(p => p.id === pacienteId) || familia[0];
             pacienteLogueadoData = titular;
 
-            // Inyectar nombres en Navbar
             const lblUser = document.getElementById('nombreUserActivo');
             const lblTutor = document.getElementById('nombreTutorMenu');
-            if (lblUser) lblUser.innerText = `${titular.nombre} ${titular.apellido_paterno}`;
+            if (lblUser) lblUser.innerText = `${titular.nombre} ${titular.apellido_paterno}`.toUpperCase();
             if (lblTutor) lblTutor.innerText = `${titular.nombre} (Titular)`;
 
-            // Inyectar hijos/familiares en el dropdown
             const contenedorFamilia = document.getElementById('listaFamiliaresMenu');
             if (contenedorFamilia) {
                 const hijos = familia.filter(p => p.id !== titular.id);
@@ -106,7 +95,6 @@ async function cargarExpedienteCompleto(pacienteId) {
                 }
             }
 
-            // Seleccionar por defecto al titular
             seleccionarPerfil(titular.id);
         }
     } catch (e) {
@@ -120,9 +108,8 @@ function seleccionarPerfil(idPaciente) {
     
     if (paciente) {
         const lblSaludo = document.getElementById('txtSaludo');
-        if (lblSaludo) lblSaludo.innerText = `¡Hola, ${paciente.nombre}!`;
+        if (lblSaludo) lblSaludo.innerText = `¡Hola, ${paciente.nombre.toUpperCase()}!`;
         
-        // Cargar registros correspondientes a este perfil
         cargarRegistrosClinicos(idPaciente);
     }
 }
@@ -132,11 +119,8 @@ function seleccionarPerfil(idPaciente) {
 // ==========================================
 async function escucharSolicitudesEnVivo(pacienteId) {
     console.log("👂 Escuchando solicitudes médicas en tiempo real para:", pacienteId);
-
-    // Búsqueda inicial de solicitudes pendientes de aprobación
     verificarSolicitudesPendientes(pacienteId);
 
-    // Canal Realtime con Supabase
     fisioNet
         .channel('solicitudes_medicas_otp')
         .on('postgres_changes', { 
@@ -178,7 +162,6 @@ function mostrarBannerSolicitud(solicitud) {
     const lblDoctor = document.getElementById('lblNombreDoctorSolicitante');
     const lblCodigo = document.getElementById('lblCodigoOTPPaciente');
 
-    // 🎯 Usamos la columna nombre_profesional
     if (lblDoctor) lblDoctor.innerText = solicitud.nombre_profesional || "Dr. Cristian";
     if (lblCodigo) lblCodigo.innerText = solicitud.codigo_otp || "000 000";
     
@@ -203,7 +186,6 @@ async function aprobarAccesoDoctor() {
     }
 
     try {
-        // 🎯 Guardamos en la columna permisos_concedidos como JSON/Objeto
         const { error } = await fisioNet
             .from('solicitudes_acceso_otp')
             .update({
@@ -228,60 +210,17 @@ async function aprobarAccesoDoctor() {
     }
 }
 
-// 🎯 BOTÓN DEL PACIENTE: Aprobar y autorizar acceso al Doctor
-async function aprobarAccesoDoctor() {
-    if (!idSolicitudActiva) {
-        alert("⚠️ No hay ninguna solicitud activa para autorizar.");
-        return;
-    }
-
-    const permiteNotas = document.getElementById('chkPermisoNotas')?.checked || false;
-    const permiteEstudios = document.getElementById('chkPermisoEstudios')?.checked || false;
-
-    if (!permiteNotas && !permiteEstudios) {
-        alert("⚠️ Debes seleccionar al menos una opción de información para compartir con tu médico.");
-        return;
-    }
-
-    try {
-        console.log("🚀 Autorizando acceso en Supabase para solicitud:", idSolicitudActiva);
-
-        const { error } = await fisioNet
-            .from('solicitudes_acceso_otp')
-            .update({
-                estado_solicitud: 'APROBADO',
-                permite_notas: permiteNotas,
-                permite_estudios: permiteEstudios,
-                fecha_aprobacion: new Date().toISOString()
-            })
-            .eq('id', idSolicitudActiva);
-
-        if (error) throw error;
-
-        alert("✅ ¡Acceso Autorizado! Tu médico ya puede visualizar los registros seleccionados en su pantalla.");
-        
-        // Ocultamos el banner
-        const card = document.getElementById('cardSolicitudActiva');
-        if (card) card.style.display = 'none';
-
-    } catch (err) {
-        console.error("❌ Error al autorizar acceso:", err.message);
-        alert("Ocurrió un error al procesar la autorización.");
-    }
-}
-
 // ==========================================
-// 📄 3. CARGA DE REGISTROS CLÍNICOS
+// 📄 3. CARGA DE REGISTROS CLÍNICOS (SIN ACENTOS)
 // ==========================================
-
 async function cargarRegistrosClinicos(pacienteId) {
     try {
-        console.log("📥 Jalando datos de la DB para el paciente:", pacienteId);
+        console.log("📥 Consultando base de datos para el paciente ID:", pacienteId);
 
         // A) NOTAS CLÍNICAS (Tabla: historial_clinico)
         const { data: notas, error: errNotas } = await fisioNet
             .from('historial_clinico')
-            .select('id_nota, fecha_nota, motivo_consulta, diagnostico_principal, plan_tratamiento, nota_evolucion, especialidad_nota, nombre_clinica')
+            .select('id_nota, fecha_nota, motivo_consulta, diagnostico_principal, plan_tratamiento, nota_evolucion, especialidad_nota, nombre_clinica, sintomas')
             .eq('id_paciente', pacienteId)
             .order('fecha_nota', { ascending: false });
 
@@ -289,7 +228,7 @@ async function cargarRegistrosClinicos(pacienteId) {
         notasGlobales = notas || [];
         renderizarNotas(notasGlobales);
 
-        // B) ESTUDIOS DE GABINETE / ULTRASONIDOS (Tabla: estudios_gabinete)
+        // B) ESTUDIOS DE GABINETE (Tabla: estudios_gabinete)
         const { data: gabinete, error: errGab } = await fisioNet
             .from('estudios_gabinete')
             .select('id, tipo_estudio, archivo_url, categoria, hallazgos_resumen, fecha_registro, especialista_nombre, diagnostico_radiologico')
@@ -301,17 +240,33 @@ async function cargarRegistrosClinicos(pacienteId) {
         // C) ESTUDIOS DE LABORATORIO (Tabla: estudios_laboratorio)
         const { data: lab, error: errLab } = await fisioNet
             .from('estudios_laboratorio')
-            .select('id, tipo_estudio:estudios_etiquetas, archivo_url:archivo_pdf_url, observaciones, created_at, especialista_quimico')
+            .select('id, estudios_etiquetas, archivo_pdf_url, observaciones, created_at, especialista_quimico')
             .eq('paciente_id', pacienteId)
             .order('created_at', { ascending: false });
 
         if (errLab) console.error("❌ Error en estudios_laboratorio:", errLab);
 
-        // Combinamos gabinete y laboratorio en la pestaña de estudios
+        // COMBINAMOS Y UNIFICAMOS ESTUDIOS
         const listaEstudiosCombinada = [
-            ...(gabinete || []).map(g => ({ ...g, origen: 'GABINETE', fecha: g.fecha_registro })),
-            ...(lab || []).map(l => ({ ...l, origen: 'LABORATORIO', fecha: l.created_at, tipo_estudio: l.estudios_etiquetas || 'Laboratorio', archivo_url: l.archivo_pdf_url, hallazgos_resumen: l.observaciones, especialista_nombre: l.especialista_quimico }))
-        ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            ...(gabinete || []).map(g => ({
+                id: g.id,
+                origen: 'GABINETE',
+                titulo: g.tipo_estudio || 'Estudio de Imagen',
+                resumen: g.hallazgos_resumen || g.diagnostico_radiologico || 'Estudio adjunto al expediente.',
+                url: g.archivo_url,
+                especialista: g.especialista_nombre,
+                fecha: g.fecha_registro
+            })),
+            ...(lab || []).map(l => ({
+                id: l.id,
+                origen: 'LABORATORIO',
+                titulo: l.estudios_etiquetas || 'Análisis Clínico',
+                resumen: l.observaciones || 'Resultados de laboratorio adjuntos.',
+                url: l.archivo_pdf_url,
+                especialista: l.especialista_quimico,
+                fecha: l.created_at
+            }))
+        ].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
 
         estudiosGlobales = listaEstudiosCombinada;
         renderizarEstudios(estudiosGlobales);
@@ -363,8 +318,6 @@ function renderizarEstudios(lista) {
         const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Reciente';
         const esLab = e.origen === 'LABORATORIO';
         const icono = esLab ? 'fa-vial icon-lab' : 'fa-x-ray icon-img';
-       const titulo = e.tipo_estudio || (esLab ? 'Análisis Clínico' : 'Estudio de Imagen');
-        const resumen = e.hallazgos_resumen || e.diagnostico_radiologico || 'Estudio registrado en sistema.';
 
         return `
             <div class="record-card fade-in">
@@ -374,34 +327,13 @@ function renderizarEstudios(lista) {
                         <i class="fas ${esLab ? 'fa-vial' : 'fa-camera'} me-1"></i> ${e.origen}
                     </span>
                 </div>
-                <h6 class="record-doctor"><i class="fas ${icono} me-2"></i>${titulo.toUpperCase()}</h6>
-                <p class="record-summary">${resumen}</p>
-                ${e.especialista_nombre ? `<div class="text-muted small mb-2"><strong>Especialista:</strong> ${e.especialista_nombre}</div>` : ''}
-                ${e.archivo_url ? `<a href="${e.archivo_url}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill mt-1"><i class="fas fa-file-pdf me-1"></i> Abrir Documento / PDF</a>` : ''}
+                <h6 class="record-doctor"><i class="fas ${icono} me-2"></i>${e.titulo.toUpperCase()}</h6>
+                <p class="record-summary mb-2">${e.resumen}</p>
+                ${e.especialista ? `<div class="text-muted small mb-2"><strong>Especialista:</strong> ${e.especialista}</div>` : ''}
+                ${e.url ? `<a href="${e.url}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill mt-1"><i class="fas fa-file-pdf me-1"></i> Abrir Documento / PDF</a>` : '<span class="badge bg-light text-muted">Sin archivo adjunto</span>'}
             </div>
         `;
     }).join('');
-}
-
-function renderizarNotas(lista) {
-    const contenedor = document.getElementById('listaNotas');
-    if (!contenedor) return;
-
-    if (!lista || lista.length === 0) {
-        contenedor.innerHTML = `<div class="text-center text-muted py-4"><i class="fas fa-folder-open fa-2x mb-2 d-block"></i> No hay notas clínicas registradas.</div>`;
-        return;
-    }
-
-    contenedor.innerHTML = lista.map(n => `
-        <div class="record-card fade-in">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="record-date"><i class="fas fa-calendar-alt me-1"></i> ${n.fecha_consulta || 'Fecha N/A'}</span>
-                <span class="record-spec"><i class="fas fa-file-medical me-1 icon-note"></i> Nota de Evolución</span>
-            </div>
-            <h6 class="record-doctor"><i class="fas fa-user-md me-2 text-primary"></i>${n.nombre_profesional || 'FisioCid Red'}</h6>
-            <p class="record-summary">${n.diagnostico_subjetivo || n.resumen_clinico || 'Sin observaciones adicionales.'}</p>
-        </div>
-    `).join('');
 }
 
 // ==========================================
@@ -413,9 +345,9 @@ function aplicarFiltros() {
     const fecha = document.getElementById('filtroFecha')?.value || "";
 
     const filtradas = notasGlobales.filter(n => {
-        return (esp === "" || n.especialidad === esp) &&
-               (doc === "" || (n.nombre_profesional && n.nombre_profesional.toLowerCase().includes(doc))) &&
-               (fecha === "" || (n.fecha_consulta && n.fecha_consulta.startsWith(fecha)));
+        return (esp === "" || (n.especialidad_nota && n.especialidad_nota.includes(esp))) &&
+               (doc === "" || (n.diagnostico_principal && n.diagnostico_principal.toLowerCase().includes(doc))) &&
+               (fecha === "" || (n.fecha_nota && n.fecha_nota.startsWith(fecha)));
     });
 
     renderizarNotas(filtradas);
@@ -423,7 +355,8 @@ function aplicarFiltros() {
 
 function cerrarSesion() {
     if (confirm("¿Deseas salir de tu expediente digital?")) {
+        localStorage.removeItem('paciente_maestro_id');
         localStorage.removeItem('paciente_sesion_id');
-        window.location.reload();
+        window.location.href = 'login.html';
     }
 }
