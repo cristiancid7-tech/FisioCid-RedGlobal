@@ -485,59 +485,77 @@ async function renderizarTablaAlianzas() {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
 
+        // 🎯 Búsqueda ampliada: incluye emisor, receptor o usuario socio vinculado
         const { data: socios, error } = await fisioNet
             .from('red_colaboracion')
             .select(`*, id_doctor_emisor(nombre_completo, especialidad, telefono_contacto, correo_institucional)`)
-            .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id}`)
-            // 🔥 Filtro: Mostramos todo menos lo ELIMINADO
+            .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id},id_usuario_socio.eq.${user.id}`)
             .neq('estado_conexion', 'ELIMINADO') 
             .order('nombre_entidad', { ascending: true });
 
         if (error) throw error;
 
-        // 🧠 Lógica de Orden: Ponemos los ACTIVO arriba y los PAUSADO abajo
-        const sociosOrdenados = [...socios].sort((a, b) => {
-            if (a.estado_conexion === 'ACTIVO' && b.estado_conexion === 'PAUSADO') return -1;
-            if (a.estado_conexion === 'PAUSADO' && b.estado_conexion === 'ACTIVO') return 1;
+        // Lógica de ordenamiento: ACTIVO/ACEPTADO arriba, PENDIENTE/PAUSADO abajo
+        const sociosOrdenados = [...(socios || [])].sort((a, b) => {
+            const esActivoA = a.estado_conexion === 'ACTIVO' || a.estado_conexion === 'ACEPTADO';
+            const esActivoB = b.estado_conexion === 'ACTIVO' || b.estado_conexion === 'ACEPTADO';
+            if (esActivoA && !esActivoB) return -1;
+            if (!esActivoA && esActivoB) return 1;
             return 0;
         });
 
         if (contador) {
             const totalEquipo = document.getElementById('tablaCuerpoEquipo')?.children.length || 0;
-            contador.innerText = `${sociosOrdenados.length + (totalEquipo - 1)} En Red`;
+            contador.innerText = `${sociosOrdenados.length + Math.max(0, totalEquipo - 1)} En Red`;
         }
 
         let html = `
             <tr>
                 <td colspan="4" style="background-color: #f0fdf4; color: #14532d; font-weight: 800; padding: 10px 15px; font-size: 0.8rem; letter-spacing: 0.5px;">
-                    🟢 ALIANZAS ESTRATÉGICAS (EXTERNOS)
+                    🟢 ALIANZAS ESTRATÉGICAS Y DOCTORES EXTERNOS
                 </td>
             </tr>
         `;
 
         if (sociosOrdenados.length === 0) {
-            html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay alianzas externas registradas.</td></tr>`;
+            html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay alianzas ni doctores externos vinculados.</td></tr>`;
         } else {
             html += sociosOrdenados.map(s => {
                 const esPausado = s.estado_conexion === 'PAUSADO';
+                const esPendiente = s.estado_conexion === 'PENDIENTE';
                 const soyReceptor = s.id_doctor_receptor === user.id;
-                
-                const nombreMostrar = soyReceptor ? "FISIOCID (FISIOTERAPIA)" : (s.nombre_entidad || 'N/A');
-                const contactoMostrar = soyReceptor ? (s.id_doctor_emisor?.nombre_completo || "CRISTIAN CID") : (s.contacto_principal || 'N/A');
-                
-                // 🎨 Estilos dinámicos para Pausados
-                const estiloFila = esPausado ? 'background-color: #fafafa; opacity: 0.6;' : '';
-                const colorBadge = esPausado ? '#f1f5f9' : '#f0fdf4'; 
-                const colorTextoBadge = esPausado ? '#64748b' : '#166534';
+
+                let nombreMostrar = s.nombre_entidad || s.contacto_principal || 'DOCTOR EXTERNO';
+                if (soyReceptor && s.id_doctor_emisor?.nombre_completo) {
+                    nombreMostrar = s.id_doctor_emisor.nombre_completo;
+                }
+
+                const contactoMostrar = s.contacto_principal || s.id_doctor_emisor?.nombre_completo || 'N/A';
+                const telMostrar = s.telefono_contacto || s.id_doctor_emisor?.telefono_contacto || 'N/A';
+
+                let etiquetaEstado = 'ALIANZA EXTERNA';
+                let colorBadge = '#f0fdf4';
+                let colorTextoBadge = '#166534';
+
+                if (esPausado) {
+                    etiquetaEstado = 'PAUSADO';
+                    colorBadge = '#f1f5f9';
+                    colorTextoBadge = '#64748b';
+                } else if (esPendiente) {
+                    etiquetaEstado = 'PENDIENTE APROBACIÓN';
+                    colorBadge = '#fef3c7';
+                    colorTextoBadge = '#b45309';
+                }
+
                 const descuento = s.porcentaje_descuento ? `${s.porcentaje_descuento}% DESC` : 'SIN DESC.';
 
                 return `
-                <tr style="border-bottom: 1px solid #f1f5f9; transition: all 0.3s ease; ${estiloFila}">
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: all 0.3s ease; ${esPausado ? 'opacity:0.6;' : ''}">
                     <td style="padding: 15px;">
-                        <div style="font-weight: 700; color: ${esPausado ? '#94a3b8' : '#1e293b'};">
-                            ${nombreMostrar} ${esPausado ? '<span style="font-size:0.6rem; color:#ef4444;">(PAUSADO)</span>' : ''}
+                        <div style="font-weight: 700; color: #1e293b;">
+                            ${nombreMostrar} ${esPendiente ? '<span style="font-size:0.65rem; color:#d97706;">⏳ (Por confirmar)</span>' : ''}
                         </div>
-                        <div style="font-size: 0.75rem; color: ${esPausado ? '#cbd5e1' : '#10b981'}; font-weight: 600;">ALIANZA EXTERNA</div>
+                        <div style="font-size: 0.75rem; color: ${colorTextoBadge}; font-weight: 600;">${etiquetaEstado}</div>
                     </td>
                     <td style="padding: 15px; text-align: center;">
                         <span style="background: ${colorBadge}; color: ${colorTextoBadge}; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
@@ -546,7 +564,7 @@ async function renderizarTablaAlianzas() {
                     </td>
                     <td style="padding: 15px;">
                         <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">👤 ${contactoMostrar}</div>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">📞 ${s.telefono_contacto || s.id_doctor_emisor?.telefono_contacto || 'N/A'}</div>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">📞 ${telMostrar}</div>
                     </td>
                     <td style="padding: 15px; text-align: right;">
                         <button onclick="abrirConfiguracionAlianza('${s.id}')" 
@@ -562,7 +580,7 @@ async function renderizarTablaAlianzas() {
         tbody.innerHTML = html;
 
     } catch (e) {
-        console.error("Fallo al cargar alianzas externas:", e);
+        console.error("❌ Fallo al cargar alianzas externas:", e);
     }
 }
 // ==========================================
