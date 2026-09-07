@@ -2135,8 +2135,7 @@ function mostrarAlertaInvitacion(inv) {
             </div>
 
             <div style="display:flex; gap:15px; justify-content:center;">
-                <!-- 🔥 AQUÍ AGREGAMOS LOS DATOS FALTANTES AL CLIC -->
-                onclick="procesarRespuestaInv('${inv.id}', 'ACEPTADO', '${inv.id_clinica_padre}', '${inv.nombre_clinica}')"
+                <button onclick="procesarRespuestaInv('${inv.id}', 'ACEPTADO', '${inv.id_clinica_padre}', '${inv.nombre_clinica}')" 
                         style="background:#10b981; color:white; border:none; padding:15px; border-radius:14px; font-weight:800; cursor:pointer; flex:1; font-size:1rem; transition:0.2s;">
                     ✅ ACEPTAR
                 </button>
