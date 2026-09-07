@@ -177,7 +177,14 @@
                     <label>Email del Profesional (MINÚSCULAS)</label>
                     <input type="email" id="emailInvitar" placeholder="ejemplo@gmail.com" oninput="this.value = this.value.toLowerCase().trim()">
                 </div>
-                
+                <div class="input-group">
+                    <label>Tipo de Vínculo (Ubicación en Red)</label>
+                    <select id="tipoVinculoInvitar" style="border-color: #3b82f6; background-color: #eff6ff; color: #1e40af; font-weight: 800;">
+                        <option value="INTERNO" selected>🔵 EQUIPO INTERNO (STAFF DE CLINICA)</option>
+                        <option value="EXTERNO">🟢 EXTERNO / ALIANZA / REFERIDO</option>
+                    </select>
+                </div>
+
                 <div class="input-group">
                     <label>Rol de Sistema (Permisos)</label>
                     <select id="rolInvitar">
@@ -313,7 +320,13 @@
                         <span id="labelDominio" class="label-dominio">@fisiocid.com</span>
                     </div>
                 </div>
-                
+                <div class="input-group">
+                    <label>Tipo de Vínculo (Ubicación en Red)</label>
+                    <select id="tipoVinculoInvitarAPOYO" style="border-color: #3b82f6; background-color: #eff6ff; color: #1e40af; font-weight: 800;">
+                        <option value="INTERNO" selected>🔵 EQUIPO INTERNO (STAFF DE CLINICA)</option>
+                                </select>
+                </div>
+
                 <div class="input-group">
                     <label>CONTRASEÑA TEMPORAL</label>
                     <input type="password" id="passTemporal" placeholder="">
