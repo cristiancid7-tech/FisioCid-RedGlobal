@@ -2130,17 +2130,18 @@ function mostrarAlertaInvitacion(inv) {
                 
                 <div style="font-size:0.8rem; color:#475569; font-weight:600;">
                     📍 Área: ${inv.area_asignada || 'General'} <br>
-                    ⏰ Turno: ${inv.turno || 'No especificado'}
+                    ⏰ Turno: ${inv.turno || 'No especificado'} <br>
+                    🔗 Vínculo: <strong>${inv.tipo_vinculo || 'COLABORADOR'}</strong>
                 </div>
             </div>
 
             <div style="display:flex; gap:15px; justify-content:center;">
-                <button onclick="procesarRespuestaInv('${inv.id}', 'ACEPTADO', '${inv.id_clinica_padre}', '${inv.nombre_clinica}')" 
+                <button onclick="procesarRespuestaInv('${inv.id}', 'ACEPTADO', '${inv.id_clinica_padre}', '${inv.nombre_clinica}', '${inv.tipo_vinculo}', '${inv.cargo_clinico}', '${inv.area_asignada || ''}', '${inv.turno || ''}')" 
                         style="background:#10b981; color:white; border:none; padding:15px; border-radius:14px; font-weight:800; cursor:pointer; flex:1; font-size:1rem; transition:0.2s;">
                     ✅ ACEPTAR
                 </button>
                 
-                <button onclick="procesarRespuestaInv('${inv.id}', 'RECHAZADO', null, null, null)" 
+                <button onclick="procesarRespuestaInv('${inv.id}', 'RECHAZADO', null, null, null, null, null, null)" 
                         style="background:#fee2e2; color:#ef4444; border:none; padding:15px; border-radius:14px; font-weight:800; cursor:pointer; flex:1; font-size:1rem; transition:0.2s;">
                     ❌ RECHAZAR
                 </button>
@@ -2156,12 +2157,12 @@ window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica,
     try {
         console.log("🔄 Procesando respuesta:", respuesta, "para la clínica:", nombreClinica);
 
-        // 1. ACTUALIZAR ESTADO Y RESCATAR EL ADN COMPLETO DEL RECLUTAMIENTO
+        // 1. ACTUALIZAR ESTADO Y RESCATAR EL ADN COMPLETO DEL RECLUTAMIENTO (incluyendo tipo_vinculo)
         const { data: datosInv, error: errUpdateInv } = await fisioNet
             .from('invitaciones_clinicas')
             .update({ estado: respuesta })
             .eq('id', idInv)
-            .select('rol_asignado, cargo_clinico, area_asignada, turno, id_superior_directo') 
+            .select('rol_asignado, cargo_clinico, area_asignada, turno, id_superior_directo, tipo_vinculo') // <-- 1. Añadimos tipo_vinculo aquí
             .single();
 
         if (errUpdateInv) throw new Error("No se pudo actualizar la invitación.");
@@ -2169,9 +2170,10 @@ window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica,
         if (respuesta === 'ACEPTADO') {
             const { data: { user } } = await fisioNet.auth.getUser();
 
+            // Respaldo de seguridad por si no viniera tipo_vinculo especificado en la invitación
             const esExterno = datosInv.cargo_clinico?.toUpperCase().includes('EXTERNO') || 
-                  datosInv.rol_asignado === 'SOCIOS_EXTERNOS' ||
-                  datosInv.cargo_clinico?.toUpperCase().includes('ALIANZA');
+                              datosInv.rol_asignado === 'SOCIOS_EXTERNOS' ||
+                              datosInv.cargo_clinico?.toUpperCase().includes('ALIANZA');
 
             // 2. ⚡ CREAR EL VÍNCULO CON LA INFORMACIÓN COMPLETA
             const { error: errInsertColab } = await fisioNet
@@ -2184,7 +2186,7 @@ window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica,
                     area_asignada: datosInv.area_asignada || 'GENERAL', 
                     turno: datosInv.turno || 'MATUTINO',
                     id_superior_directo: datosInv.id_superior_directo || null,
-                    tipo_vinculo: esExterno ? 'EXTERNO' : 'INTERNO',
+                    tipo_vinculo: datosInv.tipo_vinculo || (esExterno ? 'EXTERNO' : 'INTERNO'), // <-- 2. Usa primero el tipo_vinculo de la invitación
                     estado: 'ACTIVO'
                 }]);
 
