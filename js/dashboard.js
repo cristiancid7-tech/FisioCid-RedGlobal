@@ -997,67 +997,70 @@ window.cargarMonitorBoxes = async () => {
         }
 
         contenedor.innerHTML = boxes.map(box => {
-            let bgColor, textColor, borderColor, estadoTexto, botonAccion;
+            let badgeBg, badgeColor, estadoTexto, botonAccion;
             let tiempoTexto = "";
 
             if (box.estado === 'OCUPADO') {
-                bgColor = '#fff1f2'; 
-                textColor = '#be123c'; 
-                borderColor = '#fecdd3'; 
+                badgeBg = '#fee2e2'; 
+                badgeColor = '#991b1b'; 
                 estadoTexto = '🔴 OCUPADO';
 
                 if (box.hora_ingreso) {
                     const inicio = new Date(box.hora_ingreso);
                     const diffMinutos = Math.floor((new Date() - inicio) / 60000);
-                    tiempoTexto = `<span style="color: #e11d48; font-size: 0.7rem; font-weight: 800;">⏱️ ${diffMinutos} min</span>`;
+                    tiempoTexto = `<span style="color: #ef4444; font-size: 0.75rem; font-weight: 800;">⏱️ ${diffMinutos} min</span>`;
                 }
 
                 botonAccion = `
                     <button onclick="cambiarEstadoBox('${box.id}', 'LIMPIEZA')" 
-                            style="width: 100%; background: #f59e0b; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-top: 10px; transition: 0.2s;">
+                            style="width: 100%; background: #f59e0b; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin-top: 12px; transition: 0.2s;">
                         🧹 PASAR A LIMPIEZA
                     </button>`;
 
             } else if (box.estado === 'LIMPIEZA') {
-                bgColor = '#fffbeb'; 
-                textColor = '#b45309'; 
-                borderColor = '#fde68a'; 
-                estadoTexto = '🧹 EN LIMPIEZA';
+                badgeBg = '#fef3c7'; 
+                badgeColor = '#92400e'; 
+                estadoTexto = '🧹 LIMPIEZA';
 
                 botonAccion = `
                     <button onclick="cambiarEstadoBox('${box.id}', 'LIBRE')" 
-                            style="width: 100%; background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-top: 10px; transition: 0.2s;">
+                            style="width: 100%; background: #10b981; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin-top: 12px; transition: 0.2s;">
                         ✅ MARCAR DISPONIBLE
                     </button>`;
 
             } else {
-                bgColor = '#f0fdf4'; 
-                textColor = '#15803d'; 
-                borderColor = '#bbf7d0'; 
-                estadoTexto = '🟢 DISPONIBLE'; 
+                badgeBg = '#dcfce7'; 
+                badgeColor = '#166534'; 
+                estadoTexto = '🟢 LIBRE'; 
                 botonAccion = ''; 
             }
 
             const nombrePaciente = (box.estado === 'OCUPADO' && box.pacientes_maestros) 
                 ? `${box.pacientes_maestros.nombre} ${box.pacientes_maestros.apellido_paterno}` 
-                : (box.estado === 'LIMPIEZA' ? 'EN MANTENIMIENTO' : 'DISPONIBLE');
+                : (box.estado === 'LIMPIEZA' ? 'MANTENIMIENTO' : 'DISPONIBLE');
 
             return `
-                <div class="stat-card" style="background: ${bgColor}; border: 2px solid ${borderColor}; padding: 15px; text-align: center; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 18px; text-align: left; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; justify-content: space-between;">
                     <div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <small style="color: ${textColor}; font-weight: 800; font-size: 0.65rem; text-transform: uppercase;">
-                                ${box.nombre_box}
-                            </small>
+                        <!-- Encabezado con badge e indicador de tiempo -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: ${badgeBg}; color: ${badgeColor}; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.5px;">
+                                ${estadoTexto}
+                            </span>
                             ${tiempoTexto}
                         </div>
-                        <p style="margin: 8px 0; font-weight: 800; font-size: 0.85rem; color: #1e293b;">
+
+                        <!-- Nombre del Espacio (Destacado y Grande) -->
+                        <h4 style="margin: 0 0 6px 0; font-size: 1.1rem; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.3px;">
+                            ${box.nombre_box}
+                        </h4>
+
+                        <!-- Paciente / Estado secundario -->
+                        <p style="margin: 0; font-weight: 600; font-size: 0.85rem; color: #64748b;">
                             ${nombrePaciente.toUpperCase()}
                         </p>
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-                            <small style="font-size: 0.7rem; color: ${textColor}; font-weight: 800;">${estadoTexto}</small>
-                        </div>
                     </div>
+
                     ${botonAccion}
                 </div>`;
         }).join('');
