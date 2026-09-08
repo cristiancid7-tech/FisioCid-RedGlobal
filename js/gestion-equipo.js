@@ -40,6 +40,101 @@ async function obtenerIdClinicaReal(userId) {
     };
 }
 
+// ==========================================
+// 📦 NUEVA FUNCIÓN: CARGAR ÁREAS DESDE BOXES_CLINICA
+// ==========================================
+async function cargarAreasDesdeBoxes(idClinica) {
+    if (!idClinica) return;
+
+    try {
+        const { data: boxes, error } = await fisioNet
+            .from('boxes_clinica')
+            .select('nombre_box, tipo_espacio')
+            .eq('id_clinica', idClinica)
+            .order('nombre_box', { ascending: true });
+
+        if (error) throw error;
+
+        let opcionesHTML = `<option value="GENERAL">ÁREA GENERAL / TODA LA CLÍNICA</option>`;
+
+        if (boxes && boxes.length > 0) {
+            opcionesHTML += boxes.map(b => 
+                `<option value="${b.nombre_box.toUpperCase()}">📍 ${b.nombre_box.toUpperCase()} [${b.tipo_espacio || 'BOX'}]</option>`
+            ).join('');
+        }
+
+        // Reemplazar inputs por selects dinámicos con las opciones reales de boxes_clinica
+        const areaProf = document.getElementById('areaInvitar');
+        const areaApoyo = document.getElementById('areaInvitarAPOYO');
+
+        if (areaProf) {
+            areaProf.outerHTML = `<select id="areaInvitar" style="width:100%; padding:12px; border-radius:12px; border:2px solid #e2e8f0; font-weight:600; background:white;">${opcionesHTML}</select>`;
+        }
+        if (areaApoyo) {
+            areaApoyo.outerHTML = `<select id="areaInvitarAPOYO" style="width:100%; padding:12px; border-radius:12px; border:2px solid #e2e8f0; font-weight:600; background:white;">${opcionesHTML}</select>`;
+        }
+
+    } catch (err) {
+        console.error("❌ ERROR AL CARGAR BOXES DE LA CLÍNICA:", err);
+    }
+}
+
+// ==========================================
+// 👔 CARGAR SUPERIORES DIRECTOS (MÉTODO SEGURO 2 PASOS)
+// ==========================================
+async function cargarSuperioresDirectos(idClinica) {
+    if (!idClinica) return;
+
+    try {
+        // 1. Obtener colaboradores activos de la clínica
+        const { data: equipo, error: errColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('id_profesional, cargo_clinico')
+            .eq('id_clinica', idClinica)
+            .eq('estado', 'ACTIVO');
+
+        if (errColab) throw errColab;
+
+        let opcionesSuperiores = `<option value="">DIRECCIÓN GENERAL (SIN JEFE INTERMEDIO)</option>`;
+
+        if (equipo && equipo.length > 0) {
+            // Extraer IDs para consultar los perfiles de nombres
+            const uids = equipo.map(c => c.id_profesional).filter(Boolean);
+
+            const { data: perfiles, error: errPerf } = await fisioNet
+                .from('perfiles')
+                .select('id, nombre_completo')
+                .in('id', uids);
+
+            if (errPerf) console.warn("Aviso al cargar perfiles:", errPerf);
+
+            // Crear mapa ID -> Nombre
+            const mapaNombres = {};
+            if (perfiles) {
+                perfiles.forEach(p => { mapaNombres[p.id] = p.nombre_completo; });
+            }
+
+            opcionesSuperiores += equipo.map(colab => {
+                const nombre = mapaNombres[colab.id_profesional] 
+                    ? mapaNombres[colab.id_profesional].toUpperCase() 
+                    : 'COLABORADOR';
+                const cargo = (colab.cargo_clinico || 'STAFF').toUpperCase();
+
+                return `<option value="${colab.id_profesional}">👤 ${nombre} — [${cargo}]</option>`;
+            }).join('');
+        }
+
+        const superiorProf = document.getElementById('superiorInvitar');
+        const superiorApoyo = document.getElementById('superiorInvitarAPOYO');
+
+        if (superiorProf) superiorProf.innerHTML = opcionesSuperiores;
+        if (superiorApoyo) superiorApoyo.innerHTML = opcionesSuperiores;
+
+    } catch (err) {
+        console.error("❌ ERROR AL CARGAR SUPERIORES DIRECTOS:", err);
+    }
+}
+
 async function cargarRedActual(idClinica) {
     const contenedor = document.getElementById('listaRedActual'); 
     if (!contenedor) return;
@@ -152,13 +247,16 @@ document.getElementById('btnEnviarInv')?.addEventListener('click', async () => {
 // ==========================================
 // 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA)
 // ==========================================
+// ==========================================
+// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA)
+// ==========================================
 document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async () => {
     // 1. Recolección de datos
-    const alias = document.getElementById('userApoyo').value.trim().toLowerCase();
+    let alias = document.getElementById('userApoyo').value.trim().toLowerCase();
     const dominio = document.getElementById('labelDominio').innerText.replace('@', '').trim();
     const password = document.getElementById('passTemporal').value;
     const cargo = document.getElementById('cargoInvitarAPOYO').value; 
-    const nombre = document.getElementById('nombreCompletoAPOYO').value;
+    const nombre = document.getElementById('nombreCompletoAPOYO').value.trim().toUpperCase();
     const rol = document.getElementById('rolInvitarapoyo').value;
     const area = document.getElementById('areaInvitarAPOYO').value.toUpperCase();
     const turno = document.getElementById('turnoInvitarAPOYO').value;
@@ -167,7 +265,12 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
     if (!alias || !password || !cargo || !nombre) return alert("❌ Llena todos los campos (Nombre, Alias, Pass, Cargo).");
 
-    const correo = `${alias}@${dominio}`;
+    // Limpieza de alias por si el navegador autorrellenó un email completo
+    if (alias.includes('@')) {
+        alias = alias.split('@')[0];
+    }
+
+    const correoCorporativo = `${alias}@${dominio}`;
     const btn = document.getElementById('btnEnviarInvAPOYO');
     btn.innerText = "PROCESANDO...";
     btn.disabled = true;
@@ -176,7 +279,6 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
         const { data: { user: admin } } = await fisioNet.auth.getUser();
         const datosClinica = await obtenerIdClinicaReal(admin.id);
         
-        // 🛠️ EXTRACCIÓN CORRECTA DEL ID
         const idClinicaReal = datosClinica?.id; 
 
         if (!idClinicaReal || idClinicaReal === "null" || idClinicaReal === "undefined") {
@@ -185,31 +287,26 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
         // A. CREAR USUARIO EN AUTH
         const { data: authData, error: authErr } = await fisioAdmin.auth.signUp({
-            email: correo,
+            email: correoCorporativo,
             password: password,
             options: { data: { display_name: nombre } }
         });
         if (authErr) throw authErr;
 
         const uid = authData.user.id;
-        console.log("✅ DEBUG: UID generado con éxito:", uid);
 
-        // B. CREAR PERFIL (Identidad)
-        console.log("✅ DEBUG: Creando perfil en clínica UUID:", idClinicaReal);
+        // B. CREAR PERFIL EN TABLA 'perfiles'
         const { error: pErr } = await fisioAdmin.from('perfiles').upsert([{
             id: uid,
             nombre_completo: nombre,
             rol_sistema: rol,
+            correo_institucional: correoCorporativo,
             id_clinica_principal: idClinicaReal
         }]);
 
-        if (pErr) {
-            console.error("❌ ERROR DETALLADO EN PERFILES:", pErr);
-            throw new Error("Perfiles: " + pErr.message);
-        }
+        if (pErr) throw new Error("Perfiles: " + pErr.message);
 
-        // C. GUARDAR COLABORADOR (Contrato)
-        console.log("✅ DEBUG: Insertando colaborador final...");
+        // C. GUARDAR COLABORADOR
         const newCollabId = crypto.randomUUID(); 
         const { error: cErr } = await fisioAdmin.from('colaboradores_clinica').upsert([{
             id: newCollabId,
@@ -217,7 +314,7 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
             id_clinica: idClinicaReal,
             rol_sistema: rol,
             cargo_clinico: cargo,
-            tipo_vinculo: tipoVinculo, // 👈 INCLUIDO EN LA INSERCIÓN A SUPABASE
+            tipo_vinculo: tipoVinculo,
             estado: 'ACTIVO',
             fecha_inicio: new Date().toISOString(),
             area_asignada: area,
@@ -225,12 +322,9 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
             id_superior_directo: superior
         }], { onConflict: 'id' });
 
-        if (cErr) {
-            console.error("❌ ERROR DETALLADO EN COLABORADORES:", cErr);
-            throw new Error("Colaboradores: " + cErr.message);
-        }
+        if (cErr) throw new Error("Colaboradores: " + cErr.message);
 
-        alert("✅ ¡ÉXITO TOTAL! Usuario y colaborador creados de forma correcta.");
+        alert(`✅ ¡ÉXITO TOTAL! Acceso creado para: ${nombre}\nCorreo asignado: ${correoCorporativo}`);
         location.reload();
 
     } catch (err) {
@@ -241,7 +335,6 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
         btn.disabled = false;
     }
 });
-
 // ==========================================
 // ⚙️ ARRANQUE PRINCIPAL
 // ==========================================
@@ -261,6 +354,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (spanDominio) spanDominio.innerText = `@${clinica.dominio}`;
     }
 
-    // Cargar la tabla de colaboradores
-    await cargarRedActual(clinica.id);
+    // 🔗 Cargas dinámicas ligadas a la clínica
+    if (clinica.id) {
+        await cargarAreasDesdeBoxes(clinica.id);        // Carga camillas/espacios reales de boxes_clinica
+        await cargarSuperioresDirectos(clinica.id);    // Carga lista de superiores reales
+        await cargarRedActual(clinica.id);             // Carga lista de colaboradores
+    }
 });

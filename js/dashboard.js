@@ -309,19 +309,16 @@ async function renderizarTablaEquipo() {
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
         if (!idClinica) return console.warn("⚠️ No se encontró ID de clínica activa.");
 
-        // Consulta directa a colaboradores_clinica
+        // 1. Obtener colaboradores de la clínica
         const { data: colaboradores, error } = await fisioNet
             .from('colaboradores_clinica')
             .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno')
             .eq('id_clinica', idClinica)
             .eq('estado', 'ACTIVO');
 
-        if (error) {
-            console.error("❌ Error al consultar colaboradores_clinica:", error);
-            throw error;
-        }
+        if (error) throw error;
 
-        // Filtramos para el Equipo Interno (Staff)
+        // Filtramos para el Equipo Interno
         const equipoInterno = (colaboradores || []).filter(c => 
             !c.cargo_clinico?.toUpperCase().includes('EXTERNO') && 
             !c.cargo_clinico?.toUpperCase().includes('ALIANZA') &&
@@ -339,28 +336,51 @@ async function renderizarTablaEquipo() {
         if (equipoInterno.length === 0) {
             html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay colaboradores internos registrados.</td></tr>`;
         } else {
-            // Traemos nombres desde perfiles_profesionales
             const idsProf = equipoInterno.map(c => c.id_profesional).filter(Boolean);
             let perfilesMapa = {};
 
             if (idsProf.length > 0) {
-                const { data: perfiles } = await fisioNet
+                // Paso A: Buscar en 'perfiles_profesionales'
+                const { data: perfilesProf } = await fisioNet
                     .from('perfiles_profesionales')
                     .select('id, nombre_completo, correo_institucional')
                     .in('id', idsProf);
 
-                (perfiles || []).forEach(p => { perfilesMapa[p.id] = p; });
+                (perfilesProf || []).forEach(p => { 
+                    perfilesMapa[p.id] = {
+                        nombre_completo: p.nombre_completo,
+                        correo: p.correo_institucional
+                    }; 
+                });
+
+                // Paso B: Identificar UIDs que faltaron y buscarlos en la tabla 'perfiles' (Apoyo Corporativo)
+                const idsFaltantes = idsProf.filter(id => !perfilesMapa[id]);
+                
+                if (idsFaltantes.length > 0) {
+                    const { data: perfilesGen } = await fisioNet
+                        .from('perfiles')
+                        .select('id, nombre_completo, correo_institucional')
+                        .in('id', idsFaltantes);
+
+                    (perfilesGen || []).forEach(p => { 
+                     perfilesMapa[p.id] = {
+        nombre_completo: p.nombre_completo,
+        correo: p.correo_institucional || 'Sin correo'
+                        }; 
+                    });
+                }
             }
 
+            // Renderizar la tabla con la información combinada
             html += equipoInterno.map(colab => {
                 const perfil = perfilesMapa[colab.id_profesional] || {};
-                const nombre = perfil.nombre_completo || 'Usuario Registrado';
-                const correo = perfil.correo_institucional || 'Sin correo';
+                const nombre = perfil.nombre_completo || 'USUARIO REGISTRADO';
+                const correo = perfil.correo || 'Sin correo';
 
                 return `
                 <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fcfcfc;">
                     <td style="padding: 15px;">
-                        <div style="font-weight: 700; color: #1e293b;">${nombre}</div>
+                        <div style="font-weight: 700; color: #1e293b; text-transform: uppercase;">${nombre}</div>
                         <div style="font-size: 0.75rem; color: #3b82f6; font-weight: 600;">${colab.rol_sistema || 'STAFF INTERNO'}</div>
                     </td>
                     <td style="padding: 15px; text-align: center;">
