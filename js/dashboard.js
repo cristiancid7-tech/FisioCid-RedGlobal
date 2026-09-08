@@ -309,24 +309,24 @@ async function renderizarTablaEquipo() {
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
         if (!idClinica) return console.warn("⚠️ No se encontró ID de clínica activa.");
 
+        // Consulta directa a colaboradores_clinica
         const { data: colaboradores, error } = await fisioNet
             .from('colaboradores_clinica')
-            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno, tipo_vinculo')
+            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno')
             .eq('id_clinica', idClinica)
             .eq('estado', 'ACTIVO');
 
-        if (error) throw error;
+        if (error) {
+            console.error("❌ Error al consultar colaboradores_clinica:", error);
+            throw error;
+        }
 
-        const equipoInterno = (colaboradores || []).filter(c => {
-            if (c.tipo_vinculo) {
-                return c.tipo_vinculo.toUpperCase() === 'INTERNO';
-            }
-            return !c.cargo_clinico?.toUpperCase().includes('EXTERNO') && 
-                   !c.cargo_clinico?.toUpperCase().includes('ALIANZA') &&
-                   !c.cargo_clinico?.toUpperCase().includes('REFERIDO');
-        });
-
-        window.totalEquipoInternoNum = equipoInterno.length;
+        // Filtramos para el Equipo Interno (Staff)
+        const equipoInterno = (colaboradores || []).filter(c => 
+            !c.cargo_clinico?.toUpperCase().includes('EXTERNO') && 
+            !c.cargo_clinico?.toUpperCase().includes('ALIANZA') &&
+            !c.cargo_clinico?.toUpperCase().includes('REFERIDO')
+        );
 
         let html = `
             <tr>
@@ -339,6 +339,7 @@ async function renderizarTablaEquipo() {
         if (equipoInterno.length === 0) {
             html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay colaboradores internos registrados.</td></tr>`;
         } else {
+            // Traemos nombres desde perfiles_profesionales
             const idsProf = equipoInterno.map(c => c.id_profesional).filter(Boolean);
             let perfilesMapa = {};
 
@@ -372,7 +373,7 @@ async function renderizarTablaEquipo() {
                         <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
                     </td>
                     <td style="padding: 15px; text-align: right;">
-                        <button onclick="abrirConfiguracionEquipo('${colab.id}', '${nombre}', '${colab.cargo_clinico}', '${colab.area_asignada}')" title="Configurar" style="border: none; background: #fee2e2; color: #b91c1c; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
+                        <button onclick="abrirConfiguracionEquipo('${colab.id}')" title="Configurar" style="border: none; background: #fee2e2; color: #b91c1c; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
                             ⚙️
                         </button>
                     </td>
