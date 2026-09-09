@@ -177,11 +177,14 @@ async function aprobarAccesoDoctor() {
         return;
     }
 
+    // Recolección granular de la selección del paciente
     const permiteNotas = document.getElementById('chkPermisoNotas')?.checked || false;
     const permiteEstudios = document.getElementById('chkPermisoEstudios')?.checked || false;
+    const permiteLab = document.getElementById('chkPermisoLab')?.checked || false;
+    const permiteCitas = document.getElementById('chkPermisoCitas')?.checked || false;
 
-    if (!permiteNotas && !permiteEstudios) {
-        alert("⚠️ Selecciona al menos una opción para compartir.");
+    if (!permiteNotas && !permiteEstudios && !permiteLab && !permiteCitas) {
+        alert("⚠️ Selecciona al menos una categoría de información para compartir con tu médico.");
         return;
     }
 
@@ -192,14 +195,17 @@ async function aprobarAccesoDoctor() {
                 estado_solicitud: 'APROBADO',
                 permisos_concedidos: {
                     notas: permiteNotas,
-                    estudios: permiteEstudios
-                }
+                    estudios: permiteEstudios,
+                    laboratorio: permiteLab,
+                    citas: permiteCitas
+                },
+                fecha_autorizacion: new Date().toISOString()
             })
             .eq('id', idSolicitudActiva);
 
         if (error) throw error;
 
-        alert("✅ ¡Acceso Autorizado! Tu médico ya puede visualizar la información seleccionada.");
+        alert("✅ ¡Acceso Autorizado! El profesional de la salud ya puede visualizar los registros seleccionados.");
         
         const card = document.getElementById('cardSolicitudActiva');
         if (card) card.style.display = 'none';
@@ -369,3 +375,4 @@ async function cerrarSesion() {
         }
     }
 }
+

@@ -1594,63 +1594,87 @@ async function buscarMedicoSolicitanteEnRed(texto) {
 }
 // Lo exponemos globalmente para que el HTML lo encuentre
 window.cambiarTomaPACS = cambiarTomaPACS;
+
+
 // ============================================================================
-// 📡 ESCANER DE RADIÓLOGOS DISPONIBLES (INTERNOS Y CONVENIOS EXTERNOS)
+// 📡 ESCÁNER DE RADIÓLOGOS DISPONIBLES (SIN JOINS COMPLEJOS / BLINDADO HTTP 400)
 // ============================================================================
 async function cargarRadiologosDisponibles() {
     const select = document.getElementById('select-radiologo-asignado');
     if (!select) return;
 
     const idClinica = localStorage.getItem('id_clinica_activa');
-    
-    try {
-        const [resInternos, resExternos] = await Promise.all([
-            // 1. Internos: Filtro de IGUALDAD exacta
-            fisioNet
-                .from('colaboradores_clinica')
-                .select('id_profesional, perfiles_profesionales!inner(nombre_completo, especialidad)')
-                .eq('id_clinica', idClinica)
-                .eq('estado', 'ACTIVO')
-                .eq('perfiles_profesionales.especialidad', 'MEDICO-RADIOLOGO'), // Filtro exacto
-            
-            // 2. Externos: Filtro de IGUALDAD exacta en el tipo de entidad
-            fisioNet
-                .from('red_colaboracion')
-                .select('id_doctor_receptor, nombre_entidad, tipo_entidad')
-                .eq('id_doctor_emisor', idClinica)
-                .eq('estado_conexion', 'ACTIVO')
-                .eq('tipo_entidad', 'MEDICO-RADIOLOGO') // Filtro exacto
-        ]);
+    if (!idClinica) return;
 
-        let opcionesHtml = '<option value="" disabled selected>SELECCIONE MEDICO-RADIOLOGO...</option>';
+    try {
+        // 1. Obtener los colaboradores de la clínica activa
+        const { data: colaboradores, error: errColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('id_profesional, cargo_clinico')
+            .eq('id_clinica', idClinica)
+            .eq('estado', 'ACTIVO');
+
+        if (errColab) throw errColab;
+
+        // 2. Obtener la lista de convenios externos de la red
+        const { data: externos, error: errExt } = await fisioNet
+            .from('red_colaboracion')
+            .select('id_doctor_receptor, nombre_entidad, tipo_entidad')
+            .eq('id_doctor_emisor', idClinica)
+            .eq('estado_conexion', 'ACTIVO');
+
+        if (errExt) throw errExt;
+
+        let opcionesHtml = '<option value="" disabled selected>SELECCIONE MÉDICO-RADIÓLOGO...</option>';
 
         // 🔵 PROCESAR INTERNOS
-        if (resInternos.data && resInternos.data.length > 0) {
-            opcionesHtml += `<optgroup label="🔵 STAFF MÉDICO-RADIÓLOGO INTERNO">`;
-            resInternos.data.forEach(c => {
-                opcionesHtml += `<option value="${c.id_profesional}">👨‍⚕️ ${c.perfiles_profesionales.nombre_completo.toUpperCase()}</option>`;
+        if (colaboradores && colaboradores.length > 0) {
+            const idsProf = colaboradores.map(c => c.id_profesional);
+
+            // Consultamos los perfiles directamente
+            const { data: perfiles } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('id, nombre_completo, especialidad')
+                .in('id', idsProf);
+
+            const radiologosInternos = (perfiles || []).filter(p => {
+                const esp = (p.especialidad || '').toUpperCase();
+                return esp.includes('RADIOLOG');
             });
-            opcionesHtml += `</optgroup>`;
+
+            if (radiologosInternos.length > 0) {
+                opcionesHtml += `<optgroup label="🔵 STAFF MÉDICO-RADIÓLOGO INTERNO">`;
+                radiologosInternos.forEach(p => {
+                    opcionesHtml += `<option value="${p.id}">👨‍⚕️ ${p.nombre_completo.toUpperCase()}</option>`;
+                });
+                opcionesHtml += `</optgroup>`;
+            }
         }
 
         // 🟢 PROCESAR CONVENIOS EXTERNOS
-        if (resExternos.data && resExternos.data.length > 0) {
-            opcionesHtml += `<optgroup label="🟢 CONVENIOS EXTERNOS MÉDICO-RADIÓLOGO">`;
-            resExternos.data.forEach(ali => {
-                opcionesHtml += `<option value="${ali.id_doctor_receptor}">🤝 ${ali.nombre_entidad.toUpperCase()}</option>`;
+        if (externos && externos.length > 0) {
+            const radiologosExternos = externos.filter(ali => {
+                const tipo = (ali.tipo_entidad || '').toUpperCase();
+                return tipo.includes('RADIOLOG');
             });
-            opcionesHtml += `</optgroup>`;
+
+            if (radiologosExternos.length > 0) {
+                opcionesHtml += `<optgroup label="🟢 CONVENIOS EXTERNOS MÉDICO-RADIÓLOGO">`;
+                radiologosExternos.forEach(ali => {
+                    opcionesHtml += `<option value="${ali.id_doctor_receptor}">🤝 ${ali.nombre_entidad.toUpperCase()}</option>`;
+                });
+                opcionesHtml += `</optgroup>`;
+            }
         }
 
-        // Validación si no encuentra nada
-        if (opcionesHtml.includes('optgroup') === false) {
-            opcionesHtml = '<option value="" disabled>NO HAY MÉDICO-RADIÓLOGO DISPONIBLE</option>';
+        if (!opcionesHtml.includes('optgroup')) {
+            opcionesHtml = '<option value="" disabled>NO HAY MÉDICOS RADIÓLOGOS REGISTRADOS</option>';
         }
 
         select.innerHTML = opcionesHtml;
 
     } catch (err) {
-        console.error("❌ Error de blindaje estricto:", err);
+        console.error("❌ Error en selector de radiólogos:", err);
     }
 }
 
