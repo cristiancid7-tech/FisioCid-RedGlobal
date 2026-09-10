@@ -1,4 +1,4 @@
-// Variable maestra global únicacreqara
+// Variable maestra global única
 let pacienteExistenteId = null;
 let edicionFichaAutorizada = false;
 
@@ -291,9 +291,6 @@ function congelarCamposIdentidad(bloquear) {
     }
 }
 
-// Variable global para mantener el token activo en memoria
-let tokenSeguridadActivo = null;
-
 function crearBotonDesbloqueoDinamico() {
     const tituloSeccion = document.querySelector('h2') || 
                           document.querySelector('.main-title') || 
@@ -311,118 +308,43 @@ function crearBotonDesbloqueoDinamico() {
         btnKey.style = "padding: 6px 14px; font-size: 14px; border-radius: 8px; margin-left: 15px; background-color: #ecc94b; color: #000; border: none; cursor: pointer; font-weight: bold; font-family: inherit; display: inline-block; vertical-align: middle;";
         
         btnKey.addEventListener('click', async () => {
-            const pacienteData = window.pacienteCargado;
-            const esMenor = pacienteData?.es_menor_edad;
-            const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-
-            if (!pacienteData?.id) {
-                alert("⚠️ Error: No hay un paciente cargado activo.");
+            const esMenor = window.pacienteCargado?.es_menor_edad;
+            const telefonoDestino = esMenor ? window.pacienteCargado?.telefono_tutor : window.pacienteCargado?.telefono;
+            
+            if (!telefonoDestino) {
+                alert("⚠️ Error: El paciente no tiene un teléfono registrado para el envío del código.");
                 return;
             }
 
-            // 🎯 Si es menor, enviamos la solicitud al ID del tutor para que le aparezca en su Portal
-            const idDestinatarioOTP = (esMenor && pacienteData.id_tutor) 
-                ? pacienteData.id_tutor 
-                : pacienteData.id;
+            const tokenSeguridad = Math.floor(100000 + Math.random() * 900000);
+            alert(`🛡️ PROTOCOLO DE EDICIÓN FISIOCID:\nCódigo enviado al: ${telefonoDestino}\n👉 (Código Beta actual: ${tokenSeguridad})`);
 
-            console.log("📲 Destinatario OTP -> ID:", idDestinatarioOTP, esMenor ? "(TUTOR)" : "(PACIENTE)");
-
-            btnKey.disabled = true;
-            btnKey.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Solicitando OTP...';
-
-            try {
-                const { data: { user } } = await fisioNet.auth.getUser();
-
-                const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
-                const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-                console.log("🔑 [FISIOCID OTP]: Generando clave interna para edición ->", codigoOTP);
-
-                // Insert directo mapeando exactamente a tus 11 columnas
-                const { data: solInsert, error: errOTP } = await fisioNet
-                    .from('solicitudes_acceso_otp')
-                    .insert([{
-                        id_paciente: idDestinatarioOTP,
-                        id_profesional: user ? user.id : null,
-                        nombre_profesional: "EDICIÓN FICHA MAESTRA",
-                        codigo_otp: codigoOTP,
-                        permisos_concedidos: { 
-                            edicion_ficha: true, 
-                            paciente_afectado_id: pacienteData.id,
-                            paciente_nombre: `${pacienteData.nombre || ''} ${pacienteData.apellido_paterno || ''}`.trim()
-                        },
-                        estado_solicitud: 'PENDIENTE',
-                        expira_en: expiraEn,
-                        id_clinica: idClinicaActiva || null
-                    }])
-                    .select();
-
-                if (errOTP) throw errOTP;
-
-                tokenSeguridadActivo = codigoOTP;
-
-                // Abrir modal de entrada de OTP en la pantalla del médico
-                const inputCodigo = document.getElementById('inputCodigoIngresadoOTP');
-                const msgError = document.getElementById('msgErrorOTP');
+            const codigoIngresado = prompt("🔒 Ingrese el código de 6 dígitos para habilitar la escritura:");
+            
+            if (String(codigoIngresado) === String(tokenSeguridad)) {
+                edicionFichaAutorizada = true; 
                 
-                if (inputCodigo) inputCodigo.value = '';
-                if (msgError) msgError.classList.add('d-none');
+                // 🔓 1. Desbloqueamos pasando 'false' (esto dejará todos los campos editables)
+                congelarCamposIdentidad(false); 
+                
+                // 2. Feedback visual inmediato
+                btnKey.innerHTML = '<i class="fas fa-lock-open"></i> Modo Edición Activo';
+                btnKey.style.backgroundColor = "#48bb78";
+                btnKey.style.color = "#ffffff";
+                btnKey.disabled = true;
 
-                const modalElem = document.getElementById('modalValidarOTP');
-                if (modalElem) {
-                    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElem);
-                    modalInstance.show();
+                // 3. Cambiamos el texto del botón principal de guardado para dar claridad
+                const btnSubmit = document.querySelector('button[type="submit"]');
+                if (btnSubmit) {
+                    btnSubmit.innerHTML = '<i class="fas fa-sync"></i> ACTUALIZAR DATOS MAESTROS';
+                    btnSubmit.classList.replace('btn-primary', 'btn-success');
                 }
-
-            } catch (err) {
-                console.error("💥 Error al generar OTP dinámico:", err.message);
-                alert("Error al solicitar código de desbloqueo: " + err.message);
-            } finally {
-                btnKey.disabled = false;
-                btnKey.innerHTML = '<i class="fas fa-lock"></i> ✏️ Corregir Datos de Identidad';
+            } else {
+                alert("❌ Código incorrecto. Los campos permanecen protegidos.");
             }
         });
         
         tituloSeccion.appendChild(btnKey);
-    }
-}
-// ==========================================
-// 🗝️ VALIDACIÓN DEL CÓDIGO INGRESADO EN MODAL
-// ==========================================
-function validarCodigoOTPIngresado() {
-    const codigoIngresado = document.getElementById('inputCodigoIngresadoOTP')?.value?.trim();
-    const msgError = document.getElementById('msgErrorOTP');
-    const btnKey = document.getElementById('btnDesbloquearFicha');
-
-    if (String(codigoIngresado) === String(tokenSeguridadActivo)) {
-        edicionFichaAutorizada = true; 
-        
-        // 🔓 Desbloqueo de campos
-        congelarCamposIdentidad(false); 
-        
-        // Feedback visual
-        if (btnKey) {
-            btnKey.innerHTML = '<i class="fas fa-lock-open"></i> Modo Edición Activo';
-            btnKey.style.backgroundColor = "#48bb78";
-            btnKey.style.color = "#ffffff";
-            btnKey.disabled = true;
-        }
-
-        const btnSubmit = document.querySelector('button[type="submit"]');
-        if (btnSubmit) {
-            btnSubmit.innerHTML = '<i class="fas fa-sync"></i> ACTUALIZAR DATOS MAESTROS';
-            btnSubmit.classList.replace('btn-primary', 'btn-success');
-        }
-
-        // Cierre de Modal
-        const modalElem = document.getElementById('modalValidarOTP');
-        if (modalElem) {
-            const modalInstance = bootstrap.Modal.getInstance(modalElem);
-            if (modalInstance) modalInstance.hide();
-        }
-
-    } else {
-        if (msgError) msgError.classList.remove('d-none');
     }
 }
 

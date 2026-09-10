@@ -155,28 +155,6 @@
     min-height: 120px;
 }
 
-/* FORZAR ANCHO MÁXIMO EN EL VISOR DE EXPEDIENTE */
-#modalVisorExpediente .modal-dialog {
-    max-width: 95vw !important;
-    width: 95vw !important;
-    margin: 2.5vh auto !important;
-}
-
-#modalVisorExpediente .modal-content {
-    height: 95vh !important;
-    border-radius: 16px !important;
-}
-
-#modalVisorExpediente .nav-link {
-    color: #64748b;
-    border-bottom: 3px solid transparent;
-}
-
-#modalVisorExpediente .nav-link.active {
-    color: var(--primary) !important;
-    border-bottom: 3px solid var(--primary) !important;
-    background: transparent !important;
-}
     </style>
 
 </head>
@@ -401,11 +379,8 @@
             <i class="fas fa-stethoscope" style="color: #3b82f6;"></i> 4. VALORACIÓN Y CONDUCTA CLÍNICA
         </h3>
 
-<button type="button" class="btn btn-outline-primary btn-sm rounded-pill font-weight-bold" onclick="abrirModalVincularEstudio()" 
-style="font-size: 0.75rem;">
-                📎 🔬 VINCULAR NUEVO ESTUDIO / GABINETE
-            </button>
 
+<!-- 2. Contenedor para el Botón (Alineado a la Derecha) -->
 <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
     <button type="button" id="btn-asistente-exploracion" 
             onclick="modalEngine.abrirAsistente('exploracion')" 
@@ -630,116 +605,6 @@ style="font-size: 0.75rem;">
         </div>
     </div>
 </div>
-
-<!-- MODAL PARA VINCULAR ESTUDIO DIRECTAMENTE AL PACIENTE Y MÉDICO -->
-<div class="modal fade" id="modalVincularEstudioDirecto" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title fw-bold" style="font-size: 1rem;">
-                    🔬 Vincular Estudio de Gabinete
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4 bg-light">
-                <form id="formVincularEstudio">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-secondary">TIPO DE ESTUDIO</label>
-                        <select id="estudio_tipo" class="form-select fw-bold" required>
-                            <option value="RADIOGRAFÍA (RX)">RADIOGRAFÍA (RX)</option>
-                            <option value="RESONANCIA MAGNÉTICA (RM)">RESONANCIA MAGNÉTICA (RM)</option>
-                            <option value="ECOGRAFÍA / ULTRASONIDO">ECOGRAFÍA / ULTRASONIDO</option>
-                            <option value="TOMOGRAFÍA (TAC)">TOMOGRAFÍA (TAC)</option>
-                            <option value="LABORATORIO CLÍNICO">LABORATORIO CLÍNICO</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-secondary">HALLAZGOS Y OBSERVACIONES</label>
-                        <textarea id="estudio_hallazgos" class="form-control" rows="3" placeholder="Resumen de lo observado en la placa o análisis..." required></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-secondary">URL DEL ARCHIVO / PACS (OPCIONAL)</label>
-                        <input type="url" id="estudio_url" class="form-control" placeholder="https://drive.google.com/... o enlace PACS">
-                    </div>
-                    <button type="submit" id="btnGuardarEstudio" class="btn btn-primary w-100 fw-bold rounded-pill">
-                        💾 VINCULAR A PACIENTE Y MÉDICO
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- MODAL VISOR INTEGRAL DE EXPEDIENTE Y GABINETE (PANTALLA ANCHA) -->
-<div class="modal fade" id="modalVisorExpediente" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 95vw; width: 95vw;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 18px; overflow: hidden; height: 90vh;">
-            
-            <!-- Encabezado del visor -->
-            <div class="modal-header text-white" style="background: #0f172a; padding: 15px 25px;">
-                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size: 1.1rem; font-weight: 800;">
-                    <i class="fas fa-folder-open text-warning"></i> EXPEDIENTE AUTORIZADO Y GABINETE CLÍNICO
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <!-- Cuerpo principal desplegado -->
-            <div class="modal-body p-0" style="background: #f8fafc; display: flex; flex-direction: column;">
-                
-                <!-- Pestañas horizontales completas -->
-                <ul class="nav nav-tabs nav-justified bg-white border-bottom shadow-sm" id="tabVisor" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active fw-bold py-3" id="tab-notas-link" data-bs-toggle="tab" data-bs-target="#tab-notas" style="font-size: 0.9rem;">
-                            📜 HISTORIAL NOTAS
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link fw-bold py-3" id="tab-imagen-link" data-bs-toggle="tab" data-bs-target="#tab-imagen" style="font-size: 0.9rem;">
-                            🩻 IMAGENOLOGÍA (RX / RM)
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link fw-bold py-3" id="tab-lab-link" data-bs-toggle="tab" data-bs-target="#tab-lab" style="font-size: 0.9rem;">
-                            🧪 LABORATORIO CLÍNICO
-                        </button>
-                    </li>
-                </ul>
-
-                <!-- Área de contenido amplio -->
-                <div class="tab-content p-4 overflow-auto" id="contenidoVisor" style="flex: 1;">
-                    <!-- 📜 HISTORIAL DE NOTAS -->
-                    <div class="tab-pane fade show active" id="tab-notas">
-                        <div id="listaNotasHistorial" class="d-flex flex-column gap-3">
-                            <p class="text-muted text-center">Cargando historial de notas...</p>
-                        </div>
-                    </div>
-
-                    <!-- 🩻 IMAGENOLOGÍA -->
-                    <div class="tab-pane fade" id="tab-imagen">
-                        <div id="listaEstudiosImagen" class="row g-3">
-                            <p class="text-muted text-center">Cargando placas y estudios de imagen...</p>
-                        </div>
-                    </div>
-
-                    <!-- 🧪 LABORATORIO -->
-                    <div class="tab-pane fade" id="tab-lab">
-                        <div id="listaEstudiosLab" class="row g-3">
-                            <p class="text-muted text-center">Cargando resultados de laboratorio...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pie de ventana -->
-            <div class="modal-footer bg-light border-0 px-4 py-3 justify-content-between">
-                <span class="text-muted small fw-bold">💡 Tip: Haz clic en "Inyectar" para agregar información directo a tu nota activa.</span>
-                <button type="button" class="btn btn-secondary fw-bold px-4 rounded-pill" data-bs-dismiss="modal">CERRAR VISOR</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 
 
 </body>
