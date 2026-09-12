@@ -312,18 +312,30 @@ async function renderizarTablaEquipo() {
         // 1. Obtener colaboradores de la clínica
         const { data: colaboradores, error } = await fisioNet
             .from('colaboradores_clinica')
-            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno')
+            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno, tipo_vinculo')
             .eq('id_clinica', idClinica)
             .eq('estado', 'ACTIVO');
 
         if (error) throw error;
 
-        // Filtramos para el Equipo Interno
-        const equipoInterno = (colaboradores || []).filter(c => 
-            !c.cargo_clinico?.toUpperCase().includes('EXTERNO') && 
-            !c.cargo_clinico?.toUpperCase().includes('ALIANZA') &&
-            !c.cargo_clinico?.toUpperCase().includes('REFERIDO')
-        );
+        // 🎯 FILTRADO STRICTO PARA EQUIPO INTERNO:
+        // Excluimos explícitamente cualquier vínculo 'EXTERNO' o roles/cargos de alianzas externas
+        const equipoInterno = (colaboradores || []).filter(c => {
+            const vinculo = (c.tipo_vinculo || '').toUpperCase();
+            const cargo = (c.cargo_clinico || '').toUpperCase();
+            const rol = (c.rol_sistema || '').toUpperCase();
+
+            const esExterno = vinculo === 'EXTERNO' || 
+                              cargo.includes('EXTERNO') || 
+                              cargo.includes('ALIANZA') || 
+                              cargo.includes('REFERIDO') ||
+                              rol === 'SOCIOS_EXTERNOS';
+
+            return !esExterno;
+        });
+
+        // Guardar contador global de internos para la tabla de alianzas
+        window.totalEquipoInternoNum = equipoInterno.length;
 
         let html = `
             <tr>
@@ -340,7 +352,6 @@ async function renderizarTablaEquipo() {
             let perfilesMapa = {};
 
             if (idsProf.length > 0) {
-                // Paso A: Buscar en 'perfiles_profesionales'
                 const { data: perfilesProf } = await fisioNet
                     .from('perfiles_profesionales')
                     .select('id, nombre_completo, correo_institucional')
@@ -353,7 +364,6 @@ async function renderizarTablaEquipo() {
                     }; 
                 });
 
-                // Paso B: Identificar UIDs que faltaron y buscarlos en la tabla 'perfiles' (Apoyo Corporativo)
                 const idsFaltantes = idsProf.filter(id => !perfilesMapa[id]);
                 
                 if (idsFaltantes.length > 0) {
@@ -363,15 +373,14 @@ async function renderizarTablaEquipo() {
                         .in('id', idsFaltantes);
 
                     (perfilesGen || []).forEach(p => { 
-                     perfilesMapa[p.id] = {
-        nombre_completo: p.nombre_completo,
-        correo: p.correo_institucional || 'Sin correo'
+                        perfilesMapa[p.id] = {
+                            nombre_completo: p.nombre_completo,
+                            correo: p.correo_institucional || 'Sin correo'
                         }; 
                     });
                 }
             }
 
-            // Renderizar la tabla con la información combinada
             html += equipoInterno.map(colab => {
                 const perfil = perfilesMapa[colab.id_profesional] || {};
                 const nombre = perfil.nombre_completo || 'USUARIO REGISTRADO';
