@@ -12,12 +12,13 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     e.preventDefault();
     
     // 1. CAPTURA DE DATOS
-    const email = document.getElementById('regEmail').value.trim();
+    const email = document.getElementById('regEmail').value.trim().toLowerCase(); // 👈 Normalizado a minúsculas
     const pass = document.getElementById('regPass').value;
     const nombre = document.getElementById('regNombre').value.trim().toUpperCase();
     const categoriaRegistro = document.getElementById('tipoPerfil').value; 
     const telefono = document.getElementById('regTelefono').value.trim();
-    
+
+    const especialidadCapturada = document.getElementById('regEspecialidad')?.value || 'FISIOTERAPEUTA';
 
     const regexCorreo = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     const regexTelefono = /^[0-9]{10}$/; 
@@ -76,6 +77,7 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
             correo_institucional: email,
             telefono_contacto: telefono,
             rol: 'ADMIN_SISTEMA', 
+            especialidad: especialidadCapturada,
             nivel_suscripcion: 'BASICO',
             suscripcion_activa: true
         }]);
@@ -102,11 +104,12 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         }]);
         if (colabError) throw colabError;
 
+       localStorage.setItem('especialidad_usuario', especialidadCapturada);
         localStorage.setItem('id_clinica_activa', clinica.id); 
         localStorage.setItem('nombre_clinica', nombreSede);
-        localStorage.setItem('clinica_color', '#10B981'); // Color por defecto de FisioCid
+        localStorage.setItem('clinica_color', '#10B981');
         localStorage.setItem('nombre_completo', nombre);
-        localStorage.setItem('clinica_activa_id', clinica.id); 
+        localStorage.setItem('clinica_activa_id', clinica.id);
 
         alert(`¡BIENVENIDO A FISIOCID! 🚀\nSe ha creado: ${nombreSede}`);
         
