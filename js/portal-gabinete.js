@@ -984,6 +984,9 @@ function quitarArchivo(index) {
 // ============================================================================
 // 📜 CARGA INICIAL DEL HISTORIAL (ADAPTADA PARA EL ACCESO TOTAL DEL RADIÓLOGO)
 // ============================================================================
+// ============================================================================
+// 📜 CARGA INICIAL DEL HISTORIAL (EQUIPO INTERNO DE SEDE Y RADIÓLOGO ASIGNADO)
+// ============================================================================
 async function cargarHistorialPersonal() {
     const contenedor = document.getElementById('lista-historial-gabinete');
     if (!contenedor) return;
@@ -1001,56 +1004,55 @@ async function cargarHistorialPersonal() {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
 
-        const especialidadUsuario = (perfilEspecialistaCache?.especialidad || '').toUpperCase();
-        const esRadiologo = especialidadUsuario.includes('RADIOLOG');
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa');
 
-        // 🎯 INTEGRACIÓN: Traemos la fecha_nacimiento desde pacientes_maestros usando un JOIN
-        // Asegúrate de que la relación en tu DB sea pacientes_maestros (FK: paciente_id)
-      let query = fisioNet.from('estudios_gabinete').select(`
-    *,
-    pacientes_maestros:paciente_id (
-        fecha_nacimiento,
-        apellido_paterno,
-        apellido_materno,
-        curp
+        // 🎯 CONSULTA CORREGIDA: Trae estudios de la clínica o asignados a la radióloga logueada
+        let query = fisioNet.from('estudios_gabinete').select(`
+            *,
+            pacientes_maestros:paciente_id (
+                fecha_nacimiento,
+                apellido_paterno,
+                apellido_materno,
+                curp
+            )
+        `);
 
-    )
-`);
-
-        if (esRadiologo) {
-            query = query.or(`doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+        // 🔥 FILTRO DE PERMISOS:
+        // Muestra si pertenece a la sede activa O si la radióloga logueada fue asignada/creadora/emisora
+        if (idClinicaActiva) {
+            query = query.or(`id_socio_emisor.eq.${idClinicaActiva},id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
         } else {
-            query = query.eq('creado_por', user.id);
+            query = query.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
         }
 
         const { data: estudios, error } = await query
             .order('fecha_registro', { ascending: false })
-            .limit(20);
+            .limit(30);
 
         if (error) throw error;
 
-        // 🧠 Limpiamos los datos para que el renderizador los reciba como un objeto plano
-       historialGabineteCache = estudios ? estudios.map(est => ({
-    ...est,
-    fecha_nacimiento: est.pacientes_maestros?.fecha_nacimiento || null,
-    apellido_paterno: est.pacientes_maestros?.apellido_paterno || "",
-    apellido_materno: est.pacientes_maestros?.apellido_materno || "",
-    curp: est.pacientes_maestros?.curp || "N/A"
-})) : [];
+        historialGabineteCache = estudios ? estudios.map(est => ({
+            ...est,
+            fecha_nacimiento: est.pacientes_maestros?.fecha_nacimiento || null,
+            apellido_paterno: est.pacientes_maestros?.apellido_paterno || "",
+            apellido_materno: est.pacientes_maestros?.apellido_materno || "",
+            curp: est.pacientes_maestros?.curp || "N/A"
+        })) : [];
 
         renderizarListaHistorialGabinete(historialGabineteCache);
 
     } catch (err) {
         console.error("❌ Error al cargar historial por roles:", err);
-        contenedor.innerHTML = '<div class="p-4 text-center text-danger small"><i class="fas fa-exclamation-triangle"></i> Error de sincronizacion.</div>';
+        contenedor.innerHTML = '<div class="p-4 text-center text-danger small"><i class="fas fa-exclamation-triangle"></i> Error de sincronización.</div>';
     }
 }
 
 // ============================================================================
 // 🔍 MOTOR DE FILTRADO EN TIEMPO REAL CON ANTI-BOUNCE (LIBERADO PARA RADIÓLOGOS)
 // ============================================================================
-
-
+// ============================================================================
+// 🔍 MOTOR DE FILTRADO EN TIEMPO REAL (CORREGIDO PARA RADIÓLOGOS E INTERNOS)
+// ============================================================================
 function filtrarHistorialGabineteRealTime() {
     const input = document.getElementById('busquedaHistorialGabinete');
     if (!input) return;
@@ -1062,47 +1064,40 @@ function filtrarHistorialGabineteRealTime() {
         (estudio.curp && estudio.curp.toUpperCase().includes(texto))
     );
 
-    // Renderizamos los resultados del filtro local inmediatamente
     renderizarListaHistorialGabinete(resultados);
 
     // 2. Anti-Bounce para Supabase
     clearTimeout(timeoutBusqueda);
-    
-    // SI EL TEXTO ES CORTO, NO BUSQUES EN LA NUBE, YA FILTRAMOS EL CACHÉ LOCAL
     if (texto.length < 3) return; 
 
     timeoutBusqueda = setTimeout(async () => {
         try {
-             const { data: { user } } = await fisioNet.auth.getUser();
-                if (!user) return;
+            const { data: { user } } = await fisioNet.auth.getUser();
+            if (!user) return;
 
-                const especialidadUsuario = (perfilEspecialistaCache?.especialidad || '').toUpperCase();
-                const esRadiologo = especialidadUsuario.includes('RADIOLOG');
+            const idClinicaActiva = localStorage.getItem('id_clinica_activa');
+            let queryDeep = fisioNet.from('estudios_gabinete').select('*');
 
-                let query = fisioNet.from('estudios_gabinete').select('*');
+            if (idClinicaActiva) {
+                queryDeep = queryDeep.or(`id_socio_emisor.eq.${idClinicaActiva},id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+            } else {
+                queryDeep = queryDeep.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+            }
 
-                if (esRadiologo) {
-                    query = query.or(`doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
-                } else {
-                    query = query.eq('creado_por', user.id);
-                }
-
-            
             const { data: resultadosDB, error } = await queryDeep
-                .or(`paciente_nombre_manual.ilike.%${texto}%,curp.ilike.%${texto}%`) // 🔥 BÚSQUEDA DOBLE
+                .or(`paciente_nombre_manual.ilike.%${texto}%,curp.ilike.%${texto}%`)
                 .order('fecha_registro', { ascending: false })
                 .limit(15);
 
             if (!error && resultadosDB) {
-                // Aquí está el secreto: NO mezcles con el caché global a menos que sea necesario
-                // Si el usuario está escribiendo, solo muestra lo que la DB encontró
                 renderizarListaHistorialGabinete(resultadosDB);
             }
         } catch (err) {
-            console.error("Error:", err);
+            console.error("Error en búsqueda remota:", err);
         }
     }, 400);
 }
+
 // ============================================================================
 // 🎨 RENDERIZADOR DE FILAS CON CHECKBOX DE COMPARATIVA Y BADGES DE ADVERTENCIA
 // ============================================================================
