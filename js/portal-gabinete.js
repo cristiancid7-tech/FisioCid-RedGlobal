@@ -783,33 +783,42 @@ async function registrarPacienteNuevo() {
     if (error) throw error;
     return data.id; // ¡Este es el ID que necesitamos!
 }
+
+// ============================================================================
+// 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO Y EXPEDIENTE LOCAL DE SEDE (CORREGIDO)
+// ============================================================================
 async function guardarEstudioGabinete(event) {
     if (event) event.preventDefault();
     const btn = document.getElementById('btn-finalizar');
 
-    // 1. OBTENCIÓN SEGURA
+    // 1. OBTENCIÓN SEGURA DE SESIÓN
     const { data: { user }, error: authErr } = await fisioNet.auth.getUser();
-    if (authErr || !user) { alert("Error: No se detectó sesión."); return; }
+    if (authErr || !user) { alert("Error: No se detectó sesión activa."); return; }
 
     const idClinicaActiva = localStorage.getItem('id_clinica_activa');
     const radiologoId = document.getElementById('select-radiologo-asignado')?.value;
 
-    // 2. Validación Básica (Clínica sí es obligatoria)
-    if (!idClinicaActiva) { alert("Error: Falta ID de clínica."); return; }
+    // 2. LECTURA CORRECTA DE MÉDICO SOLICITANTE (RED / EXTERNO)
+    const doctorEmisorVinculado = document.getElementById('idDoctorSolicitanteVinculado')?.value || null;
+    const medicoSolicitanteTexto = document.getElementById('input-doctor-solicitante')?.value.trim().toUpperCase() || 'MEDICO EXTERNO';
+
+    // 3. Validaciones obligatorias
+    if (!idClinicaActiva) { alert("Error: Falta ID de clínica activa."); return; }
     if (!radiologoId) { alert("⚠️ Es obligatorio asignar un Médico Radiólogo."); return; }
 
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> PROCESANDO...`;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> PROCESANDO...`;
+    }
 
     try {
-        // 3. LÓGICA DE PACIENTE (NUEVO O EXISTENTE)
-        // Si no hay ID, intentamos registrarlo como nuevo
+        // 4. PACIENTE NUEVO VS EXISTENTE
         if (!pacienteExistenteId) {
-            console.log("🆕 Detectado paciente nuevo. Registrando...");
-            pacienteExistenteId = await registrarPacienteNuevo(); // Esta función devuelve el nuevo ID
+            console.log("🆕 Detectado paciente nuevo. Registrando en pacientes_maestros...");
+            pacienteExistenteId = await registrarPacienteNuevo(); 
         }
 
-        // 4. Continuamos con el resto de tu código (Cálculo de edad, etc.)
+        // 5. CÁLCULO Y LIMPIEZA DE DATOS MAESTROS
         const p1 = document.getElementById('curp-parte1')?.value || "";
         const p2 = document.getElementById('curp-estado')?.value || "";
         const p3 = document.getElementById('curp-consonantes')?.value || "";
@@ -828,19 +837,25 @@ async function guardarEstudioGabinete(event) {
             generoFinal = ['HOMBRE', 'MUJER'].includes(inputGenero) ? inputGenero : 'NO ESPECIFICADO';
         }
 
-        // 5. Subida de archivos
+        const nombrePacManual = `${document.getElementById('valNombre')?.value || ''} ${document.getElementById('valPaterno')?.value || ''} ${document.getElementById('valMaterno')?.value || ''}`.trim().toUpperCase();
+
+        // 6. SUBIDA DE ARCHIVOS A BUCKET
         const listaNombresArchivos = await subirArchivosASupabase(pacienteExistenteId, idClinicaActiva, "ESTUDIO_" + Date.now());
 
-        // 6. Guardado del Estudio
+        if (listaNombresArchivos.length === 0 && archivosParaSubir.length > 0) {
+            throw new Error("No se pudo subir ningún archivo de estudio al servidor.");
+        }
+
+        // 7. PAYLOAD COMPLETO A ESTUDIOS_GABINETE
         const payload = {
             paciente_id: pacienteExistenteId,
             id_socio_emisor: idClinicaActiva,
-            doctor_emisor_id: doctorEmisorId,                      // UUID si pertenece a la red (o null)
-            medico_solicitante_manual: medicoSolicitanteManual,     // Texto legible del médico
-            id_radiologo_firmante: radiologoId,                     // Radiólogo asignado
+            doctor_emisor_id: doctorEmisorVinculado || null,          // Corregido: UUID si es de la red
+            medico_solicitante_manual: medicoSolicitanteTexto,       // Corregido: Texto del médico
+            id_radiologo_firmante: radiologoId,                      // Radiólogo asignado
             creado_por: user.id,
             tecnico_captura: user.email, 
-            paciente_nombre_manual: `${document.getElementById('valNombre').value} ${document.getElementById('valPaterno').value} ${document.getElementById('valMaterno').value || ''}`.trim().toUpperCase(),
+            paciente_nombre_manual: nombrePacManual,
             curp: curpFinal,
             tipo_estudio: document.getElementById('tipo-estudio')?.value || 'N/A',
             zona_anatomica: document.getElementById('zona-estudio')?.value.toUpperCase() || 'N/A',
@@ -858,11 +873,13 @@ async function guardarEstudioGabinete(event) {
         window.location.reload();
 
     } catch (err) {
-        console.error("❌ ERROR CRÍTICO:", err);
-        alert("Error crítico: " + err.message);
+        console.error("❌ ERROR CRÍTICO AL GUARDAR ESTUDIO:", err);
+        alert("Error al guardar el estudio: " + err.message);
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = "INTEGRAR A EXPEDIENTE FISIOCID";
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = "INTEGRAR A EXPEDIENTE FISIOCID";
+        }
     }
 }
 
