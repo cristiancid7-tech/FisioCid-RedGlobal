@@ -1,3 +1,26 @@
+async function comprobarConfiguracionInicialRequerida() {
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+
+        const { data: perfil } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('costo_consulta_base, horario_atencion')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        const modal = document.getElementById('modalConfigInicial');
+        if (!modal) return;
+
+        if (!perfil || !perfil.costo_consulta_base || !perfil.horario_atencion) {
+            modal.style.display = 'flex';
+        } else {
+            modal.style.display = 'none';
+        }
+    } catch (err) {
+        console.error("Error al verificar configuracion inicial:", err);
+    }
+}
 async function actualizarInterfazSede() {
     const labelSede = document.getElementById('sedeActivaTexto') || document.getElementById('txtSedeActual'); 
     const sedeElegidaNombre = localStorage.getItem('nombre_clinica');
@@ -301,15 +324,17 @@ function renderizarCitas(citas, modo) {
     });
 }
 
+// ==========================================
+// RENDEREAR TABLA EQUIPO INTERNO
+// ==========================================
 async function renderizarTablaEquipo() {
     const tbody = document.getElementById('tablaCuerpoEquipo');
     if (!tbody) return;
 
     try {
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
-        if (!idClinica) return console.warn("⚠️ No se encontró ID de clínica activa.");
+        if (!idClinica) return console.warn("⚠️ No se encontro ID de clinica activa.");
 
-        // 1. Obtener colaboradores de la clínica
         const { data: colaboradores, error } = await fisioNet
             .from('colaboradores_clinica')
             .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno, tipo_vinculo')
@@ -318,8 +343,7 @@ async function renderizarTablaEquipo() {
 
         if (error) throw error;
 
-        // 🎯 FILTRADO STRICTO PARA EQUIPO INTERNO:
-        // Excluimos explícitamente cualquier vínculo 'EXTERNO' o roles/cargos de alianzas externas
+        // Filtrado exclusivo para personal interno
         const equipoInterno = (colaboradores || []).filter(c => {
             const vinculo = (c.tipo_vinculo || '').toUpperCase();
             const cargo = (c.cargo_clinico || '').toUpperCase();
@@ -334,7 +358,6 @@ async function renderizarTablaEquipo() {
             return !esExterno;
         });
 
-        // Guardar contador global de internos para la tabla de alianzas
         window.totalEquipoInternoNum = equipoInterno.length;
 
         let html = `
@@ -398,7 +421,7 @@ async function renderizarTablaEquipo() {
                         </span>
                     </td>
                     <td style="padding: 15px;">
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">Área: ${colab.area_asignada || 'General'}</div>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">Area: ${colab.area_asignada || 'General'}</div>
                         <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
                     </td>
                     <td style="padding: 15px; text-align: right;">
@@ -417,6 +440,9 @@ async function renderizarTablaEquipo() {
     }
 }
 
+// ==========================================
+// RENDEREAR TABLA ALIANZAS Y EXTERNOS
+// ==========================================
 async function renderizarTablaAlianzas() {
     const tbody = document.getElementById('tablaCuerpoAlianzas');
     const contador = document.getElementById('contadorSocios');
@@ -433,11 +459,17 @@ async function renderizarTablaAlianzas() {
 
         if (error) throw error;
 
+        // Filtrado exclusivo para alianzas y medicos externos
         const alianzasYStaff = (todosColabs || []).filter(c => {
-            if (c.tipo_vinculo) {
-                return c.tipo_vinculo.toUpperCase() === 'EXTERNO';
-            }
-            return c.rol_sistema !== 'ADMIN_SISTEMA' && c.rol_sistema !== 'DUEÑO';
+            const vinculo = (c.tipo_vinculo || '').toUpperCase();
+            const cargo = (c.cargo_clinico || '').toUpperCase();
+            const rol = (c.rol_sistema || '').toUpperCase();
+
+            return vinculo === 'EXTERNO' || 
+                   cargo.includes('EXTERNO') || 
+                   cargo.includes('ALIANZA') || 
+                   cargo.includes('REFERIDO') ||
+                   rol === 'SOCIOS_EXTERNOS';
         });
 
         if (contador) {
@@ -448,7 +480,7 @@ async function renderizarTablaAlianzas() {
         let html = `
             <tr>
                 <td colspan="4" style="background-color: #f0fdf4; color: #14532d; font-weight: 800; padding: 10px 15px; font-size: 0.8rem; letter-spacing: 0.5px;">
-                    🟢 ALIANZAS ESTRATÉGICAS Y DOCTORES EXTERNOS
+                    🟢 ALIANZAS ESTRATEGICAS Y DOCTORES EXTERNOS
                 </td>
             </tr>
         `;
@@ -501,7 +533,7 @@ async function renderizarTablaAlianzas() {
                         </span>
                     </td>
                     <td style="padding: 15px;">
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">📍 Área: ${item.area_asignada || 'General'}</div>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">📍 Area: ${item.area_asignada || 'General'}</div>
                         <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
                     </td>
                     <td style="padding: 15px; text-align: right;">
@@ -516,7 +548,7 @@ async function renderizarTablaAlianzas() {
         tbody.innerHTML = html;
 
     } catch (e) {
-        console.error("❌ Fallo crítico en renderizarTablaAlianzas:", e);
+        console.error("❌ Fallo critico en renderizarTablaAlianzas:", e);
     }
 }
 
@@ -1909,6 +1941,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas(); 
     if (typeof cargarSolicitudesRecibidas === 'function') await cargarSolicitudesRecibidas();
     await verificarInvitacionesPendientes(); 
+    await comprobarConfiguracionInicialRequerida();
 });
 
 async function verificarInvitacionesPendientes() {
