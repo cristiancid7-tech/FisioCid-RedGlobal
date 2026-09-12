@@ -493,16 +493,22 @@ function autorrellenarCamposLaboratorio(p) {
 }
 
 
-
 async function guardarEstudioLaboratorio(event) {
     if (event) event.preventDefault();
     const btn = document.getElementById('btn-finalizar-laboratorio');
     
-    const elQuimico = document.getElementById('id-quimico-asignado-final');
-    const elDoctor = document.getElementById('id-doctor-referente-final');
+    const elQuimicoHidden = document.getElementById('id-quimico-asignado-final');
+    const elDoctorHidden = document.getElementById('id-doctor-referente-final');
+    const inputQuimicoTexto = document.getElementById('buscador-quimico')?.value.trim();
+    const inputDoctorTexto = document.getElementById('buscador-doctor')?.value.trim();
 
-    if (!elQuimico?.value || !elDoctor?.value) {
-        alert("⚠️ ¡Error! Debes seleccionar tanto al químico como al doctor referente.");
+    // Validar que al menos se tenga texto o selección
+    if (!inputQuimicoTexto) {
+        alert("⚠️ ¡Error! Debes ingresar o seleccionar al Químico / Especialista asignado.");
+        return;
+    }
+    if (!inputDoctorTexto) {
+        alert("⚠️ ¡Error! Debes ingresar o seleccionar al Doctor referente.");
         return;
     }
 
@@ -512,35 +518,39 @@ async function guardarEstudioLaboratorio(event) {
     });
     const arrayNumeros = idsSeleccionados.length > 0 ? idsSeleccionados : null;
 
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> REGISTRANDO...`;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> REGISTRANDO...`;
+    }
     
     try {
-        // 1. Obtener usuario
+        // 1. Obtener usuario en sesión
         const { data: { user }, error: authError } = await fisioNet.auth.getUser();
         if (authError || !user) throw new Error("No hay sesión activa.");
 
-        // 2. Gestionar Paciente (AQUÍ ESTÁ EL CAMBIO CLAVE)
-        // Usamos la variable que ya tengas, pero aseguramos que sea el UUID del paciente
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa');
+
+        // 2. Registrar o recuperar Paciente
         let idPacienteActual = pacienteExistenteId; 
         if (!idPacienteActual) {
-            idPacienteActual = await registrarPacienteNuevo(); // Esta función debe retornar el nuevo UUID
+            console.log("🆕 Registrando paciente nuevo en la Ficha Maestra...");
+            idPacienteActual = await registrarPacienteNuevo(); 
         }
 
-        // 3. Subida de archivos
+        // 3. Subida de archivos (PDFs/Estudios)
         let rutasSubidas = [];
         try {
             const resultadosSubida = await subirArchivosASupabase(
-                idPacienteActual, // Usamos el ID real (UUID)
-                localStorage.getItem('id_clinica_activa'), 
+                idPacienteActual,
+                idClinicaActiva, 
                 'ESTUDIO_' + Date.now()
             );
             rutasSubidas = Array.isArray(resultadosSubida) ? resultadosSubida : [];
         } catch (uploadErr) {
-            console.error("❌ Error en subida, continuando...", uploadErr);
+            console.error("❌ Error en subida de archivos:", uploadErr);
         }
 
-        // 4. Preparación de etiquetas
+        // 4. Preparación de etiquetas de estudio
         const etiquetas = [];
         document.querySelectorAll('.check-estudio:checked').forEach(ch => {
             const label = document.querySelector(`label[for="${ch.id}"]`);
@@ -549,60 +559,57 @@ async function guardarEstudioLaboratorio(event) {
         const otro = document.getElementById('otro-estudio')?.value?.trim();
         if (otro) etiquetas.push(otro.toUpperCase());
 
-        // 5. Payload Final (INCLUYENDO paciente_id)
+        // 5. Construcción del Payload Seguro
         const payload = {
             id: crypto.randomUUID(),
-            paciente_id: idPacienteActual, // <--- ESTO ES LO NUEVO Y NECESARIO
-            id_socio_emisor: localStorage.getItem('id_clinica_activa'),
-            paciente_nombre: document.getElementById('valNombre').value.toUpperCase(),
-            // ... resto de tus campos ...
+            paciente_id: idPacienteActual,
+            id_socio_emisor: idClinicaActiva,
+            paciente_nombre: document.getElementById('valNombre')?.value.toUpperCase() || '',
+            apellido_paterno: document.getElementById('valPaterno')?.value.toUpperCase() || '',
+            apellido_materno: document.getElementById('valMaterno')?.value.toUpperCase() || '',
+            paciente_curp: (document.getElementById('curp-parte1')?.value || '') + 
+                           (document.getElementById('curp-estado')?.value || '') + 
+                           (document.getElementById('curp-consonantes')?.value || '') + 
+                           (document.getElementById('curp-homo')?.value || ''),
+            fecha_nacimiento: document.getElementById('valFecha')?.value || null,
+            edad_actual: document.getElementById('valFecha')?.value ? calcularEdad(document.getElementById('valFecha').value).anos : null,
+            genero: document.getElementById('genero-manual')?.value || 'NO ESPECIFICADO',
+            telefono_paciente: document.getElementById('tel-manual')?.value || null,
+            correo_paciente: document.getElementById('valEmail')?.value || null,
+            nombre_tutor: document.getElementById('tutor-nombre')?.value.toUpperCase() || null,
+            parentesco_tutor: document.getElementById('tutor-parentesco')?.value.toUpperCase() || null,
+            numero_tutor: document.getElementById('tutor-tel')?.value || null,
+            estudios_etiquetas: etiquetas,
             archivo_pdf_url: rutasSubidas.length > 0 ? rutasSubidas.join(',') : null,
             especialista_muestrista: user.id,
-            especialista_quimico: elQuimico.value,
-            id_doctor_referente: elDoctor.value,
+            especialista_quimico: elQuimicoHidden?.value || null, // Si es UUID guardado
+            id_doctor_referente: elDoctorHidden?.value || null,   // Si es UUID guardado
+            doctor_referente_nombre: inputDoctorTexto.toUpperCase(), // Respaldo de nombre en texto legible
             estado: 'PENDIENTE_ANALISIS',
             fecha_captura: new Date().toISOString(),
             observaciones: document.getElementById('observaciones-laboratorio')?.value?.trim() || null,
-           
-    apellido_paterno: document.getElementById('valPaterno').value.toUpperCase(),
-    apellido_materno: document.getElementById('valMaterno').value.toUpperCase(),
-    paciente_curp: (document.getElementById('curp-parte1')?.value || '') + 
-                   (document.getElementById('curp-estado')?.value || '') + 
-                   (document.getElementById('curp-consonantes')?.value || '') + 
-                   (document.getElementById('curp-homo')?.value || ''),
-    fecha_nacimiento: document.getElementById('valFecha').value || null,
-    // Llamamos a la función que ya tenías declarada abajo en tu JS
-    edad_actual: calcularEdad(document.getElementById('valFecha').value).anos, 
-    
-    genero: document.getElementById('genero-manual').value,
-    telefono_paciente: document.getElementById('tel-manual').value || null,
-    correo_paciente: document.getElementById('valEmail').value || null,
-    nombre_tutor: document.getElementById('tutor-nombre')?.value.toUpperCase() || null,
-    parentesco_tutor: document.getElementById('tutor-parentesco')?.value.toUpperCase() || null,
-    numero_tutor: document.getElementById('tutor-tel')?.value || null,
-    estudios_etiquetas: etiquetas, // ¡ARRAY!
-  
-    metodo_carga: 'MANUAL',
-
-  id_estudio_catalogo: arrayNumeros.length > 0 ? arrayNumeros : null,
-   
-    created_at: new Date().toISOString()
+            metodo_carga: 'MANUAL',
+            id_estudio_catalogo: arrayNumeros,
+            created_at: new Date().toISOString()
         };
 
         const { error: errInsert } = await fisioNet.from('estudios_laboratorio').insert([payload]);
         if (errInsert) throw errInsert;
 
-        alert("✅ ESTUDIO ASIGNADO correctamente.");
+        alert("✅ ESTUDIO ASIGNADO Y REGISTRADO CORRECTAMENTE.");
         window.location.reload();
 
     } catch (err) {
-        console.error("❌ ERROR CRÍTICO:", err);
-        alert("Error: " + err.message);
+        console.error("❌ ERROR CRÍTICO AL GUARDAR:", err);
+        alert("Error al guardar el estudio: " + err.message);
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fas fa-save me-2"></i> REGISTRAR Y ENVIAR`;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fas fa-save me-2"></i> REGISTRAR Y ENVIAR`;
+        }
     }
 }
+
 function renderizarListaPDFs() {
     // Asegúrate de que apunte al nuevo contenedor que pusimos en el modal
     let contenedor = document.getElementById('lista-pdfs-cargados'); 
@@ -876,60 +883,91 @@ async function configurarBuscadorDoctor() {
     const lista = document.getElementById('sugerencias-doctores');
     const inputHidden = document.getElementById('id-doctor-referente-final');
 
+    if (!input || !lista) return;
+
     input.addEventListener('input', async (e) => {
         const query = e.target.value.trim().toUpperCase();
+        if (inputHidden) inputHidden.value = ""; // Si edita texto libre, reseteamos el UUID
+
         if (query.length < 3) { lista.classList.add('d-none'); return; }
 
-        // 1. Pedimos nombre Y especialidad en ambas tablas
-        const [internos, externos] = await Promise.all([
-            fisioNet.from('colaboradores_clinica')
-                .select('id_profesional, perfiles_profesionales!inner(nombre_completo, especialidad)')
-                .eq('id_clinica', localStorage.getItem('id_clinica_activa'))
-                .ilike('perfiles_profesionales.nombre_completo', `%${query}%`),
-            
-            fisioNet.from('red_colaboracion')
-                .select('id_doctor_receptor, nombre_entidad, tipo_entidad') // Asegúrate que 'tipo_entidad' tenga la especialidad
-                .eq('id_doctor_emisor', localStorage.getItem('id_clinica_activa'))
-                .ilike('nombre_entidad', `%${query}%`)
-        ]);
+        try {
+            const idClinica = localStorage.getItem('id_clinica_activa');
 
-        lista.innerHTML = '';
-        lista.classList.remove('d-none');
+            // 1. Consulta limpia a colaboradores internos
+            const { data: internos } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('id_profesional, perfiles_profesionales(nombre_completo, especialidad)')
+                .eq('id_clinica', idClinica)
+                .eq('estado', 'ACTIVO');
 
-        // 2. Mapeamos incluyendo la especialidad
-        const todos = [
-            ...(internos.data?.map(i => ({ 
-                id: i.id_profesional, 
-                nombre: i.perfiles_profesionales.nombre_completo, 
-                especialidad: i.perfiles_profesionales.especialidad, 
-                tipo: 'STAFF INTERNO' 
-            })) || []),
-            ...(externos.data?.map(e => ({ 
-                id: e.id_doctor_receptor, 
-                nombre: e.nombre_entidad, 
-                especialidad: e.tipo_entidad, 
-                tipo: 'CONVENIO EXTERNO' 
-            })) || [])
-        ];
+            // 2. Consulta a convenios externos
+            const { data: externos } = await fisioNet
+                .from('red_colaboracion')
+                .select('id_doctor_receptor, nombre_entidad, tipo_entidad')
+                .eq('id_doctor_emisor', idClinica)
+                .eq('estado_conexion', 'ACTIVO');
 
-        // 3. Renderizado profesional
-        todos.forEach(item => {
-            const btn = document.createElement('button');
-            btn.className = 'list-group-item list-group-item-action p-2';
-            btn.innerHTML = `
-                <div class="d-flex justify-content-between">
-                    <strong>${item.nombre}</strong>
-                    <span class="badge ${item.tipo === 'STAFF INTERNO' ? 'bg-primary' : 'bg-success'}">${item.tipo}</span>
-                </div>
-                <small class="text-muted"><i class="fas fa-stethoscope me-1"></i>${item.especialidad || 'MÉDICO GENERAL'}</small>
-            `;
-            btn.onclick = () => {
-                input.value = item.nombre;
-                inputHidden.value = item.id;
-                lista.classList.add('d-none');
-            };
-            lista.appendChild(btn);
-        });
+            lista.innerHTML = '';
+
+            // Filtrado manual flexible en memoria (evita fallos de SQL sintáctico)
+            const listaInternos = (internos || [])
+                .filter(i => i.perfiles_profesionales?.nombre_completo?.toUpperCase().includes(query))
+                .map(i => ({
+                    id: i.id_profesional,
+                    nombre: i.perfiles_profesionales.nombre_completo,
+                    especialidad: i.perfiles_profesionales.especialidad || 'MÉDICO GENERAL',
+                    tipo: 'STAFF INTERNO'
+                }));
+
+            const listaExternos = (externos || [])
+                .filter(e => e.nombre_entidad?.toUpperCase().includes(query))
+                .map(e => ({
+                    id: e.id_doctor_receptor,
+                    nombre: e.nombre_entidad,
+                    especialidad: e.tipo_entidad || 'CONVENIO EXTERNO',
+                    tipo: 'CONVENIO EXTERNO'
+                }));
+
+            const todos = [...listaInternos, ...listaExternos];
+
+            if (todos.length > 0) {
+                lista.classList.remove('d-none');
+                todos.forEach(item => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'list-group-item list-group-item-action p-2 text-start';
+                    btn.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="text-dark fs-7">${item.nombre.toUpperCase()}</strong>
+                            <span class="badge ${item.tipo === 'STAFF INTERNO' ? 'bg-primary' : 'bg-success'}" style="font-size: 0.6rem;">${item.tipo}</span>
+                        </div>
+                        <small class="text-muted" style="font-size: 0.65rem;"><i class="fas fa-stethoscope me-1"></i>${item.especialidad}</small>
+                    `;
+                    btn.onclick = (evt) => {
+                        evt.preventDefault();
+                        input.value = item.nombre.toUpperCase();
+                        if (inputHidden) inputHidden.value = item.id;
+                        lista.classList.add('d-none');
+                    };
+                    lista.appendChild(btn);
+                });
+            } else {
+                lista.classList.remove('d-none');
+                lista.innerHTML = `
+                    <div class="list-group-item bg-light text-muted small py-2">
+                        ✍️ <strong>Médico Externo:</strong> Se registrará como texto libre.
+                    </div>`;
+            }
+        } catch (err) {
+            console.error("❌ Error en buscador de doctores:", err);
+        }
+    });
+
+    document.addEventListener('click', (evt) => {
+        if (!input.contains(evt.target) && !lista.contains(evt.target)) {
+            lista.classList.add('d-none');
+        }
     });
 }
 
@@ -937,42 +975,71 @@ async function configurarBuscadorQuimico() {
     const input = document.getElementById('buscador-quimico');
     const lista = document.getElementById('sugerencias-quimicos');
     const inputHidden = document.getElementById('id-quimico-asignado-final');
-    
-    // Aquí está la clave: pon los valores exactos que ves en tu base de datos
-    const especialidadesLaboratorio = ['QUIMICO', 'BIOQUIMICO', 'PATOLOGO', 'MICROBIOLOGO'];
+
+    if (!input || !lista) return;
 
     input.addEventListener('input', async (e) => {
         const query = e.target.value.trim().toUpperCase();
+        if (inputHidden) inputHidden.value = "";
+
         if (query.length < 3) { lista.classList.add('d-none'); return; }
 
-        const { data: resultados } = await fisioNet
-            .from('colaboradores_clinica')
-            .select(`
-                id_profesional, 
-                perfiles_profesionales!inner(nombre_completo, especialidad)
-            `)
-            .eq('id_clinica', localStorage.getItem('id_clinica_activa'))
-            .in('perfiles_profesionales.especialidad', especialidadesLaboratorio) // 🎯 FILTRO RESTRINGIDO
-            .ilike('perfiles_profesionales.nombre_completo', `%${query}%`);
+        try {
+            const idClinica = localStorage.getItem('id_clinica_activa');
 
-        lista.innerHTML = '';
-        lista.classList.remove('d-none');
+            // Consultamos los colaboradores de la sede
+            const { data: resultados, error } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('id_profesional, perfiles_profesionales(nombre_completo, especialidad)')
+                .eq('id_clinica', idClinica)
+                .eq('estado', 'ACTIVO');
 
-        if (resultados && resultados.length > 0) {
-            resultados.forEach(r => {
-                const btn = document.createElement('button');
-                btn.className = 'list-group-item list-group-item-action p-2';
-                btn.innerHTML = `<strong>${r.perfiles_profesionales.nombre_completo}</strong> 
-                                 <br><small class="text-muted">${r.perfiles_profesionales.especialidad}</small>`;
-                btn.onclick = () => {
-                    input.value = r.perfiles_profesionales.nombre_completo;
-                    inputHidden.value = r.id_profesional;
-                    lista.classList.add('d-none');
-                };
-                lista.appendChild(btn);
+            if (error) throw error;
+
+            lista.innerHTML = '';
+
+            // Filtrado flexible por nombre o por cualquier especialidad de laboratorio
+            const filtrados = (resultados || []).filter(r => {
+                const nom = (r.perfiles_profesionales?.nombre_completo || '').toUpperCase();
+                const esp = (r.perfiles_profesionales?.especialidad || '').toUpperCase();
+                
+                const coincideNombre = nom.includes(query);
+                const esDeLaboratorio = ['QUIMICO', 'QUÍMICO', 'BIOQUIMICO', 'BIOQUÍMICO', 'PATOLOGO', 'PATÓLOGO', 'MICROBIOLOGO', 'LABORATORIO', 'LABORATORISTA'].some(e => esp.includes(e));
+                
+                return coincideNombre || (esDeLaboratorio && query.length >= 3);
             });
-        } else {
-            lista.innerHTML = '<div class="p-2 text-muted small">No hay especialistas de laboratorio registrados.</div>';
+
+            if (filtrados.length > 0) {
+                lista.classList.remove('d-none');
+                filtrados.forEach(r => {
+                    const perfil = r.perfiles_profesionales;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'list-group-item list-group-item-action p-2 text-start';
+                    btn.innerHTML = `
+                        <strong class="text-dark fs-7">${perfil.nombre_completo.toUpperCase()}</strong>
+                        <br><small class="text-muted" style="font-size: 0.65rem;"><i class="fas fa-vial me-1"></i>${perfil.especialidad || 'ESPECIALISTA'}</small>
+                    `;
+                    btn.onclick = (evt) => {
+                        evt.preventDefault();
+                        input.value = perfil.nombre_completo.toUpperCase();
+                        if (inputHidden) inputHidden.value = r.id_profesional;
+                        lista.classList.add('d-none');
+                    };
+                    lista.appendChild(btn);
+                });
+            } else {
+                lista.classList.remove('d-none');
+                lista.innerHTML = '<div class="p-2 text-muted small">No se encontraron especialistas de laboratorio registrados.</div>';
+            }
+        } catch (err) {
+            console.error("❌ Error en buscador de químicos:", err);
+        }
+    });
+
+    document.addEventListener('click', (evt) => {
+        if (!input.contains(evt.target) && !lista.contains(evt.target)) {
+            lista.classList.add('d-none');
         }
     });
 }
