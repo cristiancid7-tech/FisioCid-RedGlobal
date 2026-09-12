@@ -22,7 +22,8 @@ async function comprobarConfiguracionInicialRequerida() {
     }
 }
 async function actualizarInterfazSede() {
-    const labelSede = document.getElementById('sedeActivaTexto') || document.getElementById('txtSedeActual'); 
+    const labelSede = document.getElementById('txtSedeActual') || document.getElementById('sedeActivaTexto'); 
+    const txtEspUI = document.getElementById('txtEspecialidadUsuario');
     const sedeElegidaNombre = localStorage.getItem('nombre_clinica');
     const clinicaId = localStorage.getItem('id_clinica_activa');
 
@@ -38,30 +39,31 @@ async function actualizarInterfazSede() {
     }
 
     try {
-        // 1. Obtener la sesión activa directamente desde Supabase Auth (Garantiza el ID real)
+        // 1. Obtener la sesión activa en tiempo real (evita IDs nulos)
         const { data: { user } } = await fisioNet.auth.getUser();
         
         if (user) {
-            // Guardar para evitar futuros nulos
             localStorage.setItem('usuarioId', user.id);
 
-            // 2. Consultar la especialidad real en la tabla perfiles_profesionales
-            const { data: perfil } = await fisioNet
+            // 2. Consulta a la tabla maestra de perfiles
+            const { data: perfil, error: errPerfil } = await fisioNet
                 .from('perfiles_profesionales')
                 .select('especialidad') 
                 .eq('id', user.id)
                 .maybeSingle();
 
-            if (perfil && perfil.especialidad) {
-                const especialidadReal = perfil.especialidad
-                    .toUpperCase()
-                    .trim();
+            if (errPerfil) console.error("Error al consultar especialidad:", errPerfil);
 
+            if (perfil && perfil.especialidad) {
+                const especialidadReal = perfil.especialidad.toUpperCase().trim();
+                
+                // Actualizar UI y almacenamiento local
                 localStorage.setItem('especialidadUsuario', especialidadReal);
-                const txtEspUI = document.getElementById('txtEspecialidadUsuario');
-                if (txtEspUI) txtEspUI.innerText = especialidadReal;
+                if (txtEspUI) {
+                    txtEspUI.innerText = especialidadReal;
+                }
             } else if (clinicaId) {
-                // Fallback a colaboradores de clínica si no hay especialidad
+                // Fallback a colaboradores
                 const { data: colaborador } = await fisioNet
                     .from('colaboradores_clinica')
                     .select('cargo_clinico')
@@ -71,10 +73,9 @@ async function actualizarInterfazSede() {
 
                 const cargoFinal = colaborador?.cargo_clinico 
                     ? colaborador.cargo_clinico.toUpperCase().trim() 
-                    : "PERSONAL DE APOYO";
+                    : "ESPECIALISTA";
 
                 localStorage.setItem('especialidadUsuario', cargoFinal);
-                const txtEspUI = document.getElementById('txtEspecialidadUsuario');
                 if (txtEspUI) txtEspUI.innerText = cargoFinal;
             }
         }
