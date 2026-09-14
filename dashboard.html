@@ -364,12 +364,20 @@
         <p style="color: #64748b; font-size: 0.9rem;">Conecta con especialistas y colabora en expedientes interdisciplinarios.</p>
     </div>
 
-    <div id="contenedorSolicitudesPendientes" style="margin-bottom: 30px; display: none; background: #fffbeb; border: 1px solid #fef3c7; padding: 15px; border-radius: 15px;">
+    <!-- 📬 BANNER DE SOLICITUDES ENVIADAS Y RECIBIDAS DE LA RED -->
+    <div id="contenedorSolicitudesPendientes" style="margin-bottom: 30px; background: #fffbeb; border: 1px solid #fef3c7; padding: 15px; border-radius: 15px;">
         <h3 style="font-size: 0.8rem; color: #92400e; margin-bottom: 12px; text-transform: uppercase; font-weight: 800;">
-            <i class="fas fa-bell"></i> Solicitudes de enlace
+            <i class="fas fa-bell"></i> Solicitudes Recibidas
         </h3>
-        <div id="listaSolicitudes" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        <div id="listaSolicitudesRecibidasRed" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;"></div>
+
+        <h3 style="font-size: 0.8rem; color: #92400e; margin-bottom: 12px; text-transform: uppercase; font-weight: 800; border-top: 1px dashed #fde68a; padding-top: 12px;">
+            <i class="fas fa-paper-plane"></i> Solicitudes Enviadas (Pendientes)
+        </h3>
+        <div id="listaSolicitudesEnviadas" style="display: flex; flex-direction: column; gap: 10px;"></div>
     </div>
+
+
 
     <div class="search-box" style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #e2e8f0; margin-bottom: 30px;">
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">

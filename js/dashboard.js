@@ -447,24 +447,39 @@ async function renderizarTablaEquipo() {
 // ==========================================
 // RENDEREAR TABLA ALIANZAS Y EXTERNOS
 // ==========================================
+// ==========================================
+// 🟢 RENDEREAR ALIANZAS Y DOCTORES EXTERNOS (UNIFICADO)
+// ==========================================
 async function renderizarTablaAlianzas() {
     const tbody = document.getElementById('tablaCuerpoAlianzas');
     const contador = document.getElementById('contadorSocios');
     if (!tbody) return;
 
     try {
+        const { data: { user } } = await fisioNet.auth.getUser();
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
-        if (!idClinica) return;
+        if (!user || !idClinica) return;
 
-        const { data: todosColabs, error } = await fisioNet
+        // 1. Obtener Convenios y Empresas de red_colaboracion
+        const { data: conveniosRed, error: errRed } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id}`)
+            .eq('estado_conexion', 'ACTIVO');
+
+        if (errRed) console.error("Error al consultar red_colaboracion:", errRed);
+
+        // 2. Obtener Doctores y Colaboradores Externos de colaboradores_clinica
+        const { data: colabsClinica, error: errColab } = await fisioNet
             .from('colaboradores_clinica')
-            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, tipo_vinculo')
-            .eq('id_clinica', idClinica);
+            .select('id, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, tipo_vinculo')
+            .eq('id_clinica', idClinica)
+            .eq('estado', 'ACTIVO');
 
-        if (error) throw error;
+        if (errColab) console.error("Error al consultar colaboradores_clinica:", errColab);
 
-        // Filtrado exclusivo para alianzas y medicos externos
-        const alianzasYStaff = (todosColabs || []).filter(c => {
+        // Filtrar solo los externos de la clínica
+        const doctoresExternos = (colabsClinica || []).filter(c => {
             const vinculo = (c.tipo_vinculo || '').toUpperCase();
             const cargo = (c.cargo_clinico || '').toUpperCase();
             const rol = (c.rol_sistema || '').toUpperCase();
@@ -476,72 +491,103 @@ async function renderizarTablaAlianzas() {
                    rol === 'SOCIOS_EXTERNOS';
         });
 
+        // 3. Mapear nombres de los doctores externos desde perfiles_profesionales / perfiles
+        let mapaDoctores = {};
+        const idsProf = doctoresExternos.map(d => d.id_profesional).filter(Boolean);
+
+        if (idsProf.length > 0) {
+            const { data: perfilesProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('id, nombre_completo, correo_institucional, telefono_contacto')
+                .in('id', idsProf);
+
+            (perfilesProf || []).forEach(p => { mapaDoctores[p.id] = p; });
+
+            const idsFaltantes = idsProf.filter(id => !mapaDoctores[id]);
+            if (idsFaltantes.length > 0) {
+                const { data: perfilesGen } = await fisioNet
+                    .from('perfiles')
+                    .select('id, nombre_completo, correo')
+                    .in('id', idsFaltantes);
+
+                (perfilesGen || []).forEach(p => { 
+                    mapaDoctores[p.id] = { 
+                        nombre_completo: p.nombre_completo, 
+                        correo_institucional: p.correo 
+                    }; 
+                });
+            }
+        }
+
+        // 4. Consolidar ambas fuentes en una lista única para renderizar
+        let listaUnificada = [];
+
+        // Agregar convenios empresariales
+        (conveniosRed || []).forEach(c => {
+            listaUnificada.push({
+                id: c.id,
+                origen: 'RED_COLABORACION',
+                nombre: c.nombre_entidad || c.contacto_principal || 'EMPRESA / SOCIO',
+                tipo: c.tipo_entidad || 'CONVENIO',
+                beneficio: c.porcentaje_descuento ? `${c.porcentaje_descuento}% DESC` : 'SIN DESC',
+                contacto: c.contacto_principal ? `👤 ${c.contacto_principal}` : 'Contacto directo',
+                correo: c.email_contacto || 'Sin correo'
+            });
+        });
+
+        // Agregar doctores/especialistas externos
+        doctoresExternos.forEach(d => {
+            const perfil = mapaDoctores[d.id_profesional] || {};
+            listaUnificada.push({
+                id: d.id,
+                origen: 'COLABORADOR_EXTERNO',
+                nombre: perfil.nombre_completo || 'DOCTOR EXTERNO',
+                tipo: d.cargo_clinico || d.rol_sistema || 'MÉDICO INTERCONSULTANTE',
+                beneficio: 'ESPECIALISTA',
+                contacto: `📍 Área: ${d.area_asignada || 'General'}`,
+                correo: perfil.correo_institucional || 'Sin correo'
+            });
+        });
+
+        // Actualizar contador global
         if (contador) {
             const totalInternos = window.totalEquipoInternoNum || 0;
-            contador.innerText = `${alianzasYStaff.length + totalInternos} En Red`;
+            contador.innerText = `${listaUnificada.length + totalInternos} En Red`;
         }
 
         let html = `
             <tr>
                 <td colspan="4" style="background-color: #f0fdf4; color: #14532d; font-weight: 800; padding: 10px 15px; font-size: 0.8rem; letter-spacing: 0.5px;">
-                    🟢 ALIANZAS ESTRATEGICAS Y DOCTORES EXTERNOS
+                    🟢 ALIANZAS ESTRATÉGICAS Y DOCTORES EXTERNOS
                 </td>
             </tr>
         `;
 
-        if (alianzasYStaff.length === 0) {
+        if (listaUnificada.length === 0) {
             html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay alianzas ni doctores externos vinculados.</td></tr>`;
         } else {
-            const idsProf = alianzasYStaff.map(a => a.id_profesional).filter(Boolean);
-            let perfilesMapa = {};
-
-            if (idsProf.length > 0) {
-                const { data: perfilesProf } = await fisioNet
-                    .from('perfiles_profesionales')
-                    .select('id, nombre_completo, correo_institucional, telefono_contacto')
-                    .in('id', idsProf);
-
-                (perfilesProf || []).forEach(p => { perfilesMapa[p.id] = p; });
-
-                const idsFaltantes = idsProf.filter(id => !perfilesMapa[id]);
-                if (idsFaltantes.length > 0) {
-                    const { data: perfilesGen } = await fisioNet
-                        .from('perfiles')
-                        .select('id, nombre_completo, correo')
-                        .in('id', idsFaltantes);
-
-                    (perfilesGen || []).forEach(p => { 
-                        perfilesMapa[p.id] = { 
-                            nombre_completo: p.nombre_completo, 
-                            correo_institucional: p.correo 
-                        }; 
-                    });
-                }
-            }
-
-            html += alianzasYStaff.map(item => {
-                const perfil = perfilesMapa[item.id_profesional] || {};
-                const nombre = perfil.nombre_completo || 'COLABORADOR / DOCTOR';
-                const correo = perfil.correo_institucional || 'Sin correo registrado';
-                const cargoOrol = item.cargo_clinico || item.rol_sistema || 'STAFF EXTERNO';
+            html += listaUnificada.map(item => {
+                const handlerBoton = item.origen === 'RED_COLABORACION' 
+                    ? `abrirConfiguracionAlianza('${item.id}')` 
+                    : `abrirConfiguracionEquipo('${item.id}')`;
 
                 return `
                 <tr style="border-bottom: 1px solid #f1f5f9; transition: all 0.3s ease;">
                     <td style="padding: 15px;">
-                        <div style="font-weight: 700; color: #1e293b;">${nombre}</div>
-                        <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">${cargoOrol}</div>
+                        <div style="font-weight: 700; color: #1e293b;">${item.nombre}</div>
+                        <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">🤝 ${item.tipo}</div>
                     </td>
                     <td style="padding: 15px; text-align: center;">
-                        <span style="background: #f0fdf4; color: #166534; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
-                            ${item.estado || 'ACTIVO'}
+                        <span style="background: #dcfce7; color: #15803d; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
+                            ${item.beneficio}
                         </span>
                     </td>
                     <td style="padding: 15px;">
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">📍 Area: ${item.area_asignada || 'General'}</div>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">${item.contacto}</div>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${item.correo}</div>
                     </td>
                     <td style="padding: 15px; text-align: right;">
-                        <button onclick="abrirConfiguracionAlianza('${item.id}')" title="Configurar Convenio" style="border: none; background: #f1f5f9; padding: 8px; border-radius: 8px; cursor: pointer;">
+                        <button onclick="${handlerBoton}" title="Configurar" style="border: none; background: #f1f5f9; padding: 8px; border-radius: 8px; cursor: pointer;">
                             ⚙️
                         </button>
                     </td>
@@ -552,7 +598,7 @@ async function renderizarTablaAlianzas() {
         tbody.innerHTML = html;
 
     } catch (e) {
-        console.error("❌ Fallo critico en renderizarTablaAlianzas:", e);
+        console.error("❌ Fallo crítico en renderizarTablaAlianzas:", e);
     }
 }
 
@@ -1607,6 +1653,255 @@ document.getElementById('btnNuevaCita')?.addEventListener('click', () => {
     verificarDisponibilidadReal();
 });
 
+// ==========================================
+// 📬 CARGAR SOLICITUDES PENDIENTES DE LA RED (CORREGIDO)
+// ==========================================
+async function cargarSolicitudesRedPendientes() {
+    const contenedorPadre = document.getElementById('contenedorSolicitudesPendientes');
+    const contenedorEnviadas = document.getElementById('listaSolicitudesEnviadas');
+    const contenedorRecibidas = document.getElementById('listaSolicitudesRecibidasRed');
+    
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const idClinica = localStorage.getItem('id_clinica_activa');
+        if (!user) return;
+
+        // 1. Obtener Recibidas (Red + Colaboradores)
+        const { data: recibidasRed } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .eq('id_doctor_receptor', user.id)
+            .eq('estado_conexion', 'PENDIENTE');
+
+        const { data: recibidasColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('id, id_clinica, cargo_clinico, clinicas(nombre_clinica)')
+            .eq('id_profesional', user.id)
+            .eq('estado', 'PENDIENTE');
+
+        // 2. Obtener Enviadas por mi
+        const { data: enviadasRed } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .eq('id_doctor_emisor', user.id)
+            .eq('estado_conexion', 'PENDIENTE');
+
+        const totalRecibidas = (recibidasRed || []).length + (recibidasColab || []).length;
+        const totalEnviadas = (enviadasRed || []).length;
+        const tienePendientes = totalRecibidas > 0 || totalEnviadas > 0;
+
+        if (contenedorPadre) {
+            contenedorPadre.style.setProperty('display', tienePendientes ? 'block' : 'none', 'important');
+        }
+
+        // --- RENDERIZAR ENVIADAS (Consultar nombres de a quién se las envié) ---
+        if (contenedorEnviadas) {
+            if (totalEnviadas === 0) {
+                contenedorEnviadas.innerHTML = `<p style="font-size:0.75rem; color:#94a3b8; text-align:center; margin:5px 0;">No has enviado solicitudes pendientes.</p>`;
+            } else {
+                // Obtener nombres reales de los receptores desde perfiles_profesionales
+                const idsReceptores = enviadasRed.map(e => e.id_doctor_receptor).filter(Boolean);
+                let mapaReceptores = {};
+
+                if (idsReceptores.length > 0) {
+                    const { data: perfilesRec } = await fisioNet
+                        .from('perfiles_profesionales')
+                        .select('id, nombre_completo, especialidad')
+                        .in('id', idsReceptores);
+
+                    (perfilesRec || []).forEach(p => {
+                        mapaReceptores[p.id] = p;
+                    });
+                }
+
+                contenedorEnviadas.innerHTML = enviadasRed.map(sol => {
+                    const destinatario = mapaReceptores[sol.id_doctor_receptor];
+                    const nombreMostrar = destinatario?.nombre_completo || 'DOCTOR / ESPECIALISTA';
+                    const especialidadMostrar = destinatario?.especialidad || sol.tipo_entidad || 'ESPECIALISTA';
+
+                    return `
+                        <div style="background:#fff3c7; border:1px solid #fde68a; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:0.65rem; background:#d97706; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">ENVIADA A:</span>
+                                <h5 style="margin:4px 0 0 0; font-size:0.85rem; color:#78350f;">${nombreMostrar.toUpperCase()}</h5>
+                                <small style="font-size:0.7rem; color:#b45309;">🎓 ${especialidadMostrar.toUpperCase()}</small>
+                            </div>
+                            <small style="font-size:0.7rem; color:#b45309;">⏳ Esperando respuesta</small>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // --- RENDERIZAR RECIBIDAS ---
+        if (contenedorRecibidas) {
+            if (totalRecibidas === 0) {
+                contenedorRecibidas.innerHTML = `<p style="font-size:0.75rem; color:#94a3b8; text-align:center; margin:5px 0;">Sin invitaciones pendientes.</p>`;
+            } else {
+                let htmlRecibidas = "";
+
+                (recibidasRed || []).forEach(sol => {
+                    htmlRecibidas += `
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:0.65rem; background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">SOLICITUD DE RED</span>
+                                <h5 style="margin:4px 0 2px 0; font-size:0.9rem; color:#1e3a8a; font-weight:800;">${sol.nombre_entidad || 'DOCTOR / ESPECIALISTA'}</h5>
+                                <small style="font-size:0.72rem; color:#3b82f6; font-weight:700;">🎓 ${sol.tipo_entidad || 'ESPECIALISTA'}</small>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button onclick="responderSolicitudRed('${sol.id}', 'ACTIVO', 'RED')" style="background:#10b981; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">✅ Aceptar</button>
+                                <button onclick="responderSolicitudRed('${sol.id}', 'RECHAZADO', 'RED')" style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">❌</button>
+                            </div>
+                        </div>`;
+                });
+
+                (recibidasColab || []).forEach(sol => {
+                    htmlRecibidas += `
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:0.65rem; background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">INVITACIÓN A CLÍNICA</span>
+                                <h5 style="margin:4px 0 2px 0; font-size:0.9rem; color:#1e3a8a; font-weight:800;">${sol.clinicas?.nombre_clinica || 'CLÍNICA'}</h5>
+                                <small style="font-size:0.72rem; color:#3b82f6; font-weight:700;">🎓 ${sol.cargo_clinico || 'ESPECIALISTA'}</small>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button onclick="responderSolicitudRed('${sol.id}', 'ACTIVO', 'COLAB')" style="background:#10b981; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">✅ Aceptar</button>
+                                <button onclick="responderSolicitudRed('${sol.id}', 'RECHAZADO', 'COLAB')" style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">❌</button>
+                            </div>
+                        </div>`;
+                });
+
+                contenedorRecibidas.innerHTML = htmlRecibidas;
+            }
+        }
+
+    } catch (err) {
+        console.error("❌ Error al cargar solicitudes pendientes:", err);
+    }
+}
+
+// Handler único unificado para responder solicitudes (RED o COLAB)
+window.responderSolicitudRed = async (idSolicitud, nuevoEstado, tipoOrigen = 'RED') => {
+    try {
+        const idClinica = localStorage.getItem('id_clinica_activa');
+
+        if (tipoOrigen === 'RED') {
+            const { data: alianza, error: errRed } = await fisioNet
+                .from('red_colaboracion')
+                .update({ estado_conexion: nuevoEstado })
+                .eq('id', idSolicitud)
+                .select()
+                .single();
+
+            if (errRed) throw errRed;
+
+            if (nuevoEstado === 'ACTIVO' && idClinica) {
+                await fisioNet
+                    .from('colaboradores_clinica')
+                    .insert([{
+                        id_clinica: idClinica,
+                        id_profesional: alianza.id_doctor_emisor,
+                        rol_sistema: 'SOCIOS_EXTERNOS',
+                        cargo_clinico: alianza.tipo_entidad || 'DOCTOR EXTERNO',
+                        estado: 'ACTIVO',
+                        tipo_vinculo: 'EXTERNO',
+                        area_asignada: 'INTERCONSULTA'
+                    }]);
+            }
+        } else {
+            const { error: errColab } = await fisioNet
+                .from('colaboradores_clinica')
+                .update({ 
+                    estado: nuevoEstado,
+                    fecha_inicio: nuevoEstado === 'ACTIVO' ? new Date().toISOString().split('T')[0] : null
+                })
+                .eq('id', idSolicitud);
+
+            if (errColab) throw errColab;
+        }
+
+        alert(`Solicitud ${nuevoEstado === 'ACTIVO' ? 'aceptada' : 'rechazada'} correctamente.`);
+        await cargarSolicitudesRedPendientes();
+        if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas();
+
+    } catch (err) {
+        console.error("❌ Error al responder solicitud:", err);
+        alert("Error al responder solicitud: " + err.message);
+    }
+};
+
+
+// ==========================================
+// ✉️ ENVIAR SOLICITUD DE COLABORACIÓN (VERSIÓN UNIFICADA)
+// ==========================================
+async function enviarSolicitudColaboracion(idReceptor) {
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+
+        // 1. Validar que no sea auto-solicitud
+        if (user.id === idReceptor) {
+            alert("⚠️ No puedes enviarte una solicitud a ti mismo.");
+            return;
+        }
+
+        // 2. Obtener datos del EMISOR (Quien envía la invitación)
+        const { data: perfilEmisor } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('nombre_completo, especialidad')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        // 3. Obtener datos del RECEPTOR (Quien recibe la invitación, para la alerta)
+        const { data: perfilReceptor } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('nombre_completo')
+            .eq('id', idReceptor)
+            .maybeSingle();
+
+        // 4. Verificar si ya existe un registro entre ambos usuarios
+        const { data: existente } = await fisioNet
+            .from('red_colaboracion')
+            .select('id, estado_conexion')
+            .or(`and(id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${idReceptor}),and(id_doctor_emisor.eq.${idReceptor},id_doctor_receptor.eq.${user.id})`)
+            .maybeSingle();
+
+        if (existente) {
+            alert(`⚠️ Ya existe una solicitud registrada entre ustedes (Estado: ${existente.estado_conexion}).`);
+            if (typeof cerrarModalColega === 'function') cerrarModalColega();
+            return;
+        }
+
+        // 5. Preparar datos reales del EMISOR para guardar en Supabase
+        const nombreEmisor = perfilEmisor?.nombre_completo || user.user_metadata?.full_name || 'COLABORADOR PROFESIONAL';
+        const especialidadEmisor = (perfilEmisor?.especialidad || 'ESPECIALISTA').toUpperCase().trim();
+
+        // 6. Insertar en red_colaboracion
+        const { error } = await fisioNet
+            .from('red_colaboracion')
+            .insert([{
+                id_doctor_emisor: user.id,
+                id_doctor_receptor: idReceptor,
+                id_usuario_socio: idReceptor,
+                nombre_entidad: nombreEmisor,        // 👈 Guarda el nombre de quien ENVÍA
+                contacto_principal: nombreEmisor,
+                tipo_entidad: especialidadEmisor,    // 👈 Guarda la especialidad real (ej. INTERNISTA)
+                estado_conexion: 'PENDIENTE'
+            }]);
+
+        if (error) throw error;
+
+        const nombreDestino = perfilReceptor?.nombre_completo || 'el especialista';
+        alert(`✉️ Solicitud enviada correctamente a ${nombreDestino}.`);
+        
+        if (typeof cerrarModalColega === 'function') cerrarModalColega();
+        await cargarSolicitudesRedPendientes();
+
+    } catch (err) {
+        console.error("❌ Error al enviar solicitud:", err);
+        alert("No se pudo enviar la solicitud: " + err.message);
+    }
+}
+
 async function cargarSolicitudesRecibidas() {
     const lista = document.getElementById('listaEsperaReferidos'); 
     const badge = document.getElementById('badgeSolicitudes');
@@ -1797,6 +2092,8 @@ async function verDetalleColega(idColega) {
     const modal = document.getElementById('modalPerfilColega');
     
     try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+
         const { data: perfiles, error } = await fisioNet
             .from('perfiles_profesionales')
             .select(`
@@ -1831,7 +2128,16 @@ async function verDetalleColega(idColega) {
             gestionarEnlaceContacto('modalColegaEmail', c.correo_institucional, 'mailto:');
             gestionarEnlaceContacto('modalColegaTelefono', c.telefono_contacto, 'tel:');
 
-            document.getElementById('btnEnlazarModal').onclick = () => enviarSolicitudColaboracion(idColega);
+            const btnEnlazar = document.getElementById('btnEnlazarModal');
+            if (btnEnlazar) {
+                // 🚫 Si estoy viendo MI PROPIO perfil, ocultar o desactivar el botón
+                if (user && user.id === idColega) {
+                    btnEnlazar.style.display = 'none';
+                } else {
+                    btnEnlazar.style.display = 'block';
+                    btnEnlazar.onclick = () => enviarSolicitudColaboracion(idColega);
+                }
+            }
 
             modal.style.display = 'flex';
         }
@@ -1857,47 +2163,7 @@ function cerrarModalColega() {
     document.getElementById('modalPerfilColega').style.display = 'none';
 }
 
-async function enviarSolicitudColaboracion(idReceptor) {
-    try {
-        const { data: { user } } = await fisioNet.auth.getUser();
-        if (!user) return;
 
-        const { data: perfilSocio, error: errPerfil } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('nombre_completo, correo_institucional, telefono_contacto, especialidad')
-            .eq('id', idReceptor)
-            .single();
-
-        if (errPerfil) throw errPerfil;
-
-        const datosAInsertar = {
-            id_doctor_emisor: user.id,
-            id_doctor_receptor: idReceptor,
-            id_usuario_socio: idReceptor, 
-            nombre_entidad: perfilSocio.nombre_completo,
-            contacto_principal: perfilSocio.nombre_completo,
-            email_contacto: perfilSocio.correo_institucional, 
-            telefono_contacto: perfilSocio.telefono_contacto,
-            estado_conexion: 'PENDIENTE',
-            tipo_entidad: 'PROFESIONAL_SALUD'
-        };
-
-        const { error } = await fisioNet
-            .from('red_colaboracion')
-            .insert([datosAInsertar]);
-
-        if (error) throw error;
-
-        alert(`¡Solicitud enviada a ${perfilSocio.nombre_completo}! Datos vinculados.`);
-        cerrarModalColega();
-        
-        if (typeof renderizarTablaAlianzas === 'function') renderizarTablaAlianzas();
-
-    } catch (err) {
-        console.error("❌ Error crítico al enviar:", err);
-        alert("No se pudo enviar la solicitud: " + err.message);
-    }
-}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const { data: { user } } = await fisioNet.auth.getUser();
@@ -1907,6 +2173,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await aplicarIdentidadVisual(); 
     await actualizarInterfazSede(); 
+   
+await cargarSolicitudesRedPendientes();
 
     let nombreTrabajador = localStorage.getItem('nombre_completo');
     if (!nombreTrabajador || nombreTrabajador === 'null') {
