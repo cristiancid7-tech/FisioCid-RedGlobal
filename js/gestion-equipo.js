@@ -4,20 +4,23 @@
 
 async function obtenerIdClinicaReal(userId) {
     let id = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
-    
-    // Si no hay ID válido en LocalStorage, consultamos Supabase
-    if (!id || id === "null" || id === "undefined" || id.length < 30) {
-        console.log("🔍 Buscando clínica activa en Supabase para el usuario:", userId);
+    let dominio = localStorage.getItem('clinica_dominio');
+    let nombre = localStorage.getItem('nombre_clinica');
+
+    // Si falta el dominio o la clínica en memoria local, consultamos la DB
+    if (!id || !dominio || id === "null" || dominio === "undefined" || id.length < 30) {
+        console.log("🔍 Consultando tabla clinicas en Supabase para el usuario:", userId);
         
-        // 1. Intentamos buscar si es el DUEÑO de la clínica
+        // Busqueda 1: ¿Es el dueño directo?
         let { data: clinica, error: errC } = await fisioNet
             .from('clinicas')
             .select('id, nombre_clinica, dominio_corporativo')
             .eq('id_dueno', userId)
             .maybeSingle();
 
-        // 2. Si no es el dueño directo, buscamos en colaboradores a qué clínica pertenece
+        // Busqueda 2: Si no es el dueño, ¿es un colaborador activo?
         if (!clinica) {
+            console.log("🔍 El usuario no es id_dueno, buscando en colaboradores_clinica...");
             const { data: colab } = await fisioNet
                 .from('colaboradores_clinica')
                 .select('id_clinica')
@@ -38,25 +41,23 @@ async function obtenerIdClinicaReal(userId) {
 
         if (clinica) {
             id = clinica.id;
-            const dominioFinal = clinica.dominio_corporativo || 'fisiocid.com';
-            
+            nombre = clinica.nombre_clinica;
+            dominio = clinica.dominio_corporativo || 'fisiocid.com';
+
+            // Guardamos en LocalStorage
             localStorage.setItem('id_clinica_activa', id);
             localStorage.setItem('id_clinica_actual', id);
-            localStorage.setItem('nombre_clinica', clinica.nombre_clinica);
-            localStorage.setItem('clinica_dominio', dominioFinal);
-            
-            return { id, nombre: clinica.nombre_clinica, dominio: dominioFinal };
+            localStorage.setItem('nombre_clinica', nombre);
+            localStorage.setItem('clinica_dominio', dominio);
+
+            return { id, nombre, dominio };
         } else {
-            return { id: null, nombre: null, dominio: null };
+            console.error("❌ No se encontró ninguna clínica vinculada a esta cuenta.");
+            return { id: null, nombre: null, dominio: 'fisiocid.com' };
         }
     }
-    
-    // Si ya existía en LocalStorage:
-    return { 
-        id, 
-        nombre: localStorage.getItem('nombre_clinica'),
-        dominio: localStorage.getItem('clinica_dominio') || 'fisiocid.com'
-    };
+
+    return { id, nombre, dominio };
 }
 
 // ==========================================
@@ -356,22 +357,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) { window.location.href = 'login.html'; return; }
 
+    console.log("👤 Usuario detectado ID:", user.id);
+
+    // Forzamos limpieza si había un valor basura guardado
+    const domGuardado = localStorage.getItem('clinica_dominio');
+    if (!domGuardado || domGuardado === 'undefined' || domGuardado === 'null') {
+        localStorage.removeItem('clinica_dominio');
+    }
+
     const clinica = await obtenerIdClinicaReal(user.id);
+    console.log("🏢 Datos de clínica recuperados:", clinica);
+
+    const spanDominio = document.getElementById('labelDominio');
     
-    // Configurar marca y dominio visual
+    if (clinica && clinica.dominio) {
+        if (spanDominio) spanDominio.innerText = `@${clinica.dominio}`;
+    } else {
+        console.warn("⚠️ No se encontró dominio corporativo. Aplicando fallback.");
+        if (spanDominio) spanDominio.innerText = `@fisiocid.com`;
+    }
+
     if (clinica.nombre) {
         const brand = document.getElementById('clinicaBrand');
         if (brand) brand.innerText = clinica.nombre.toUpperCase();
     }
-    if (clinica.dominio) {
-        const spanDominio = document.getElementById('labelDominio');
-        if (spanDominio) spanDominio.innerText = `@${clinica.dominio}`;
-    }
 
-    // 🔗 Cargas dinámicas ligadas a la clínica
     if (clinica.id) {
-        await cargarAreasDesdeBoxes(clinica.id);        // Carga camillas/espacios reales de boxes_clinica
-        await cargarSuperioresDirectos(clinica.id);    // Carga lista de superiores reales
-        await cargarRedActual(clinica.id);             // Carga lista de colaboradores
+        await cargarAreasDesdeBoxes(clinica.id);
+        await cargarSuperioresDirectos(clinica.id);
+        await cargarRedActual(clinica.id);
     }
 });
