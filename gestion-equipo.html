@@ -314,12 +314,13 @@
 
             <div class="form-grid">
                 <div class="input-group">
-                    <label>USUARIO CORPORATIVO</label>
-                    <div class="input-wrapper-dominio">
-                        <input type="text" id="userApoyo" placeholder="recepcion.maria" oninput="this.value = this.value.toLowerCase().trim()">
-                        <span id="labelDominio" class="label-dominio">@fisiocid.com</span>
-                    </div>
-                </div>
+        <label>USUARIO CORPORATIVO</label>
+        <div class="input-wrapper-dominio">
+            <input type="text" id="userApoyo" placeholder="recepcion.maria" oninput="this.value = this.value.toLowerCase().trim()">
+            <!-- 🎯 CAMBIO 1: Dejamos el span vacío con puntos para que JS inyecte el verdadero dominio sin parpadear -->
+            <span id="labelDominio" class="label-dominio">@cargando...</span>
+        </div>
+    </div>
                 <div class="input-group">
                     <label>Tipo de Vínculo (Ubicación en Red)</label>
                     <select id="tipoVinculoInvitarAPOYO" style="border-color: #3b82f6; background-color: #eff6ff; color: #1e40af; font-weight: 800;">
@@ -382,9 +383,12 @@
                 </div>
                 
                 <div class="input-group">
-                    <label>Área / Ubicación (MAYÚSCULAS)</label>
-                    <input type="text" id="areaInvitarAPOYO" placeholder="EJ: PISO 2" oninput="this.value = this.value.toUpperCase()">
-                </div>
+        <label>Área / Ubicación (MAYÚSCULAS)</label>
+        <!-- 🎯 CAMBIO 2: Nace directamente como <select> en lugar de un <input> para que JS solo inyecte las <option> -->
+        <select id="areaInvitarAPOYO" style="width:100%; padding:12px; border-radius:12px; border:2px solid #e2e8f0; font-weight:600; background:white;">
+            <option value="GENERAL">ÁREA GENERAL / TODA LA CLÍNICA</option>
+        </select>
+    </div>
                 
                 <div class="input-group">
                     <label>Turno</label>

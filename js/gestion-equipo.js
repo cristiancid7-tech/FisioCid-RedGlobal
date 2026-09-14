@@ -3,36 +3,55 @@
 // ==========================================
 
 async function obtenerIdClinicaReal(userId) {
-    // Buscar en cualquiera de las llaves habituales
     let id = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
     
+    // Si no hay ID válido en LocalStorage, consultamos Supabase
     if (!id || id === "null" || id === "undefined" || id.length < 30) {
-        console.log("🔍 Buscando clínica en Supabase para el usuario:", userId);
+        console.log("🔍 Buscando clínica activa en Supabase para el usuario:", userId);
         
-        const { data: clinica, error: errC } = await fisioNet
+        // 1. Intentamos buscar si es el DUEÑO de la clínica
+        let { data: clinica, error: errC } = await fisioNet
             .from('clinicas')
             .select('id, nombre_clinica, dominio_corporativo')
             .eq('id_dueno', userId)
             .maybeSingle();
 
-        if (errC) {
-            console.error("❌ ERROR DE SUPABASE AL BUSCAR CLÍNICA:", errC);
-            return { id: null, nombre: null, dominio: null };
+        // 2. Si no es el dueño directo, buscamos en colaboradores a qué clínica pertenece
+        if (!clinica) {
+            const { data: colab } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('id_clinica')
+                .eq('id_profesional', userId)
+                .eq('estado', 'ACTIVO')
+                .maybeSingle();
+
+            if (colab?.id_clinica) {
+                const { data: clinicaColab } = await fisioNet
+                    .from('clinicas')
+                    .select('id, nombre_clinica, dominio_corporativo')
+                    .eq('id', colab.id_clinica)
+                    .maybeSingle();
+                
+                clinica = clinicaColab;
+            }
         }
 
         if (clinica) {
             id = clinica.id;
-            // Sincronizamos todas las variables locales clave
+            const dominioFinal = clinica.dominio_corporativo || 'fisiocid.com';
+            
             localStorage.setItem('id_clinica_activa', id);
             localStorage.setItem('id_clinica_actual', id);
             localStorage.setItem('nombre_clinica', clinica.nombre_clinica);
-            localStorage.setItem('clinica_dominio', clinica.dominio_corporativo || 'fisiocid.com');
-            return { id, nombre: clinica.nombre_clinica, dominio: clinica.dominio_corporativo };
+            localStorage.setItem('clinica_dominio', dominioFinal);
+            
+            return { id, nombre: clinica.nombre_clinica, dominio: dominioFinal };
         } else {
             return { id: null, nombre: null, dominio: null };
         }
     }
     
+    // Si ya existía en LocalStorage:
     return { 
         id, 
         nombre: localStorage.getItem('nombre_clinica'),
@@ -63,16 +82,11 @@ async function cargarAreasDesdeBoxes(idClinica) {
             ).join('');
         }
 
-        // Reemplazar inputs por selects dinámicos con las opciones reales de boxes_clinica
         const areaProf = document.getElementById('areaInvitar');
         const areaApoyo = document.getElementById('areaInvitarAPOYO');
 
-        if (areaProf) {
-            areaProf.outerHTML = `<select id="areaInvitar" style="width:100%; padding:12px; border-radius:12px; border:2px solid #e2e8f0; font-weight:600; background:white;">${opcionesHTML}</select>`;
-        }
-        if (areaApoyo) {
-            areaApoyo.outerHTML = `<select id="areaInvitarAPOYO" style="width:100%; padding:12px; border-radius:12px; border:2px solid #e2e8f0; font-weight:600; background:white;">${opcionesHTML}</select>`;
-        }
+        if (areaProf) areaProf.innerHTML = opcionesHTML;
+        if (areaApoyo) areaApoyo.innerHTML = opcionesHTML;
 
     } catch (err) {
         console.error("❌ ERROR AL CARGAR BOXES DE LA CLÍNICA:", err);

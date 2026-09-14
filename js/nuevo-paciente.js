@@ -704,32 +704,40 @@ if (esPacienteExistente) {
         resultado = await fisioNet.from('pacientes_maestros').update(payloadFinal).eq('id', idRealPaciente).select();
         if (resultado.error) throw resultado.error;
 
-        // B) SINCRONIZACIÓN DEL FOLIO (Aquí arreglamos el SIN FOLIO)
-        // Buscamos si ya hay un expediente para esta sede y lo actualizamos
-        const { data: expExistente } = await fisioNet
-            .from('expedientes_clinicos')
-            .select('id')
-            .eq('id_paciente', idRealPaciente)
-            .eq('id_clinica', clinicaId)
-            .maybeSingle();
+       // ============================================================================
+// B) SINCRONIZACIÓN DEL FOLIO (Paciente Existente)
+// ============================================================================
+const { data: expExistente } = await fisioNet
+    .from('expedientes_clinicos')
+    .select('id')
+    .eq('id_paciente', idRealPaciente)
+    .eq('id_clinica', clinicaId)
+    .maybeSingle();
 
-        if (expExistente) {
-            await fisioNet.from('expedientes_clinicos')
-                .update({ 
-                    folio_personalizado: folioSede, 
-                    numero_consecutivo: parseInt((folioSede || "0").replace(/\D/g, '')) || 0 
-                })
-                .eq('id', expExistente.id);
-        } else {
-            // Si por alguna razón no existía, lo creamos
-            await fisioNet.from('expedientes_clinicos').insert([{
-                id_paciente: idRealPaciente,
-                id_clinica: clinicaId,
-                folio_personalizado: folioSede,
-                numero_consecutivo: parseInt((folioSede || "0").replace(/\D/g, '')) || 0
-            }]);
-        }
-        console.log("✅ Paciente y Expediente sincronizados.");
+// Extraemos limpiamente el consecutivo (ej. de PL-OK-2026-0001 toma solo el 1)
+const partesFolioActual = (folioSede || "").split('-');
+const consecutivoFinal = parseInt((partesFolioActual[partesFolioActual.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+
+if (expExistente) {
+    // Si ya existe en esta sede, actualizamos
+    await fisioNet.from('expedientes_clinicos')
+        .update({ 
+            folio_personalizado: folioSede, 
+            numero_consecutivo: consecutivoFinal 
+        })
+        .eq('id', expExistente.id);
+} else {
+    // Si no existía para esta sede, lo creamos limpiamente con el consecutivo correcto
+    await fisioNet.from('expedientes_clinicos').insert([{
+        id_paciente: idRealPaciente,
+        id_clinica: clinicaId,
+        folio_personalizado: folioSede,
+        numero_consecutivo: consecutivoFinal,
+        estado_expediente: 'ACTIVO'
+    }]);
+}
+console.log("✅ Paciente y Expediente sincronizados.");
+
    } else {
         // 🔓 Reactivamos el botón para que puedan corregir si se arrepintieron
         if (btnSubmit) {
@@ -770,9 +778,10 @@ if (esPacienteExistente) {
                     throw resVincNuevo.error;
                 }
 
-                console.log("📌 [LOG 13B] Vínculo creado. Procesando números de consecutivo para el folio...");
-                const numeroLimpio = (folioSede || "0").replace(/\D/g, ''); 
-                const consecutivoFinal = parseInt(numeroLimpio) || 0;
+              // ✅ CÓDIGO CORREGIDO:
+console.log("📌 [LOG 13B] Vínculo creado. Procesando números de consecutivo para el folio...");
+const partesFolioNuevo = (folioSede || "").split('-');
+const consecutivoFinal = parseInt((partesFolioNuevo[partesFolioNuevo.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
                 console.log(`🔢 [LOG 14B] Folio en texto: ${folioSede} | Consecutivo parseado: ${consecutivoFinal}`);
 
                 console.log("📌 [LOG 15B] Insertando registro final en expedientes_clinicos...");
