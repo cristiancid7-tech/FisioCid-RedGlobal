@@ -3,61 +3,52 @@
 // ==========================================
 
 async function obtenerIdClinicaReal(userId) {
-    let id = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
-    let dominio = localStorage.getItem('clinica_dominio');
-    let nombre = localStorage.getItem('nombre_clinica');
+    console.log("🔍 Consultando tabla clinicas en Supabase para el usuario:", userId);
+    
+    // 1. Busqueda: ¿Es el dueño directo?
+    let { data: clinica, error: errC } = await fisioNet
+        .from('clinicas')
+        .select('id, nombre_clinica, dominio_corporativo')
+        .eq('id_dueno', userId)
+        .maybeSingle();
 
-    // Si falta el dominio o la clínica en memoria local, consultamos la DB
-    if (!id || !dominio || id === "null" || dominio === "undefined" || id.length < 30) {
-        console.log("🔍 Consultando tabla clinicas en Supabase para el usuario:", userId);
-        
-        // Busqueda 1: ¿Es el dueño directo?
-        let { data: clinica, error: errC } = await fisioNet
-            .from('clinicas')
-            .select('id, nombre_clinica, dominio_corporativo')
-            .eq('id_dueno', userId)
+    // 2. Busqueda: Si no es el dueño, ¿es un colaborador activo?
+    if (!clinica) {
+        console.log("🔍 Buscando en colaboradores_clinica...");
+        const { data: colab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('id_clinica')
+            .eq('id_profesional', userId)
+            .eq('estado', 'ACTIVO')
             .maybeSingle();
 
-        // Busqueda 2: Si no es el dueño, ¿es un colaborador activo?
-        if (!clinica) {
-            console.log("🔍 El usuario no es id_dueno, buscando en colaboradores_clinica...");
-            const { data: colab } = await fisioNet
-                .from('colaboradores_clinica')
-                .select('id_clinica')
-                .eq('id_profesional', userId)
-                .eq('estado', 'ACTIVO')
+        if (colab?.id_clinica) {
+            const { data: clinicaColab } = await fisioNet
+                .from('clinicas')
+                .select('id, nombre_clinica, dominio_corporativo')
+                .eq('id', colab.id_clinica)
                 .maybeSingle();
-
-            if (colab?.id_clinica) {
-                const { data: clinicaColab } = await fisioNet
-                    .from('clinicas')
-                    .select('id, nombre_clinica, dominio_corporativo')
-                    .eq('id', colab.id_clinica)
-                    .maybeSingle();
-                
-                clinica = clinicaColab;
-            }
-        }
-
-        if (clinica) {
-            id = clinica.id;
-            nombre = clinica.nombre_clinica;
-            dominio = clinica.dominio_corporativo || 'fisiocid.com';
-
-            // Guardamos en LocalStorage
-            localStorage.setItem('id_clinica_activa', id);
-            localStorage.setItem('id_clinica_actual', id);
-            localStorage.setItem('nombre_clinica', nombre);
-            localStorage.setItem('clinica_dominio', dominio);
-
-            return { id, nombre, dominio };
-        } else {
-            console.error("❌ No se encontró ninguna clínica vinculada a esta cuenta.");
-            return { id: null, nombre: null, dominio: 'fisiocid.com' };
+            
+            clinica = clinicaColab;
         }
     }
 
-    return { id, nombre, dominio };
+    if (clinica) {
+        const id = clinica.id;
+        const nombre = clinica.nombre_clinica;
+        const dominio = clinica.dominio_corporativo || 'fisiocid.com';
+
+        // Sincronizamos LocalStorage para el resto del sistema
+        localStorage.setItem('id_clinica_activa', id);
+        localStorage.setItem('id_clinica_actual', id);
+        localStorage.setItem('nombre_clinica', nombre);
+        localStorage.setItem('clinica_dominio', dominio);
+
+        return { id, nombre, dominio };
+    } else {
+        console.error("❌ No se encontró ninguna clínica vinculada a esta cuenta.");
+        return { id: null, nombre: null, dominio: 'fisiocid.com' };
+    }
 }
 
 // ==========================================
@@ -259,9 +250,6 @@ document.getElementById('btnEnviarInv')?.addEventListener('click', async () => {
     }
 });
 
-// ==========================================
-// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA)
-// ==========================================
 // ==========================================
 // 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA)
 // ==========================================
