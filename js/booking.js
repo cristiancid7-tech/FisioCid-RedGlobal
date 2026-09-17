@@ -7,9 +7,6 @@ let CONFIG_CLINICA = {
     descanso: [0] // Por defecto domingo (0)
 };
 
-
-
-
 window.estadoSeleccionado = "";
 window.clinicaSeleccionadaId = null;
 window.especialistaSeleccionadoId = null;
@@ -19,19 +16,20 @@ window.horaSeleccionada = "";
 // --- 1. INICIALIZACIÓN AL CARGAR EL DOM ---
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("🔥 Inicializando Buscador Híbrido de Citas FisioCid...");
+    
     ['nombre', 'apellidoP', 'apellidoM'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', (e) => {
-        let posicionCursor = e.target.selectionStart;
-        // Reemplaza múltiples espacios por uno solo y remueve caracteres extraños
-        e.target.value = e.target.value.toUpperCase().replace(/\s+/g, ' ');
-        e.target.setSelectionRange(posicionCursor, posicionCursor);
+        document.getElementById(id)?.addEventListener('input', (e) => {
+            let posicionCursor = e.target.selectionStart;
+            e.target.value = e.target.value.toUpperCase().replace(/\s+/g, ' ');
+            e.target.setSelectionRange(posicionCursor, posicionCursor);
+        });
     });
-});
+
     configurarEventosFiltros();
 });
 
 // =========================================================================
-// 🔄 MOTOR DE FILTRADO HÍBRIDO EN CASCADA (INDISTRUCTIBLE)
+// 🔄 MOTOR DE FILTRADO HÍBRIDO EN CASCADA
 // =========================================================================
 function configurarEventosFiltros() {
     const selectEdo = document.getElementById('filtro-estado');
@@ -44,9 +42,7 @@ function configurarEventosFiltros() {
         return;
     }
 
-    // =========================================================================
-    // ESCUDO 1: Al cambiar ESTADO ➡️ Busca Especialidades en esa Región
-    // =========================================================================
+    // ESCUDO 1: Estado ➡️ Especialidades
     selectEdo.addEventListener('change', async () => {
         window.estadoSeleccionado = selectEdo.value;
         ocultarCalendarioYHoras();
@@ -66,7 +62,6 @@ function configurarEventosFiltros() {
         selectEsp.innerHTML = '<option value="">Buscando especialidades en la región...</option>';
 
         try {
-            // 🎯 AJUSTE 1: Cambiado 'estado' por 'entidad_federativa' conforme a tu nueva estructura
             const { data: clinicasEdo, error: errClinicas } = await fisioNet
                 .from('clinicas')
                 .select('id')
@@ -106,9 +101,7 @@ function configurarEventosFiltros() {
         }
     });
 
-    // =========================================================================
-    // ESCUDO 2: Al cambiar ESPECIALIDAD ➡️ Busca Clínicas de ese Estado que ofrezcan el Servicio
-    // =========================================================================
+    // ESCUDO 2: Especialidad ➡️ Clínicas / Sucursales
     selectEsp.addEventListener('change', async () => {
         const BlacklistRemover = (str) => str ? str.trim() : "";
         const especialidad = selectEsp.value;
@@ -127,7 +120,6 @@ function configurarEventosFiltros() {
         selectUbi.innerHTML = '<option value="">Buscando clínicas con este servicio...</option>';
 
         try {
-            // 🎯 AJUSTE 2: Ajustado filtro de cruzado geográfico a 'entidad_federativa'
             const { data: coincidencias, error: errCruzado } = await fisioNet
                 .from('colaboradores_clinica')
                 .select('id_clinica, clinicas!inner(id, nombre_clinica, direccion, entidad_federativa), perfiles_profesionales!inner(especialidad)')
@@ -161,9 +153,7 @@ function configurarEventosFiltros() {
         }
     });
 
-    // =========================================================================
-    // ESCUDO 3: Al cambiar SUCURSAL ➡️ Busca Doctores de esa Especialidad en esa Sede
-    // =========================================================================
+    // ESCUDO 3: Sucursal ➡️ Especialistas
     selectUbi.addEventListener('change', async () => {
         window.clinicaSeleccionadaId = selectUbi.value;
         ocultarCalendarioYHoras();
@@ -222,26 +212,47 @@ async function activarCargaConfiguracionAgenda() {
     const selectDocVal = document.getElementById('filtro-especialista').value;
     const selectEspVal = document.getElementById('filtro-especialidad').value;
     
-    if (!selectEspVal) return;
+    if (!selectEspVal || !window.clinicaSeleccionadaId) return;
 
     try {
-        let query = fisioNet.from('perfiles_profesionales').select('*');
+        let perfil = null;
 
         if (selectDocVal && selectDocVal !== 'TODOS') {
             window.especialistaSeleccionadoId = selectDocVal;
-            query = query.eq('id', selectDocVal);
+            const { data, error } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('*')
+                .eq('id', selectDocVal)
+                .maybeSingle();
+            if (error) throw error;
+            perfil = data;
         } else {
             window.especialistaSeleccionadoId = null;
-            query = query.eq('especialidad', selectEspVal).limit(1);
-        }
+            // Si elije TODOS, tomamos la configuración del primer especialista activo de esa sede
+            const { data: colab, error: errCol } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('perfiles_profesionales!inner(*)')
+                .eq('id_clinica', window.clinicaSeleccionadaId)
+                .eq('perfiles_profesionales.especialidad', selectEspVal)
+                .eq('estado', 'ACTIVO')
+                .limit(1)
+                .maybeSingle();
 
-        const { data: perfil, error } = await query.maybeSingle();
-        if (error) throw error;
+            if (errCol) throw errCol;
+            perfil = colab?.perfiles_profesionales;
+        }
 
         if (perfil) {
             CONFIG_CLINICA.intervalo = perfil.intervalo_cita || 30;
             CONFIG_CLINICA.descanso = perfil.dias_descanso || [0];
-            CONFIG_CLINICA.horarios = perfil.horario_atencion ? JSON.parse(perfil.horario_atencion) : [];
+            
+            let horariosParseados = [];
+            if (typeof perfil.horario_atencion === 'string') {
+                try { horariosParseados = JSON.parse(perfil.horario_atencion); } catch (e) { horariosParseados = []; }
+            } else if (Array.isArray(perfil.horario_atencion)) {
+                horariosParseados = perfil.horario_atencion;
+            }
+            CONFIG_CLINICA.horarios = horariosParseados;
         }
 
         const step1 = document.getElementById('step1');
@@ -254,7 +265,7 @@ async function activarCargaConfiguracionAgenda() {
 }
 
 // =========================================================================
-// 📅 3. GENERADOR DE CALENDARIO (VISTA DE 15 DÍAS CORRIDOS)
+// 📅 3. GENERADOR DE CALENDARIO (VISTA LOCAL 15 DÍAS)
 // =========================================================================
 function generarCalendario() {
     const contenedor = document.getElementById('calendario-dias');
@@ -273,7 +284,12 @@ function generarCalendario() {
 
         const nombreDia = fecha.toLocaleDateString('es-MX', { weekday: 'short' }).toUpperCase();
         const numeroDia = fecha.getDate();
-        const fechaISO = fecha.toISOString().split('T')[0]; 
+        
+        // Formato YYYY-MM-DD local seguro (sin desfase UTC)
+        const anio = fecha.getFullYear();
+        const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dia = String(fecha.getDate()).padStart(2, '0');
+        const fechaISO = `${anio}-${mes}-${dia}`;
 
         const btnDia = document.createElement('div');
         btnDia.className = 'dia-item' + (esCerrado ? ' cerrado' : '');
@@ -298,28 +314,34 @@ function generarCalendario() {
 }
 
 // =========================================================================
-// ⏱️ 4. GENERADOR MATEMÁTICO DE SLOTS (CON LÍMITE DE SALIDA)
+// ⏱️ 4. GENERADOR MATEMÁTICO DE SLOTS (SIN DESFASE HORARIO)
 // =========================================================================
 function generarSlots() {
     const slots = [];
     if (!window.fechaSeleccionada) return slots;
 
-    const diaSeleccionado = new Date(window.fechaSeleccionada + 'T00:00:00').getDay();
-    const turnosDelDia = CONFIG_CLINICA.horarios.filter(h => parseInt(h.dia) === diaSeleccionado);
+    // Obtener el día de la semana sin que afecte la zona horaria UTC
+    const partes = window.fechaSeleccionada.split('-');
+    const diaSemana = new Date(partes[0], partes[1] - 1, partes[2]).getDay();
+
+    const turnosDelDia = CONFIG_CLINICA.horarios.filter(h => parseInt(h.dia) === diaSemana);
 
     turnosDelDia.forEach(rango => {
-        let actual = new Date(`2026-01-01T${rango.inicio}:00`);
-        const fin = new Date(`2026-01-01T${rango.fin}:00`);
+        let [hIni, mIni] = rango.inicio.split(':').map(Number);
+        let [hFin, mFin] = rango.fin.split(':').map(Number);
 
-        while (true) {
-            let finDeCita = new Date(actual);
-            finDeCita.setMinutes(actual.getMinutes() + CONFIG_CLINICA.intervalo);
+        let minutosActuales = hIni * 60 + mIni;
+        const minutosFin = hFin * 60 + mFin;
 
-            if (finDeCita > fin) break; 
-
-            const horaString = actual.toTimeString().substring(0, 5);
-            slots.push(horaString);
-            actual = finDeCita; 
+        while (minutosActuales + CONFIG_CLINICA.intervalo <= minutosFin) {
+            let h = Math.floor(minutosActuales / 60);
+            let m = minutosActuales % 60;
+            
+            let hStr = String(h).padStart(2, '0');
+            let mStr = String(m).padStart(2, '0');
+            
+            slots.push(`${hStr}:${mStr}`);
+            minutosActuales += CONFIG_CLINICA.intervalo;
         }
     });
 
@@ -337,12 +359,11 @@ async function renderizarHoras() {
     try {
         const slotsDinamicos = generarSlots();
         
-        // 🎯 AJUSTE 3: Blindar consulta para separar por sucursal y especialista específico
         let queryCitas = fisioNet
             .from('agenda_maestra')
             .select('hora_inicio_cita')
             .eq('fecha', window.fechaSeleccionada)
-            .eq('id_clinica', window.clinicaSeleccionadaId); // Filtro indispensable multi-sede 🛡️
+            .eq('id_clinica', window.clinicaSeleccionadaId);
 
         if (window.especialistaSeleccionadoId) {
             queryCitas = queryCitas.eq('id_profesional', window.especialistaSeleccionadoId);
@@ -351,7 +372,7 @@ async function renderizarHoras() {
         const { data: citasOcupadas, error } = await queryCitas;
         if (error) throw error;
 
-        const horasNoDisponibles = citasOcupadas.map(c => c.hora_inicio_cita.substring(0, 5));
+        const horasNoDisponibles = (citasOcupadas || []).map(c => c.hora_inicio_cita.substring(0, 5));
         grid.innerHTML = ''; 
 
         if (slotsDinamicos.length === 0) {
@@ -411,21 +432,18 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
     const tel = document.getElementById('telefono').value.trim();
     const email = document.getElementById('email').value.trim().toLowerCase();
     
-    // 🎯 1. Declaramos curpInput una sola vez
-    let curpInput = document.getElementById('curp').value.trim().toUpperCase();
+    let curpInput = document.getElementById('curp')?.value.trim().toUpperCase() || "";
 
-    // 🛡️ 2. Si el usuario escribió algo en el campo CURP, lo validamos con Expresión Regular
     if (curpInput !== "") {
         const regexCurp = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$/;
         if (!regexCurp.test(curpInput)) {
-            alert("⚠️ La CURP ingresada no tiene un formato válido de 18 caracteres. Por favor corrígela o déjala vacía si no la recuerdas.");
+            alert("⚠️ La CURP ingresada no tiene un formato válido de 18 caracteres. Por favor corrígela o déjala vacía.");
             btn.innerText = 'Enviar Solicitud ⚡';
             btn.disabled = false;
-            return; // 🛑 Detiene el envío si está mal estructurada
+            return;
         }
     }
     
-    // 🎯 3. Declaramos curpFinal una sola vez (si pasó la validación o viene vacía)
     const curpFinal = curpInput !== "" ? curpInput : null;
 
     try {

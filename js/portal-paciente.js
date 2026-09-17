@@ -1,5 +1,5 @@
 // ==========================================
-// 🚀 VARIABLES GLOBALES
+// 🚀 VARIABLES GLOBALES DE PACIENTE Y AGENDA
 // ==========================================
 let notasGlobales = [];
 let estudiosGlobales = [];
@@ -7,6 +7,19 @@ let perfilActivoId = null;
 let pacienteLogueadoData = null;
 let listaFamiliares = [];
 let idSolicitudActiva = null;
+
+// Configuración global para el motor de citas
+let CONFIG_CLINICA = {
+    intervalo: 30,
+    horarios: [],
+    descanso: [0]
+};
+
+window.estadoSeleccionado = "";
+window.clinicaSeleccionadaId = null;
+window.especialistaSeleccionadoId = null;
+window.fechaSeleccionada = "";
+window.horaSeleccionada = "";
 
 // ==========================================
 // ⚡ INICIALIZACIÓN CON AUTO-RECUPERACIÓN
@@ -44,6 +57,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             await cargarExpedienteCompleto(idPaciente);
             escucharSolicitudesEnVivo(idPaciente);
+
+            // 🎯 Inicializar los escuchadores de eventos para el agendamiento
+            configurarEventosFiltros();
+            
+            // Auto-formato para campos de texto del formulario de agendamiento
+            ['nombre', 'apellidoP', 'apellidoM'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', (e) => {
+                    let posicionCursor = e.target.selectionStart;
+                    e.target.value = e.target.value.toUpperCase().replace(/\s+/g, ' ');
+                    e.target.setSelectionRange(posicionCursor, posicionCursor);
+                });
+            });
+
         } else {
             console.warn("⚠️ No hay sesión ni credenciales de paciente. Redirigiendo al Login.");
             window.location.href = 'login.html';
@@ -79,6 +105,9 @@ async function cargarExpedienteCompleto(pacienteId) {
             if (lblUser) lblUser.innerText = `${titular.nombre} ${titular.apellido_paterno}`.toUpperCase();
             if (lblTutor) lblTutor.innerText = `${titular.nombre} (Titular)`;
 
+            // Auto-llenar campos en el formulario de citas con los datos del perfil activo
+            autoRellenarDatosCita(titular);
+
             const contenedorFamilia = document.getElementById('listaFamiliaresMenu');
             if (contenedorFamilia) {
                 const hijos = familia.filter(p => p.id !== titular.id);
@@ -102,6 +131,22 @@ async function cargarExpedienteCompleto(pacienteId) {
     }
 }
 
+function autoRellenarDatosCita(paciente) {
+    const inputNom = document.getElementById('nombre');
+    const inputApP = document.getElementById('apellidoP');
+    const inputApM = document.getElementById('apellidoM');
+    const inputTel = document.getElementById('telefono');
+    const inputEmail = document.getElementById('email');
+    const inputCurp = document.getElementById('curp');
+
+    if (inputNom && paciente.nombre) inputNom.value = paciente.nombre.toUpperCase();
+    if (inputApP && paciente.apellido_paterno) inputApP.value = paciente.apellido_paterno.toUpperCase();
+    if (inputApM && paciente.apellido_materno) inputApM.value = paciente.apellido_materno.toUpperCase();
+    if (inputTel && paciente.telefono) inputTel.value = paciente.telefono;
+    if (inputEmail && paciente.correo_electronico) inputEmail.value = paciente.correo_electronico.toLowerCase();
+    if (inputCurp && paciente.curp) inputCurp.value = paciente.curp.toUpperCase();
+}
+
 function seleccionarPerfil(idPaciente) {
     perfilActivoId = idPaciente;
     const paciente = listaFamiliares.find(p => p.id === idPaciente);
@@ -110,6 +155,7 @@ function seleccionarPerfil(idPaciente) {
         const lblSaludo = document.getElementById('txtSaludo');
         if (lblSaludo) lblSaludo.innerText = `¡Hola, ${paciente.nombre.toUpperCase()}!`;
         
+        autoRellenarDatosCita(paciente);
         cargarRegistrosClinicos(idPaciente);
     }
 }
@@ -177,7 +223,6 @@ async function aprobarAccesoDoctor() {
         return;
     }
 
-    // Recolección granular de la selección del paciente
     const permiteNotas = document.getElementById('chkPermisoNotas')?.checked || false;
     const permiteEstudios = document.getElementById('chkPermisoEstudios')?.checked || false;
     const permiteLab = document.getElementById('chkPermisoLab')?.checked || false;
@@ -216,14 +261,430 @@ async function aprobarAccesoDoctor() {
     }
 }
 
+
 // ==========================================
-// 📄 3. CARGA DE REGISTROS CLÍNICOS (SIN ACENTOS)
+// 🔄 3. MOTOR DE BUSCADOR DE CITAS Y CALENDARIO (OPTIMIZADO CON VISTA SEGURA)
+// ==========================================
+function configurarEventosFiltros() {
+    const selectEdo = document.getElementById('filtro-estado');
+    const selectEsp = document.getElementById('filtro-especialidad');
+    const selectUbi = document.getElementById('filtro-ubicacion');
+    const selectDoc = document.getElementById('filtro-especialista');
+
+    if (!selectEdo || !selectEsp || !selectUbi || !selectDoc) return;
+
+    // =========================================================================
+    // ESCUDO 1: Al cambiar ESTADO ➡️ Busca Especialidades disponibles
+    // =========================================================================
+    selectEdo.addEventListener('change', async () => {
+        window.estadoSeleccionado = selectEdo.value ? selectEdo.value.trim() : "";
+        ocultarCalendarioYHoras();
+        
+        selectEsp.innerHTML = '<option value="">-- Selecciona Especialidad --</option>';
+        selectUbi.innerHTML = '<option value="">Selecciona primero una especialidad...</option>';
+        selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
+        selectUbi.disabled = true;
+        selectDoc.disabled = true;
+
+        if (!window.estadoSeleccionado) {
+            selectEsp.disabled = true;
+            return;
+        }
+
+        selectEsp.disabled = false;
+        selectEsp.innerHTML = '<option value="">Buscando especialidades en la región...</option>';
+
+        try {
+            // Consultamos la Vista Pública Segura
+            const { data, error } = await fisioNet
+                .from('vista_directorio_citas')
+                .select('especialidad')
+                .ilike('entidad_federativa', `%${window.estadoSeleccionado}%`);
+
+            if (error) throw error;
+
+            const especialidadesUnicas = [...new Set((data || []).map(d => d.especialidad).filter(Boolean))];
+
+            selectEsp.innerHTML = '<option value="">-- Selecciona Especialidad --</option>';
+            if (especialidadesUnicas.length === 0) {
+                selectEsp.innerHTML = '<option value="">No hay especialidades registradas en este estado</option>';
+                return;
+            }
+
+            especialidadesUnicas.forEach(esp => {
+                selectEsp.innerHTML += `<option value="${esp}">${esp.toUpperCase()}</option>`;
+            });
+
+        } catch (err) {
+            console.error("❌ Error en Escudo 1 (Estados):", err.message);
+            selectEsp.innerHTML = '<option value="">Error al consultar especialidades</option>';
+        }
+    });
+
+    // =========================================================================
+    // ESCUDO 2: Al cambiar ESPECIALIDAD ➡️ Busca Sucursales/Clínicas
+    // =========================================================================
+    selectEsp.addEventListener('change', async () => {
+        const especialidad = selectEsp.value ? selectEsp.value.trim() : "";
+        ocultarCalendarioYHoras();
+
+        selectUbi.innerHTML = '<option value="">-- Selecciona una sucursal --</option>';
+        selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
+        selectDoc.disabled = true;
+
+        if (!especialidad) {
+            selectUbi.disabled = true;
+            return;
+        }
+
+        selectUbi.disabled = false;
+        selectUbi.innerHTML = '<option value="">Buscando clínicas con este servicio...</option>';
+
+        try {
+            const { data, error } = await fisioNet
+                .from('vista_directorio_citas')
+                .select('id_clinica, nombre_clinica, direccion')
+                .eq('especialidad', especialidad)
+                .ilike('entidad_federativa', `%${window.estadoSeleccionado}%`);
+
+            if (error) throw error;
+
+            // Eliminar sucursales duplicadas en la lista
+            const clinicasUnicas = [];
+            const mapaId = new Set();
+            (data || []).forEach(item => {
+                if (!mapaId.has(item.id_clinica)) {
+                    mapaId.add(item.id_clinica);
+                    clinicasUnicas.push(item);
+                }
+            });
+
+            selectUbi.innerHTML = '<option value="">-- Selecciona una sucursal --</option>';
+            if (clinicasUnicas.length === 0) {
+                selectUbi.innerHTML = '<option value="">Sin clínicas disponibles para este servicio</option>';
+                return;
+            }
+
+            clinicasUnicas.forEach(c => {
+                selectUbi.innerHTML += `<option value="${c.id_clinica}">${c.nombre_clinica.toUpperCase()} (${c.direccion || 'Sin dirección'})</option>`;
+            });
+
+        } catch (err) {
+            console.error("❌ Error en Escudo 2 (Especialidades):", err.message);
+            selectUbi.innerHTML = '<option value="">Error al buscar sucursales</option>';
+        }
+    });
+
+    // =========================================================================
+    // ESCUDO 3: Al cambiar SUCURSAL ➡️ Busca Doctores/Especialistas
+    // =========================================================================
+    selectUbi.addEventListener('change', async () => {
+        window.clinicaSeleccionadaId = selectUbi.value;
+        ocultarCalendarioYHoras();
+
+        if (!window.clinicaSeleccionadaId) {
+            selectDoc.disabled = true;
+            return;
+        }
+
+        selectDoc.disabled = false;
+        selectDoc.innerHTML = '<option value="">Filtrando personal de la sede...</option>';
+
+        try {
+            const { data, error } = await fisioNet
+                .from('vista_directorio_citas')
+                .select('id_profesional, nombre_completo')
+                .eq('id_clinica', window.clinicaSeleccionadaId)
+                .eq('especialidad', selectEsp.value);
+
+            if (error) throw error;
+
+            selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
+            
+            if (data && data.length > 0) {
+                data.forEach(doc => {
+                    selectDoc.innerHTML += `<option value="${doc.id_profesional}">${doc.nombre_completo.toUpperCase()}</option>`;
+                });
+            }
+            
+            await activarCargaConfiguracionAgenda();
+
+        } catch (err) {
+            console.error("❌ Error en Escudo 3 (Sucursales):", err.message);
+            selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
+        }
+    });
+
+    selectDoc.addEventListener('change', async () => {
+        await activarCargaConfiguracionAgenda();
+    });
+}
+
+// =========================================================================
+// CARGAR CONFIGURACIÓN HORARIA (INTERVALOS Y DÍAS DE DESCANSO)
+// =========================================================================
+async function activarCargaConfiguracionAgenda() {
+    const selectDocVal = document.getElementById('filtro-especialista')?.value;
+    const selectEspVal = document.getElementById('filtro-especialidad')?.value;
+    
+    if (!selectEspVal || !window.clinicaSeleccionadaId) return;
+
+    try {
+        let perfil = null;
+
+        let query = fisioNet
+            .from('vista_directorio_citas')
+            .select('intervalo_cita, dias_descanso, horario_atencion')
+            .eq('id_clinica', window.clinicaSeleccionadaId)
+            .eq('especialidad', selectEspVal);
+
+        if (selectDocVal && selectDocVal !== 'TODOS') {
+            window.especialistaSeleccionadoId = selectDocVal;
+            query = query.eq('id_profesional', selectDocVal);
+        } else {
+            window.especialistaSeleccionadoId = null;
+        }
+
+        const { data, error } = await query.limit(1).maybeSingle();
+        if (error) throw error;
+
+        perfil = data;
+
+        if (perfil) {
+            CONFIG_CLINICA.intervalo = perfil.intervalo_cita || 30;
+            CONFIG_CLINICA.descanso = perfil.dias_descanso || [0];
+            
+            let horariosParseados = [];
+            if (typeof perfil.horario_atencion === 'string') {
+                try { horariosParseados = JSON.parse(perfil.horario_atencion); } catch (e) { horariosParseados = []; }
+            } else if (Array.isArray(perfil.horario_atencion)) {
+                horariosParseados = perfil.horario_atencion;
+            }
+            CONFIG_CLINICA.horarios = horariosParseados;
+        }
+
+        const step1 = document.getElementById('step1');
+        if (step1) step1.style.display = 'block';
+        generarCalendario();
+
+    } catch (err) {
+        console.error("❌ Error al cargar configuración horaria:", err.message);
+    }
+}
+
+function ocultarCalendarioYHoras() {
+    const step1 = document.getElementById('step1');
+    if (step1) step1.style.display = 'none';
+    window.fechaSeleccionada = "";
+    window.horaSeleccionada = "";
+}
+
+
+
+function generarCalendario() {
+    const contenedor = document.getElementById('calendario-dias');
+    if (!contenedor) return;
+    contenedor.innerHTML = ''; 
+    
+    const hoy = new Date();
+    const MAX_DIAS_VISTA = 15; 
+
+    for (let i = 0; i < MAX_DIAS_VISTA; i++) {
+        const fecha = new Date();
+        fecha.setDate(hoy.getDate() + i);
+        
+        const numeroDiaSemana = fecha.getDay(); 
+        const esCerrado = CONFIG_CLINICA.descanso.some(d => Number(d) === numeroDiaSemana);
+
+        const nombreDia = fecha.toLocaleDateString('es-MX', { weekday: 'short' }).toUpperCase();
+        const numeroDia = fecha.getDate();
+        
+        const anio = fecha.getFullYear();
+        const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dia = String(fecha.getDate()).padStart(2, '0');
+        const fechaISO = `${anio}-${mes}-${dia}`;
+
+        const btnDia = document.createElement('div');
+        btnDia.className = 'dia-item' + (esCerrado ? ' cerrado' : '');
+        btnDia.innerHTML = `<span>${nombreDia}</span><strong>${numeroDia}</strong>${esCerrado ? '<small>Cerrado</small>' : ''}`;
+        
+        if (!esCerrado) {
+            btnDia.onclick = () => {
+                document.querySelectorAll('.dia-item').forEach(el => el.classList.remove('activo'));
+                btnDia.classList.add('activo');
+                window.fechaSeleccionada = fechaISO;
+                renderizarHoras(); 
+            };
+
+            if (!window.fechaSeleccionada || window.fechaSeleccionada === "") {
+                 btnDia.classList.add('activo');
+                 window.fechaSeleccionada = fechaISO;
+                 renderizarHoras();
+            }
+        }
+        contenedor.appendChild(btnDia);
+    }
+}
+
+function generarSlots() {
+    const slots = [];
+    if (!window.fechaSeleccionada) return slots;
+
+    const partes = window.fechaSeleccionada.split('-');
+    const diaSemana = new Date(partes[0], partes[1] - 1, partes[2]).getDay();
+
+    const turnosDelDia = CONFIG_CLINICA.horarios.filter(h => parseInt(h.dia) === diaSemana);
+
+    turnosDelDia.forEach(rango => {
+        let [hIni, mIni] = rango.inicio.split(':').map(Number);
+        let [hFin, mFin] = rango.fin.split(':').map(Number);
+
+        let minutosActuales = hIni * 60 + mIni;
+        const minutosFin = hFin * 60 + mFin;
+
+        while (minutosActuales + CONFIG_CLINICA.intervalo <= minutosFin) {
+            let h = Math.floor(minutosActuales / 60);
+            let m = minutosActuales % 60;
+            
+            let hStr = String(h).padStart(2, '0');
+            let mStr = String(m).padStart(2, '0');
+            
+            slots.push(`${hStr}:${mStr}`);
+            minutosActuales += CONFIG_CLINICA.intervalo;
+        }
+    });
+
+    return slots;
+}
+
+async function renderizarHoras() {
+    const grid = document.getElementById('grid-horas');
+    if (!grid) return;
+    grid.innerHTML = '<p style="grid-column: span 3; color:#64748b;">Consultando disponibilidad...</p>';
+
+    try {
+        const slotsDinamicos = generarSlots();
+        
+        let queryCitas = fisioNet
+            .from('agenda_maestra')
+            .select('hora_inicio_cita')
+            .eq('fecha', window.fechaSeleccionada)
+            .eq('id_clinica', window.clinicaSeleccionadaId);
+
+        if (window.especialistaSeleccionadoId) {
+            queryCitas = queryCitas.eq('id_profesional', window.especialistaSeleccionadoId);
+        }
+
+        const { data: citasOcupadas, error } = await queryCitas;
+        if (error) throw error;
+
+        const horasNoDisponibles = (citasOcupadas || []).map(c => c.hora_inicio_cita.substring(0, 5));
+        grid.innerHTML = ''; 
+
+        if (slotsDinamicos.length === 0) {
+            grid.innerHTML = '<p style="grid-column: span 3; color:#64748b;">No hay horarios configurados para este día.</p>';
+            return;
+        }
+
+        slotsDinamicos.forEach(hora => {
+            const estaOcupado = horasNoDisponibles.includes(hora);
+            const btn = document.createElement('button');
+            btn.innerText = hora;
+            btn.className = estaOcupado ? 'hora-btn ocupado' : 'hora-btn disponible';
+            
+            if (!estaOcupado) {
+                btn.onclick = () => seleccionarHora(hora);
+            }
+            grid.appendChild(btn);
+        });
+
+    } catch (err) {
+        console.error("Error en renderizarHoras:", err);
+        grid.innerHTML = '<p style="grid-column: span 3; color:red;">Error al cargar horarios.</p>';
+    }
+}
+
+function seleccionarHora(hora) {
+    window.horaSeleccionada = hora;
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    if (step1) step1.style.display = 'none';
+    if (step2) step2.style.display = 'block';
+}
+
+function regresarAPaso1() {
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    if (step1) step1.style.display = 'block';
+    if (step2) step2.style.display = 'none';
+}
+
+// Envío de Solicitud de Cita desde el Portal
+document.getElementById('formRegistro')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnConfirmar');
+    
+    btn.innerText = 'Enviando...';
+    btn.disabled = true;
+    
+    const nombre = document.getElementById('nombre').value.trim().toUpperCase();
+    const apP = document.getElementById('apellidoP').value.trim().toUpperCase();
+    const apM = document.getElementById('apellidoM').value.trim().toUpperCase();
+    const tel = document.getElementById('telefono').value.trim();
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    
+    let curpInput = document.getElementById('curp')?.value.trim().toUpperCase() || "";
+
+    if (curpInput !== "") {
+        const regexCurp = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$/;
+        if (!regexCurp.test(curpInput)) {
+            alert("⚠️ La CURP ingresada no tiene un formato válido de 18 caracteres. Por favor corrígela o déjala vacía.");
+            btn.innerText = 'Enviar Solicitud ⚡';
+            btn.disabled = false;
+            return;
+        }
+    }
+    
+    const curpFinal = curpInput !== "" ? curpInput : null;
+
+    try {
+        const { error } = await fisioNet
+            .from('solicitudes_citas')
+            .insert([{
+                nombre: nombre,      
+                apellido_p: apP,     
+                apellido_m: apM,     
+                telefono: tel,
+                email: email,        
+                curp: curpFinal,     
+                fecha_cita: window.fechaSeleccionada, 
+                hora_cita: window.horaSeleccionada,   
+                estado: 'PENDIENTE',
+                id_clinica_solicitada: window.clinicaSeleccionadaId,
+                id_profesional_solicitado: window.especialistaSeleccionadoId,
+                especialidad_solicitada: document.getElementById('filtro-especialidad').value
+            }]);
+
+        if (error) throw error;
+
+        alert("¡Tu solicitud de cita ha sido enviada con éxito! Espera la confirmación por WhatsApp.");
+        location.reload(); 
+
+    } catch (err) {
+        console.error("Error al guardar la solicitud:", err);
+        alert("Hubo un error al procesar tu solicitud: " + err.message);
+        btn.innerText = 'Enviar Solicitud ⚡';
+        btn.disabled = false;
+    }
+});
+
+// ==========================================
+// 📄 4. CARGA DE REGISTROS CLÍNICOS
 // ==========================================
 async function cargarRegistrosClinicos(pacienteId) {
     try {
         console.log("📥 Consultando base de datos para el paciente ID:", pacienteId);
 
-        // A) NOTAS CLÍNICAS (Tabla: historial_clinico)
         const { data: notas, error: errNotas } = await fisioNet
             .from('historial_clinico')
             .select('id_nota, fecha_nota, motivo_consulta, diagnostico_principal, plan_tratamiento, nota_evolucion, especialidad_nota, nombre_clinica, sintomas')
@@ -234,7 +695,6 @@ async function cargarRegistrosClinicos(pacienteId) {
         notasGlobales = notas || [];
         renderizarNotas(notasGlobales);
 
-        // B) ESTUDIOS DE GABINETE (Tabla: estudios_gabinete)
         const { data: gabinete, error: errGab } = await fisioNet
             .from('estudios_gabinete')
             .select('id, tipo_estudio, archivo_url, categoria, hallazgos_resumen, fecha_registro, especialista_nombre, diagnostico_radiologico')
@@ -243,7 +703,6 @@ async function cargarRegistrosClinicos(pacienteId) {
 
         if (errGab) console.error("❌ Error en estudios_gabinete:", errGab);
 
-        // C) ESTUDIOS DE LABORATORIO (Tabla: estudios_laboratorio)
         const { data: lab, error: errLab } = await fisioNet
             .from('estudios_laboratorio')
             .select('id, estudios_etiquetas, archivo_pdf_url, observaciones, created_at, especialista_quimico')
@@ -252,7 +711,6 @@ async function cargarRegistrosClinicos(pacienteId) {
 
         if (errLab) console.error("❌ Error en estudios_laboratorio:", errLab);
 
-        // COMBINAMOS Y UNIFICAMOS ESTUDIOS
         const listaEstudiosCombinada = [
             ...(gabinete || []).map(g => ({
                 id: g.id,
@@ -343,7 +801,7 @@ function renderizarEstudios(lista) {
 }
 
 // ==========================================
-// 🔍 4. FILTROS Y UTILIDADES
+// 🔍 5. FILTROS Y UTILIDADES
 // ==========================================
 function aplicarFiltros() {
     const esp = document.getElementById('filtroEspecialidad')?.value || "";
@@ -362,17 +820,12 @@ function aplicarFiltros() {
 async function cerrarSesion() {
     if (confirm("¿Deseas salir de tu expediente digital?")) {
         try {
-            // 1. Cerrar la sesión activa en Supabase Auth
             await fisioNet.auth.signOut();
         } catch (err) {
             console.error("Error al cerrar sesión en Supabase:", err);
         } finally {
-            // 2. Limpiar todo el almacenamiento local
             localStorage.clear();
-
-            // 3. Redirigir al inicio de sesión
             window.location.href = 'login.html';
         }
     }
 }
-

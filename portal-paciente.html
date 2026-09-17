@@ -10,9 +10,9 @@
     
     <style>
         :root {
-            --primary-cid: #00cfd5; /* Tu verde camaleón */
+            --primary-cid: #00cfd5;
             --primary-dark: #008f94;
-            --bg-app: #f8fafc; /* Un gris azulado muy suave y limpio */
+            --bg-app: #f8fafc;
             --text-dark: #1e293b;
             --text-muted: #64748b;
             --radius-xl: 24px;
@@ -27,7 +27,7 @@
             padding-bottom: 40px;
         }
 
-        /* 🏛️ Navbar Estilo Apple */
+        /* 🏛️ Navbar */
         .navbar-custom {
             background-color: white;
             box-shadow: var(--shadow-soft);
@@ -54,7 +54,7 @@
             margin-right: 12px;
         }
 
-        /* 👤 Selector de Perfil (Dropdown Pro) */
+        /* 👤 Selector de Perfil */
         .profile-dropdown .btn {
             background-color: #f1f5f9;
             color: var(--text-dark);
@@ -65,9 +65,7 @@
             font-size: 0.9rem;
             transition: all 0.2s;
         }
-        .profile-dropdown .btn:hover {
-            background-color: #e2e8f0;
-        }
+        .profile-dropdown .btn:hover { background-color: #e2e8f0; }
         .dropdown-menu {
             border: none;
             border-radius: var(--radius-lg);
@@ -108,14 +106,14 @@
             transform: rotate(-15deg);
         }
 
-        /* 🔘 Tabs (Pestañas Superiores) */
+        /* 🔘 Tabs */
         .nav-pills {
             background: white;
             padding: 8px;
             border-radius: 50px;
             box-shadow: var(--shadow-soft);
             border: 1px solid #e2e8f0;
-            display: inline-flex; /* Para que no ocupe todo el ancho */
+            display: inline-flex;
             margin-bottom: 30px;
         }
         .nav-pills .nav-link {
@@ -144,7 +142,7 @@
         }
         .form-control, .form-select {
             border: 1px solid #e2e8f0;
-            border-radius: 50px; /* Inputs súper redondeados */
+            border-radius: 50px;
             padding: 12px 20px;
             font-size: 0.9rem;
             background-color: #f8fafc;
@@ -155,17 +153,8 @@
             box-shadow: 0 0 0 3px rgba(0, 207, 213, 0.1);
             background-color: white;
         }
-        .btn-share {
-            border-radius: 50px;
-            padding: 12px 25px;
-            font-weight: 600;
-            background-color: #f1f5f9;
-            color: var(--text-dark);
-            border: none;
-        }
-        .btn-share:hover { background-color: #e2e8f0; color: var(--primary-dark); }
 
-        /* 📄 Tarjetas de Contenido (Notas, Estudios) */
+        /* 📄 Tarjetas de Registro */
         .record-card {
             background: white;
             border: 1px solid #e2e8f0;
@@ -191,35 +180,56 @@
         .record-doctor { font-weight: 700; color: var(--text-dark); margin-top: 5px; margin-bottom: 0; }
         .record-spec { font-size: 0.8rem; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
         .record-summary { font-size: 0.95rem; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
-        
-        /* Iconos de tipo de registro */
-        .icon-note { color: var(--primary-cid); }
-        .icon-lab { color: #f59e0b; } /* Ámbar */
-        .icon-img { color: #3b82f6; } /* Azul */
 
-        /* 🔐 Modal OTP */
-        .modal-content {
-            border: none;
-            border-radius: var(--radius-xl);
-            padding: 20px;
+        /* 📅 Estilos de Calendario y Slots de Cita */
+        .dias-scroll-container {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 10px 5px;
         }
-        .modal-header { border: none; padding-bottom: 0; }
-        .modal-footer { border: none; }
-        .btn-cid-primary {
-            background-color: var(--primary-cid);
-            color: white;
-            border-radius: 50px;
-            padding: 12px 30px;
+        .dia-item {
+            min-width: 70px;
+            padding: 12px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .dia-item span { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+        .dia-item strong { font-size: 1.2rem; font-weight: 800; color: var(--text-dark); }
+        .dia-item.cerrado { background: #f1f5f9; opacity: 0.5; cursor: not-allowed; border-color: #cbd5e1; }
+        .dia-item.activo { background: var(--primary-cid); border-color: var(--primary-dark); color: white; }
+        .dia-item.activo span, .dia-item.activo strong { color: white; }
+
+        .grid-horas-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .hora-btn {
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
             font-weight: 700;
-            border: none;
+            font-size: 0.85rem;
+            color: var(--text-dark);
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .btn-cid-primary:hover { background-color: var(--primary-dark); color: white; }
-        .otp-display { font-size: 3rem; font-weight: 800; color: var(--primary-dark); letter-spacing: 5px; background: var(--bg-app); padding: 15px; border-radius: var(--radius-lg); margin: 20px 0; }
+        .hora-btn.disponible:hover { background: var(--primary-cid); color: white; border-color: var(--primary-dark); }
+        .hora-btn.ocupado { background: #fee2e2; color: #ef4444; border-color: #fca5a5; cursor: not-allowed; }
 
         /* Utilidades */
         .fw-800 { font-weight: 800; }
         .gap-10 { gap: 10px; }
-        /* Animación sutil de carga */
         .fade-in { animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
@@ -251,9 +261,9 @@
                 </ul>
             </div>
             
-            <button class="btn btn-link text-muted p-0" onclick="cerrarSesion()">
-                <i class="fas fa-sign-out-alt"></i>
-            </button>
+          <button type="button" class="btn btn-link text-muted p-0 ms-2" onclick="cerrarSesion()" title="Cerrar Sesión">
+    <i class="fas fa-sign-out-alt fa-lg text-secondary"></i>
+</button>
         </div>
     </div>
 </nav>
@@ -264,108 +274,92 @@
         <div class="row align-items-center">
             <div class="col-lg-8">
                 <h3 id="txtSaludo">¡Hola!</h3>
-                <p class="lead mt-3">Bienvenido a tu Centro de Salud Digital. Aquí puedes consultar tu historial médico, estudios y citas de forma segura.</p>
+                <p class="lead mt-3">Bienvenido a tu Centro de Salud Digital. Aquí puedes consultar tu historial médico, estudios y agendar tus citas.</p>
             </div>
         </div>
         <i class="fas fa-notes-medical banner-icon"></i>
-
-        
     </div>
 
-   
-<div id="cardSolicitudActiva" class="card border-0 shadow-lg mb-4 fade-in" style="display: none; border-radius: var(--radius-xl); background: #f0fdf4; border: 2px solid #22c55e !important;">
-    <div class="card-body p-4">
-        <!-- Encabezado -->
-        <div class="d-flex align-items-center mb-3">
-            <div class="rounded-circle bg-success text-white p-3 me-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-                <i class="fas fa-user-shield fa-lg"></i>
+    <!-- Banner OTP en vivo -->
+    <div id="cardSolicitudActiva" class="card border-0 shadow-lg mb-4 fade-in" style="display: none; border-radius: var(--radius-xl); background: #f0fdf4; border: 2px solid #22c55e !important;">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-center mb-3">
+                <div class="rounded-circle bg-success text-white p-3 me-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                    <i class="fas fa-user-shield fa-lg"></i>
+                </div>
+                <div>
+                    <h5 class="fw-800 text-success mb-0">🔒 Solicitud de Acceso Médico Detectada</h5>
+                    <p class="text-muted small mb-0">El <strong id="lblNombreDoctorSolicitante">Dr. Cristian</strong> solicita consultar tu información clínica.</p>
+                </div>
             </div>
-            <div>
-                <h5 class="fw-800 text-success mb-0">🔒 Solicitud de Acceso Médico Detectada</h5>
-                <p class="text-muted small mb-0">El <strong id="lblNombreDoctorSolicitante">Dr. Cristian</strong> solicita consultar tu información clínica.</p>
-            </div>
-        </div>
 
-        <!-- Opciones Granulares de Privacidad -->
-        <div class="bg-white p-3 rounded-4 mb-3 border shadow-sm">
-            <label class="fw-bold small text-dark d-block mb-2">SELECCIONA QUÉ DESEAS COMPARTIR CON EL MÉDICO:</label>
-            
-            <div class="row g-2">
-                <div class="col-md-6">
-                    <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
-                        <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoNotas" checked>
-                        <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoNotas">
-                            📄 Notas Clínicas y Diagnósticos
-                        </label>
+            <div class="bg-white p-3 rounded-4 mb-3 border shadow-sm">
+                <label class="fw-bold small text-dark d-block mb-2">SELECCIONA QUÉ DESEAS COMPARTIR CON EL MÉDICO:</label>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
+                            <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoNotas" checked>
+                            <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoNotas">📄 Notas Clínicas y Diagnósticos</label>
+                        </div>
                     </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
-                        <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoEstudios" checked>
-                        <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoEstudios">
-                            🔬 Estudios PACS (Radiografías / Gabinete)
-                        </label>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
+                            <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoEstudios" checked>
+                            <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoEstudios">🔬 Estudios PACS (Radiografías / Gabinete)</label>
+                        </div>
                     </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
-                        <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoLab" checked>
-                        <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoLab">
-                            🧪 Análisis de Laboratorio
-                        </label>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
+                            <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoLab" checked>
+                            <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoLab">🧪 Análisis de Laboratorio</label>
+                        </div>
                     </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
-                        <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoCitas">
-                        <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoCitas">
-                            📅 Agenda y Citas Previas
-                        </label>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch p-2 bg-light rounded-3 border ps-5">
+                            <input class="form-check-input" type="checkbox" role="switch" id="chkPermisoCitas">
+                            <label class="form-check-label font-weight-bold text-dark small" for="chkPermisoCitas">📅 Agenda y Citas Previas</label>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Código OTP y Botón de Acción -->
-        <div class="row align-items-center text-center bg-white p-3 rounded-4 border">
-            <div class="col-md-6 mb-3 mb-md-0">
-                <span class="text-muted small d-block font-weight-bold">CÓDIGO DE AUTORIZACIÓN OTP:</span>
-                <div id="lblCodigoOTPPaciente" class="fw-800 text-success" style="font-size: 2.5rem; letter-spacing: 6px; font-family: monospace;">000 000</div>
-            </div>
-            <div class="col-md-6">
-                <button class="btn btn-success w-100 fw-bold py-3 rounded-pill shadow" onclick="aprobarAccesoDoctor()">
-                    <i class="fas fa-check-circle me-1"></i> AUTORIZAR Y DAR ACCESO
-                </button>
+            <div class="row align-items-center text-center bg-white p-3 rounded-4 border">
+                <div class="col-md-6 mb-3 mb-md-0">
+                    <span class="text-muted small d-block font-weight-bold">CÓDIGO DE AUTORIZACIÓN OTP:</span>
+                    <div id="lblCodigoOTPPaciente" class="fw-800 text-success" style="font-size: 2.5rem; letter-spacing: 6px; font-family: monospace;">000 000</div>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-success w-100 fw-bold py-3 rounded-pill shadow" onclick="aprobarAccesoDoctor()">
+                        <i class="fas fa-check-circle me-1"></i> AUTORIZAR Y DAR ACCESO
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-
+    <!-- Pestañas Principales -->
     <div class="text-center">
-        <ul class="nav nav-pills mb-5" id="pills-tab" role="tablist">
+        <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="pills-notas-tab" data-bs-toggle="pill" data-bs-target="#pills-notas" type="button" role="tab" aria-controls="pills-notas" aria-selected="true">
+                <button class="nav-link active" id="pills-notas-tab" data-bs-toggle="pill" data-bs-target="#pills-notas" type="button" role="tab">
                     <i class="fas fa-file-medical me-2"></i>Notas Clínicas
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="pills-estudios-tab" data-bs-toggle="pill" data-bs-target="#pills-estudios" type="button" role="tab" aria-controls="pills-estudios" aria-selected="false">
+                <button class="nav-link" id="pills-estudios-tab" data-bs-toggle="pill" data-bs-target="#pills-estudios" type="button" role="tab">
                     <i class="fas fa-microscope me-2"></i>Estudios y Gabinete
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="pills-citas-tab" data-bs-toggle="pill" data-bs-target="#pills-citas" type="button" role="tab" aria-controls="pills-citas" aria-selected="false">
-                    <i class="fas fa-calendar-check me-2"></i>Mis Citas
+                <button class="nav-link" id="pills-citas-tab" data-bs-toggle="pill" data-bs-target="#pills-citas" type="button" role="tab">
+                    <i class="fas fa-calendar-check me-2"></i>Agendar Cita
                 </button>
             </li>
         </ul>
     </div>
 
-    <div class="filter-panel">
+    <!-- Panel de Filtros para Historial -->
+    <div class="filter-panel" id="panelFiltrosHistorial">
         <div class="row g-3">
             <div class="col-md-4">
                 <select id="filtroEspecialidad" class="form-select rounded-pill" onchange="aplicarFiltros()">
@@ -382,13 +376,138 @@
     </div>
 
     <div class="tab-content" id="pills-tabContent">
-        <div class="tab-pane fade show active" id="pills-notas"><div id="listaNotas"></div></div>
-        <div class="tab-pane fade" id="pills-estudios"><div id="listaEstudios"></div></div>
-        <div class="tab-pane fade" id="pills-citas"><div id="listaCitas"></div></div>
+        <!-- Pestaña 1: Notas -->
+        <div class="tab-pane fade show active" id="pills-notas">
+            <div id="listaNotas"></div>
+        </div>
+        
+        <!-- Pestaña 2: Estudios -->
+        <div class="tab-pane fade" id="pills-estudios">
+            <div id="listaEstudios"></div>
+        </div>
+        
+        <!-- Pestaña 3: Buscador Híbrido y Agendamiento de Citas -->
+        <div class="tab-pane fade" id="pills-citas">
+            <div class="card border-0 shadow-sm p-4 rounded-4 bg-white mb-4">
+                <h5 class="fw-800 text-dark mb-3"><i class="fas fa-search-location text-primary me-2"></i>Buscador Híbrido de Citas</h5>
+                
+                <!-- Filtros en Cascada -->
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small font-weight-bold text-muted">1. Estado / Región</label>
+                        <select id="filtro-estado" class="form-select">
+                            <option value="">SELECCIONAR ESTADO</option>
+    <option value="AGUASCALIENTES">AGUASCALIENTES</option>
+    <option value="BAJA CALIFORNIA">BAJA CALIFORNIA</option>
+    <option value="BAJA CALIFORNIA SUR">BAJA CALIFORNIA SUR</option>
+    <option value="CAMPECHE">CAMPECHE</option>
+    <option value="COAHUILA">COAHUILA</option>
+    <option value="COLIMA">COLIMA</option>
+    <option value="CHIAPAS">CHIAPAS</option>
+    <option value="CHIHUAHUA">CHIHUAHUA</option>
+    <option value="CIUDAD DE MEXICO">CIUDAD DE MÉXICO</option>
+    <option value="DURANGO">DURANGO</option>
+    <option value="GUANAJUATO">GUANAJUATO</option>
+    <option value="GUERRERO">GUERRERO</option>
+    <option value="HIDALGO">HIDALGO</option>
+    <option value="JALISCO">JALISCO</option>
+    <option value="MEXICO">MÉXICO</option>
+    <option value="MICHOACAN">MICHOACÁN</option>
+    <option value="MORELOS">MORELOS</option>
+    <option value="NAYARIT">NAYARIT</option>
+    <option value="NUEVO LEON">NUEVO LEÓN</option>
+    <option value="OAXACA">OAXACA</option>
+    <option value="PUEBLA">PUEBLA</option> <option value="QUERETARO">QUERÉTARO</option>
+    <option value="QUINTANA ROO">QUINTANA ROO</option>
+    <option value="SAN LUIS POTOSI">SAN LUIS POTOSÍ</option>
+    <option value="SINALOA">SINALOA</option>
+    <option value="SONORA">SONORA</option>
+    <option value="TABASCO">TABASCO</option>
+    <option value="TAMAULIPAS">TAMAULIPAS</option>
+    <option value="TLAXCALA">TLAXCALA</option>
+    <option value="VERACRUZ">VERACRUZ</option>
+    <option value="YUCATAN">YUCATÁN</option>
+    <option value="ZACATECAS">ZACATECAS</option>
+    <option value="EXTRANJERO">EXTRANJERO</option>
+</select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small font-weight-bold text-muted">2. Especialidad</label>
+                        <select id="filtro-especialidad" class="form-select" disabled>
+                            <option value="">Selecciona primero estado...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small font-weight-bold text-muted">3. Sucursal / Clínica</label>
+                        <select id="filtro-ubicacion" class="form-select" disabled>
+                            <option value="">Selecciona especialidad...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small font-weight-bold text-muted">4. Especialista</label>
+                        <select id="filtro-especialista" class="form-select" disabled>
+                            <option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Paso 1: Selección de Fecha y Hora -->
+            <div id="step1" class="card border-0 shadow-sm p-4 rounded-4 bg-white mb-4" style="display: none;">
+                <h6 class="fw-bold text-dark mb-3"><i class="fas fa-calendar-day text-primary me-2"></i>Selecciona Día y Hora</h6>
+                <div id="calendario-dias" class="dias-scroll-container"></div>
+                
+                <h6 class="fw-bold text-dark mt-4 mb-2"><i class="clock me-2 text-primary"></i>Horarios Disponibles:</h6>
+                <div id="grid-horas" class="grid-horas-container"></div>
+            </div>
+
+            <!-- Paso 2: Formulario de Confirmación -->
+            <div id="step2" class="card border-0 shadow-sm p-4 rounded-4 bg-white mb-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-dark mb-0"><i class="fas fa-user-check text-success me-2"></i>Confirmar Datos de la Solicitud</h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" onclick="regresarAPaso1()">
+                        <i class="fas fa-arrow-left me-1"></i> Cambiar Hora
+                    </button>
+                </div>
+                
+                <form id="formRegistro">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted font-weight-bold">Nombre(s)</label>
+                            <input type="text" id="nombre" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted font-weight-bold">Apellido Paterno</label>
+                            <input type="text" id="apellidoP" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted font-weight-bold">Apellido Materno</label>
+                            <input type="text" id="apellidoM" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted font-weight-bold">Teléfono WhatsApp</label>
+                            <input type="tel" id="telefono" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted font-weight-bold">Correo Electrónico</label>
+                            <input type="email" id="email" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted font-weight-bold">CURP (Opcional)</label>
+                            <input type="text" id="curp" class="form-control" maxlength="18">
+                        </div>
+                    </div>
+
+                    <div class="text-end mt-4">
+                        <button type="submit" id="btnConfirmar" class="btn btn-primary rounded-pill px-4 py-2 fw-bold">
+                            Enviar Solicitud ⚡
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
-
-
 
 <!-- 1. Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -396,10 +515,10 @@
 <!-- 2. Cliente JS de Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- 3. Tu conexión global a Supabase (Donde inicializas fisioNet) -->
+<!-- 3. Tu conexión global a Supabase -->
 <script src="js/supabase-config.js"></script> 
 
-<!-- 4. Tu script del portal -->
+<!-- 4. Tu script único unificado -->
 <script src="js/portal-paciente.js"></script>
 
 </body>
