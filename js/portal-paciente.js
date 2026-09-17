@@ -325,55 +325,71 @@ function configurarEventosFiltros() {
     // ESCUDO 2: Al cambiar ESPECIALIDAD ➡️ Busca Sucursales/Clínicas
     // =========================================================================
     selectEsp.addEventListener('change', async () => {
-        const especialidad = selectEsp.value ? selectEsp.value.trim() : "";
-        ocultarCalendarioYHoras();
+    const especialidad = selectEsp.value ? selectEsp.value.trim() : "";
+    ocultarCalendarioYHoras();
+
+    selectUbi.innerHTML = '<option value="">-- Selecciona una sucursal --</option>';
+    selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
+    selectDoc.disabled = true;
+
+    // Resetear la variable global para evitar arrastrar IDs previos
+    window.clinicaSeleccionadaId = null;
+
+    if (!especialidad) {
+        selectUbi.disabled = true;
+        return;
+    }
+
+    selectUbi.disabled = false;
+    selectUbi.innerHTML = '<option value="">Buscando clínicas con este servicio...</option>';
+
+    try {
+        const { data, error } = await fisioNet
+            .from('vista_directorio_citas')
+            .select('id_clinica, nombre_clinica, direccion')
+            .eq('especialidad', especialidad)
+            .ilike('entidad_federativa', `%${window.estadoSeleccionado}%`);
+
+        if (error) throw error;
+
+        // Eliminar sucursales duplicadas en la lista
+        const clinicasUnicas = [];
+        const mapaId = new Set();
+        (data || []).forEach(item => {
+            if (!mapaId.has(item.id_clinica)) {
+                mapaId.add(item.id_clinica);
+                clinicasUnicas.push(item);
+            }
+        });
 
         selectUbi.innerHTML = '<option value="">-- Selecciona una sucursal --</option>';
-        selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
-        selectDoc.disabled = true;
-
-        if (!especialidad) {
-            selectUbi.disabled = true;
+        if (clinicasUnicas.length === 0) {
+            selectUbi.innerHTML = '<option value="">Sin clínicas disponibles para este servicio</option>';
             return;
         }
 
-        selectUbi.disabled = false;
-        selectUbi.innerHTML = '<option value="">Buscando clínicas con este servicio...</option>';
+        clinicasUnicas.forEach(c => {
+            selectUbi.innerHTML += `<option value="${c.id_clinica}">${c.nombre_clinica.toUpperCase()} (${c.direccion || 'Sin dirección'})</option>`;
+        });
 
-        try {
-            const { data, error } = await fisioNet
-                .from('vista_directorio_citas')
-                .select('id_clinica, nombre_clinica, direccion')
-                .eq('especialidad', especialidad)
-                .ilike('entidad_federativa', `%${window.estadoSeleccionado}%`);
-
-            if (error) throw error;
-
-            // Eliminar sucursales duplicadas en la lista
-            const clinicasUnicas = [];
-            const mapaId = new Set();
-            (data || []).forEach(item => {
-                if (!mapaId.has(item.id_clinica)) {
-                    mapaId.add(item.id_clinica);
-                    clinicasUnicas.push(item);
-                }
-            });
-
-            selectUbi.innerHTML = '<option value="">-- Selecciona una sucursal --</option>';
-            if (clinicasUnicas.length === 0) {
-                selectUbi.innerHTML = '<option value="">Sin clínicas disponibles para este servicio</option>';
-                return;
-            }
-
-            clinicasUnicas.forEach(c => {
-                selectUbi.innerHTML += `<option value="${c.id_clinica}">${c.nombre_clinica.toUpperCase()} (${c.direccion || 'Sin dirección'})</option>`;
-            });
-
-        } catch (err) {
-            console.error("❌ Error en Escudo 2 (Especialidades):", err.message);
-            selectUbi.innerHTML = '<option value="">Error al buscar sucursales</option>';
+        // 🎯 LÓGICA DE AUTO-ASIGNACIÓN Y DISPARO
+        if (clinicasUnicas.length === 1) {
+            // Si solo hay una sede en esa región/especialidad, la seleccionamos automáticamente
+            selectUbi.value = clinicasUnicas[0].id_clinica;
+            window.clinicaSeleccionadaId = clinicasUnicas[0].id_clinica;
+            
+            // Disparar manualmente el evento change para cargar los doctores de esa sede única
+            selectUbi.dispatchEvent(new Event('change'));
+        } else {
+            // Si hay varias, tomar el valor actual por si ya hay alguna opción seleccionada por defecto
+            window.clinicaSeleccionadaId = selectUbi.value || null;
         }
-    });
+
+    } catch (err) {
+        console.error("❌ Error en Escudo 2 (Especialidades):", err.message);
+        selectUbi.innerHTML = '<option value="">Error al buscar sucursales</option>';
+    }
+});
 
     // =========================================================================
     // ESCUDO 3: Al cambiar SUCURSAL ➡️ Busca Doctores/Especialistas
@@ -620,9 +636,19 @@ function regresarAPaso1() {
 }
 
 // Envío de Solicitud de Cita desde el Portal
+// Envío de Solicitud de Cita desde el Portal
 document.getElementById('formRegistro')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btnConfirmar');
+    
+    // ✅ Validar y rescatar el ID de clínica (de la variable global, del select o de LocalStorage)
+    const selectUbiVal = document.getElementById('filtro-ubicacion')?.value;
+    const idClinicaFinal = window.clinicaSeleccionadaId || selectUbiVal || localStorage.getItem('id_clinica_activa');
+
+    if (!idClinicaFinal) {
+        alert("⚠️ Por favor selecciona una sucursal / clínica válida antes de enviar tu solicitud.");
+        return;
+    }
     
     btn.innerText = 'Enviando...';
     btn.disabled = true;
@@ -660,7 +686,7 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
                 fecha_cita: window.fechaSeleccionada, 
                 hora_cita: window.horaSeleccionada,   
                 estado: 'PENDIENTE',
-                id_clinica_solicitada: window.clinicaSeleccionadaId,
+                id_clinica_solicitada: idClinicaFinal, // ✅ Guarda el ID real validado
                 id_profesional_solicitado: window.especialistaSeleccionadoId,
                 especialidad_solicitada: document.getElementById('filtro-especialidad').value
             }]);

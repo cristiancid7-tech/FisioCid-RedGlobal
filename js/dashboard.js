@@ -409,32 +409,40 @@ async function renderizarTablaEquipo() {
             }
 
             html += equipoInterno.map(colab => {
-                const perfil = perfilesMapa[colab.id_profesional] || {};
-                const nombre = perfil.nombre_completo || 'USUARIO REGISTRADO';
-                const correo = perfil.correo || 'Sin correo';
+    const perfil = perfilesMapa[colab.id_profesional] || {};
+    const nombre = perfil.nombre_completo || 'USUARIO REGISTRADO';
+    const correo = perfil.correo || 'Sin correo';
+    
+    // Separación clara entre puesto clínico y permisos del sistema
+    const especialidadPuesto = colab.cargo_clinico || 'FISIOTERAPEUTA';
+    const rolSistemaLegible = (colab.rol_sistema || 'STAFF_CLINICO').replace('_', ' ');
 
-                return `
-                <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fcfcfc;">
-                    <td style="padding: 15px;">
-                        <div style="font-weight: 700; color: #1e293b; text-transform: uppercase;">${nombre}</div>
-                        <div style="font-size: 0.75rem; color: #3b82f6; font-weight: 600;">${colab.rol_sistema || 'STAFF INTERNO'}</div>
-                    </td>
-                    <td style="padding: 15px; text-align: center;">
-                        <span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
-                            ${colab.cargo_clinico || 'FISIOTERAPEUTA'}
-                        </span>
-                    </td>
-                    <td style="padding: 15px;">
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">Area: ${colab.area_asignada || 'General'}</div>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
-                    </td>
-                    <td style="padding: 15px; text-align: right;">
-                        <button onclick="abrirConfiguracionEquipo('${colab.id}')" title="Configurar" style="border: none; background: #fee2e2; color: #b91c1c; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
-                            ⚙️
-                        </button>
-                    </td>
-                </tr>`;
-            }).join('');
+    return `
+    <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fcfcfc;">
+        <td style="padding: 15px;">
+            <div style="font-weight: 700; color: #1e293b; text-transform: uppercase;">${nombre}</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">✉️ ${correo}</div>
+        </td>
+        <td style="padding: 15px; text-align: center;">
+            <span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; display: block; margin-bottom: 4px;">
+                🎓 ${especialidadPuesto.toUpperCase()}
+            </span>
+            <span style="background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">
+                🔑 ACCESO: ${rolSistemaLegible.toUpperCase()}
+            </span>
+        </td>
+        <td style="padding: 15px;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">Área: ${colab.area_asignada || 'General'}</div>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Turno: ${colab.turno || 'Matutino'}</div>
+        </td>
+        <td style="padding: 15px; text-align: right;">
+            <button onclick="abrirConfiguracionEquipo('${colab.id}')" title="Configurar" style="border: none; background: #f1f5f9; color: #334155; padding: 8px; border-radius: 6px; cursor: pointer;">
+                ⚙️
+            </button>
+        </td>
+    </tr>`;
+}).join('');
+             
         }
 
         tbody.innerHTML = html;
@@ -1913,11 +1921,17 @@ async function cargarSolicitudesRecibidas() {
         if (!user) return;
 
         const clinicaId = localStorage.getItem('id_clinica_activa');
-        const miEspecialidad = localStorage.getItem('especialidadUsuario') || '';
-        const esRadiologo = miEspecialidad === 'MEDICO-RADIOLOGO' || miEspecialidad === 'QUIMICO';
+        const miEspecialidad = (localStorage.getItem('especialidadUsuario') || '').toUpperCase();
+        // Leemos el rol operativo actual guardado en localStorage
+        const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
 
         let htmlFinal = "";
         let totalAlertasTotal = 0;
+
+        // -------------------------------------------------------------
+        // 1. ESTUDIOS DE GABINETE
+        // -------------------------------------------------------------
+        const esRadiologo = miEspecialidad === 'MEDICO-RADIOLOGO' || miEspecialidad === 'QUIMICO' || miEspecialidad.includes('RADIOL');
 
         if (esRadiologo) {
             const { data: pendientes, errorRad } = await fisioNet
@@ -1927,7 +1941,7 @@ async function cargarSolicitudesRecibidas() {
                 .eq('doctor_emisor_id', user.id) 
                 .order('fecha_registro', { ascending: false });
 
-            if (errorRad) throw errorRad;
+            if (errorRad) console.error("Error cargando estudios:", errorRad);
 
             if (pendientes && pendientes.length > 0) {
                 totalAlertasTotal += pendientes.length;
@@ -1961,14 +1975,26 @@ async function cargarSolicitudesRecibidas() {
             }
         }
 
-        const { data: solicitudesCitas, errorCitas } = await fisioNet
+        // -------------------------------------------------------------
+        // 2. SOLICITUDES DE CITAS (USANDO LOS ROLES REALES DEL SISTEMA)
+        // -------------------------------------------------------------
+        // ADMIN_SISTEMA y ADMINISTRATIVO ven todas las citas de la sede
+        const esPersonalAdministrativo = ['ADMIN_SISTEMA', 'ADMINISTRATIVO'].includes(miRolSistema);
+
+        let queryCitas = fisioNet
             .from('solicitudes_citas')
             .select('*')
             .eq('estado', 'PENDIENTE')
-            .eq('id_clinica_solicitada', clinicaId)
-            .order('creado_el', { ascending: false });
+            .eq('id_clinica_solicitada', clinicaId);
 
-        if (errorCitas) throw errorCitas;
+        // Si es STAFF_CLINICO u OPERATIVO, solo le mostramos las solicitudes explícitamente asignadas a él
+        if (!esPersonalAdministrativo) {
+            queryCitas = queryCitas.eq('id_profesional_solicitado', user.id);
+        }
+
+        const { data: solicitudesCitas, errorCitas } = await queryCitas.order('creado_el', { ascending: false });
+
+        if (errorCitas) console.error("Error al consultar citas pendientes:", errorCitas);
 
         if (solicitudesCitas && solicitudesCitas.length > 0) {
             totalAlertasTotal += solicitudesCitas.length;
@@ -1980,7 +2006,7 @@ async function cargarSolicitudesRecibidas() {
                         <div style="text-align: left;">
                             <span style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 5px; font-size: 0.6rem; font-weight: 800;">📅 SOLICITUD WEB</span>
                             <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-top: 5px;">${nombreFull}</strong>
-                            <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita.substring(0,5)}</small>
+                            <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
                         </div>
                         <div style="display: flex; gap: 5px;">
                             <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
@@ -1994,12 +2020,15 @@ async function cargarSolicitudesRecibidas() {
             });
         }
 
+        // -------------------------------------------------------------
+        // 3. ACTUALIZACIÓN DE INTERFAZ (Única asignación sin destellos)
+        // -------------------------------------------------------------
         if (badge) badge.innerText = totalAlertasTotal;
 
-        if (htmlFinal === "") {
-            lista.innerHTML = `<div style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;"><i class="fas fa-check-circle text-success d-block fa-2x mb-2"></i>Sin solicitudes ni estudios pendientes.</div>`;
-        } else {
+        if (htmlFinal !== "") {
             lista.innerHTML = htmlFinal;
+        } else {
+            lista.innerHTML = `<div style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;"><i class="fas fa-check-circle text-success d-block fa-2x mb-2"></i>Sin solicitudes ni estudios pendientes.</div>`;
         }
 
     } catch (err) {
@@ -2171,11 +2200,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
+    // 1. Aplicar UI básica e Identidad Visual
     await aplicarIdentidadVisual(); 
     await actualizarInterfazSede(); 
-   
-await cargarSolicitudesRedPendientes();
 
+    // 2. OBTENER EL ROL PRIMERO (Paso crítico para evitar que fallen las consultas posteriores)
+    if (clinicaActiva) {
+        await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
+    }
+
+    // 3. Renderizar componentes de UI basados en el rol
+    renderizarBotonesPorRol();
+
+    // 4. Cargar nombre de usuario
     let nombreTrabajador = localStorage.getItem('nombre_completo');
     if (!nombreTrabajador || nombreTrabajador === 'null') {
         try {
@@ -2199,19 +2236,17 @@ await cargarSolicitudesRedPendientes();
     const inputFecha = document.getElementById('filtroFechaAgenda');
     if (inputFecha) inputFecha.value = hoy.toISOString().split('T')[0];
 
-    if (clinicaActiva) {
-        await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
-    }
-    
-    renderizarBotonesPorRol();
+    // 5. Cargar módulos secuencialmente
     await cargarAgenda('semana');
     await cargarEstadisticas();
     await cargarMonitorBoxes(); 
-    await cargarSalaEspera(); 
+    await cargarSolicitudesRecibidas(); // Carga las solicitudes de cita y estudios sin parpadeos
+    await cargarSolicitudesRedPendientes(); // Carga las invitaciones de red
     await inicializarFormularioConvenio(); 
+
     if (typeof renderizarTablaEquipo === 'function') await renderizarTablaEquipo();
     if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas(); 
-    if (typeof cargarSolicitudesRecibidas === 'function') await cargarSolicitudesRecibidas();
+    
     await verificarInvitacionesPendientes(); 
     await comprobarConfiguracionInicialRequerida();
 });
@@ -2452,9 +2487,9 @@ function renderizarBotonesPorRol() {
     const contenedor = document.getElementById('contenedorAccionesRapidas');
     if (!contenedor) return;
 
-    const miRol = localStorage.getItem('rol_actual') || 'STAFF_CLINICO'; 
-    const esAdmin = (miRol === 'ADMIN_SISTEMA' || miRol === 'DUEÑO');
-    const puedeGestionarEquipo = (esAdmin || miRol === 'ADMINISTRATIVO');
+    const miRol = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase(); 
+    const esAdmin = (miRol === 'ADMIN_SISTEMA');
+    const puedeGestionarEquipo = (miRol === 'ADMIN_SISTEMA' || miRol === 'ADMINISTRATIVO');
     
     const btnEquipo = document.getElementById('btnMiEquipo');
     const btnPrecios = document.getElementById('btnAbrirConfig');
@@ -2467,7 +2502,7 @@ function renderizarBotonesPorRol() {
     const catalogoBotones = {
         agregarPaciente: `<button class="btn-action" onclick="window.location.href='nuevo-paciente.html'">📝 Agregar Paciente</button>`,
         listaPacientes: `<button class="btn-action" onclick="window.location.href='lista-pacientes.html'">👥 Lista de Pacientes</button>`,
-        inventario:     `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
+        inventario:      `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
         nuevoEstudio:   `<button class="btn-action" onclick="window.location.href='portal-gabinete.html'">📡 Nuevo Estudio</button>`,
         laboratorio:    `<button class="btn-action" onclick="lanzarLaboratorioGeneral()">🧪 Nuevo Laboratorio</button>`,
         finanzas:       `<button class="btn-action" onclick="window.location.href='finanzas.html'">📊 Control de Caja</button>`
@@ -2477,7 +2512,6 @@ function renderizarBotonesPorRol() {
 
     switch(miRol) {
         case 'ADMIN_SISTEMA':
-        case 'DUEÑO':
             botonesAJS = [
                 catalogoBotones.agregarPaciente, catalogoBotones.listaPacientes,
                 catalogoBotones.inventario, catalogoBotones.nuevoEstudio,
@@ -2489,12 +2523,14 @@ function renderizarBotonesPorRol() {
             botonesAJS = [
                 catalogoBotones.agregarPaciente, 
                 catalogoBotones.listaPacientes, 
+                catalogoBotones.inventario,
                 catalogoBotones.finanzas
             ];
             break;
 
         case 'STAFF_CLINICO':
             botonesAJS = [
+              catalogoBotones.agregarPaciente, 
                 catalogoBotones.listaPacientes, 
                 catalogoBotones.nuevoEstudio, 
                 catalogoBotones.laboratorio
@@ -2502,7 +2538,9 @@ function renderizarBotonesPorRol() {
             break;
 
         case 'OPERATIVO':
-            botonesAJS = []; 
+            botonesAJS = [
+                catalogoBotones.listaPacientes
+            ]; 
             break;
 
         default:
