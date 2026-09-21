@@ -2565,48 +2565,72 @@ function cargarHorariosEnModal(dataHorarios) {
         return;
     }
 
-    const diasSemanaNums = [1, 2, 3, 4, 5];
-    const tieneLunesAViernes = diasSemanaNums.every(d => horarios.some(h => Number(h.dia) === d));
-    
+    if (!Array.isArray(horarios) || horarios.length === 0) return;
+
+    // 1. Normalizar estructura
+    const horariosNormalizados = horarios.map(h => ({
+        dia: parseInt(h.dia, 10),
+        inicio: h.inicio,
+        fin: h.fin
+    })).filter(h => !isNaN(h.dia));
+
+    // 2. Agrupar bloques por combinación exacta de (inicio - fin)
+    const mapaTurnos = {};
+    horariosNormalizados.forEach(h => {
+        const claveTurno = `${h.inicio}_${h.fin}`;
+        if (!mapaTurnos[claveTurno]) {
+            mapaTurnos[claveTurno] = { inicio: h.inicio, fin: h.fin, dias: [] };
+        }
+        mapaTurnos[claveTurno].dias.push(h.dia);
+    });
+
+    const diasLV = [1, 2, 3, 4, 5];
     let horariosAgrupados = [];
 
-    if (tieneLunesAViernes) {
-        const hLunes = horarios.find(h => Number(h.dia) === 1);
-        const esMismoHorario = diasSemanaNums.every(d => {
-            const hDia = horarios.find(h => Number(h.dia) === d);
-            return hDia && hDia.inicio === hLunes.inicio && hDia.fin === hLunes.fin;
-        });
+    // 3. Evaluar cada turno detectado
+    Object.values(mapaTurnos).forEach(turno => {
+        const diasDelTurno = turno.dias;
+        // Verificar si este turno específico ocurre los 5 días de Lunes a Viernes
+        const esTurnoCompletoLV = diasLV.every(d => diasDelTurno.includes(d));
 
-        if (esMismoHorario) {
-            horariosAgrupados.push({ dia: 'LV', inicio: hLunes.inicio, fin: hLunes.fin });
-            horarios.filter(h => Number(h.dia) === 6 || Number(h.dia) === 0).forEach(h => horariosAgrupados.push(h));
+        if (esTurnoCompletoLV) {
+            // Se condensa como Lunes a Viernes
+            horariosAgrupados.push({ dia: 'LV', inicio: turno.inicio, fin: turno.fin });
+
+            // Si hay días adicionales fuera de L-V (ej. Sábado 6 o Domingo 0) con este mismo turno
+            diasDelTurno.filter(d => d === 6 || d === 0).forEach(dExtra => {
+                horariosAgrupados.push({ dia: dExtra, inicio: turno.inicio, fin: turno.fin });
+            });
         } else {
-            horariosAgrupados = horarios;
+            // Si no son los 5 días continuos, se muestran los días individualmente
+            diasDelTurno.forEach(d => {
+                horariosAgrupados.push({ dia: d, inicio: turno.inicio, fin: turno.fin });
+            });
         }
-    } else {
-        horariosAgrupados = horarios;
-    }
+    });
 
+    // 4. Renderizar tarjetas en el modal
     horariosAgrupados.forEach(h => {
+        const valDia = String(h.dia);
         const div = document.createElement('div');
         div.className = 'bloque-horario';
         div.style.cssText = "background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; position: relative;";
         
         div.innerHTML = `
-            <select class="dia-semana" style="width: 100%; margin-bottom:10px; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                <option value="LV" ${String(h.dia) === 'LV' ? 'selected' : ''}>Lunes a Viernes</option>
-                <option value="1" ${String(h.dia) === '1' ? 'selected' : ''}>Lunes</option>
-                <option value="2" ${String(h.dia) === '2' ? 'selected' : ''}>Martes</option>
-                <option value="3" ${String(h.dia) === '3' ? 'selected' : ''}>Miércoles</option>
-                <option value="4" ${String(h.dia) === '4' ? 'selected' : ''}>Jueves</option>
-                <option value="5" ${String(h.dia) === '5' ? 'selected' : ''}>Viernes</option>
-                <option value="6" ${String(h.dia) === '6' ? 'selected' : ''}>Sábado</option>
-                <option value="0" ${String(h.dia) === '0' ? 'selected' : ''}>Domingo</option>
+            <select class="dia-semana" style="width: 100%; margin-bottom:10px; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #1e293b;">
+                <option value="LV" ${valDia === 'LV' ? 'selected' : ''}>LUNES A VIERNES</option>
+                <option value="1" ${valDia === '1' ? 'selected' : ''}>LUNES</option>
+                <option value="2" ${valDia === '2' ? 'selected' : ''}>MARTES</option>
+                <option value="3" ${valDia === '3' ? 'selected' : ''}>MIÉRCOLES</option>
+                <option value="4" ${valDia === '4' ? 'selected' : ''}>JUEVES</option>
+                <option value="5" ${valDia === '5' ? 'selected' : ''}>VIERNES</option>
+                <option value="6" ${valDia === '6' ? 'selected' : ''}>SÁBADO</option>
+                <option value="0" ${valDia === '0' ? 'selected' : ''}>DOMINGO</option>
             </select>
             <div style="display:flex; align-items:center; gap:8px;">
-                <input type="time" class="h-ini" value="${h.inicio}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                <span style="color: #94a3b8; font-size: 0.8rem;">a</span>
-                <input type="time" class="h-fin" value="${h.fin}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                <input type="time" class="h-ini" value="${h.inicio}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
+                <span style="color: #94a3b8; font-size: 0.8rem; font-weight: bold;">a</span>
+                <input type="time" class="h-fin" value="${h.fin}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
             </div>
         `;
         
