@@ -219,6 +219,7 @@ const cargarExpedienteFijo = async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     cargarExpedienteFijo();
+    detectarEstudiosPendientesEnNota(idLimpio);
 });
 
 
@@ -997,3 +998,90 @@ async function verificarEstudiosVinculadosEnCarga(pacienteId) {
         console.warn("Error al verificar estudios vinculados:", e);
     }
 }
+
+// ============================================================================
+// 🔍 DETECTOR DE ESTUDIOS PENDIENTES AL ABRIR LA CONSULTA
+// ============================================================================
+async function detectarEstudiosPendientesEnNota(pacienteId) {
+    if (!pacienteId) return;
+
+    try {
+        // Consultamos estudios de gabinete y laboratorio cargados recientemente
+        const { data: estudios, error } = await fisioNet
+            .from('estudios_gabinete')
+            .select('*')
+            .eq('paciente_id', pacienteId)
+            .order('fecha_registro', { ascending: false })
+            .limit(3);
+
+        if (error) throw error;
+
+        const contenedorBanners = document.getElementById('contenedor-apoyo-fisiocid');
+        if (!contenedorBanners) return;
+
+        // Limpiamos avisos previos
+        contenedorBanners.innerHTML = '';
+
+        if (estudios && estudios.length > 0) {
+            estudios.forEach(est => {
+                const fechaEstudio = new Date(est.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+                
+                const cardAviso = document.createElement('div');
+                cardAviso.className = 'card border-0 shadow-sm mb-3';
+                cardAviso.style.background = 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
+                cardAviso.style.borderLeft = '5px solid #3b82f6 !important';
+                cardAviso.style.borderRadius = '12px';
+
+                cardAviso.innerHTML = `
+                    <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <span class="badge bg-primary text-uppercase mb-1" style="font-size: 0.65rem;">
+                                📂 ESTUDIO PENDIENTE POR REVISAR (${fechaEstudio})
+                            </span>
+                            <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">
+                                🩻 ${est.tipo_estudio || 'Estudio de Gabinete'}
+                            </h6>
+                            <p class="text-secondary small mb-0" style="font-size: 0.8rem;">
+                                <strong>Hallazgos:</strong> ${est.hallazgos_resumen || 'Sin interpretación previa.'}
+                            </p>
+                        </div>
+                        
+                        <div class="d-flex gap-2 align-items-center ms-auto">
+                            ${est.archivo_url ? `
+                                <a href="${est.archivo_url}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" style="font-size: 0.75rem;">
+                                    👁️ Ver Placa / PDF
+                                </a>
+                            ` : ''}
+                            
+                            <button type="button" class="btn btn-sm btn-primary fw-bold text-white shadow-sm" style="font-size: 0.75rem; border-radius: 8px;"
+                                    onclick="inyectarEstudioAExploracion('${est.tipo_estudio}', '${est.hallazgos_resumen || ''}', '${fechaEstudio}')">
+                                ➕ Cargar a esta Consulta
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                contenedorBanners.appendChild(cardAviso);
+            });
+        }
+    } catch (err) {
+        console.warn("⚠️ No se pudieron consultar los estudios pendientes:", err.message);
+    }
+}
+
+// Función auxiliar para inyectar limpia y formateada la información en la nota
+window.inyectarEstudioAExploracion = (tipo, hallazgos, fecha) => {
+    const campoExploracion = document.getElementById('exploracion');
+    if (campoExploracion) {
+        const bloqueTexto = `\n--- ESTUDIO ANEXO DE GABINETE (${fecha}) ---\nTIPO: ${tipo.toUpperCase()}\nHALLAZGOS/REPORTE: ${hallazgos}\n`;
+        
+        campoExploracion.value += (campoExploracion.value ? "\n" : "") + bloqueTexto;
+        
+        // Animación visual de confirmación
+        campoExploracion.style.backgroundColor = "#e0f2fe";
+        campoExploracion.style.transition = "background-color 0.5s ease";
+        setTimeout(() => {
+            campoExploracion.style.backgroundColor = "white";
+        }, 800);
+    }
+};

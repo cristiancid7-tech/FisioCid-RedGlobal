@@ -15,38 +15,39 @@
             <p style="color: #64748b; font-size: 1.1rem;">Únete a la red profesional de gestión clínica.</p>
         </header>
 
-      <div class="card" id="cardRegistro">
-    <div id="paso1">
-        <h3 style="text-align: center; margin-bottom: 1.5rem;">¿CÓMO USARÁS LA PLATAFORMA?</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-            <button class="btn-perfil" onclick="seleccionarPerfil('DUEÑO')" 
-                    style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
-                <span style="font-size: 2rem;">🏢</span><br>
-                <strong>DUEÑO DE CLÍNICA</strong><br>
-                <small style="color: #94a3b8;">TENGO EQUIPO Y SUCURSAL.</small>
-            </button>
-            <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')" 
-                    style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
-                <span style="font-size: 2rem;">🩺</span><br>
-                <strong>INDEPENDIENTE</strong><br>
-                <small style="color: #94a3b8;">GESTIÓN PERSONAL.</small>
-            </button>
-        </div>
-    </div>
+        <div class="card" id="cardRegistro">
+            <div id="paso1">
+                <h3 style="text-align: center; margin-bottom: 1.5rem;">¿CÓMO USARÁS LA PLATAFORMA?</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <button class="btn-perfil" onclick="seleccionarPerfil('DUEÑO')" 
+                            style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
+                        <span style="font-size: 2rem;">🏢</span><br>
+                        <strong>DUEÑO DE CLÍNICA</strong><br>
+                        <small style="color: #94a3b8;">TENGO EQUIPO Y SUCURSAL.</small>
+                    </button>
+                    <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')" 
+                            style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
+                        <span style="font-size: 2rem;">🩺</span><br>
+                        <strong>INDEPENDIENTE</strong><br>
+                        <small style="color: #94a3b8;">GESTIÓN PERSONAL.</small>
+                    </button>
+                </div>
+            </div>
 
-    <form id="formRegistroNuevo" style="display: none; margin-top: 1rem;">
-        <input type="hidden" id="tipoPerfil">
-        
-        <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 1.5rem; text-align: center; text-transform: uppercase;"></h4>
+            <form id="formRegistroNuevo" style="display: none; margin-top: 1rem;">
+                <input type="hidden" id="tipoPerfil">
+                
+                <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 1.5rem; text-align: center; text-transform: uppercase;"></h4>
 
-        <div class="form-group">
-            <label>NOMBRE COMPLETO (REAL)</label>
-            <input type="text" id="regNombre" placeholder=" " required>
-        </div>
-        <div class="form-group">
-    <label>ESPECIALIDAD / PROFESIÓN</label>
-    <select id="regEspecialidad" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                               <optgroup label="MÉDICOS ESPECIALISTAS">
+                <div class="form-group">
+                    <label>NOMBRE COMPLETO (REAL)</label>
+                    <input type="text" id="regNombre" placeholder=" " required>
+                </div>
+
+                <div class="form-group">
+                    <label>ESPECIALIDAD / PROFESIÓN</label>
+                    <select id="regEspecialidad" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        <optgroup label="MÉDICOS ESPECIALISTAS">
                             <option value="INTERNISTA">MÉDICO INTERNISTA</option>
                             <option value="CARDIOLOGO">MÉDICO CARDIÓLOGO</option>
                             <option value="TRAUMATOLOGO/ORTOPEDISTA">MÉDICO TRAUMATÓLOGO Y ORTOPEDISTA</option>
@@ -86,73 +87,109 @@
                             <option value="INHALOTERAPEUTA">INHALOTERAPEUTA</option>
                             <option value="PODOLOGO">PODÓLOGO</option>
                         </optgroup>
-    </select>
-</div>
+                    </select>
+                </div>
 
-        <div class="form-group" id="grupoClinica">
-            <label id="labelClinica">NOMBRE DE TU CLÍNICA / CONSULTORIO</label>
-            <input type="text" id="regNombreClinica" placeholder=" " required>
-        </div>
+                <div class="form-group" id="grupoClinica">
+                    <label id="labelClinica">NOMBRE DE TU CLÍNICA / CONSULTORIO</label>
+                    <input type="text" id="regNombreClinica" placeholder=" " required>
+                </div>
 
-        <div class="form-group">
-            <label>TELÉFONO CELULAR (10 DÍGITOS)</label>
-            <input type="tel" id="regTelefono" placeholder="2381234567" required pattern="[0-9]{10}">
-        </div>
+                <div class="form-group">
+                    <label>TELÉFONO CELULAR (10 DÍGITOS)</label>
+                    <input type="tel" id="regTelefono" placeholder="2381234567" required pattern="[0-9]{10}">
+                </div>
 
-        <div class="form-group">
-            <label>CORREO ELECTRÓNICO</label>
-            <input type="email" id="regEmail" placeholder="correo@ejemplo.com" required>
-        </div>
+                <!-- 🎯 CAMPO DE CORREO MEJORADO CON MINÚSCULAS EN TIEMPO REAL -->
+                <div class="form-group">
+                    <label>CORREO ELECTRÓNICO</label>
+                    <input type="email" id="regEmail" placeholder="correo@ejemplo.com" required 
+                           autocapitalize="none" autocomplete="email" style="text-transform: lowercase;">
+                </div>
 
-        <div class="form-group">
-            <label>CONTRASEÑA</label>
-            <input type="password" id="regPass" placeholder="MÍNIMO 6 CARACTERES" required>
-        </div>
-
-        <button type="submit" style="width: 100%; margin-top: 1rem; padding: 12px; font-weight: bold;">CREAR MI CUENTA PROFESIONAL</button>
+            
+  <div class="form-group">
+    <label>CONTRASEÑA</label>
+    <!-- Renglón Flexbox: El input toma casi todo el espacio y el botón queda en su propia casilla a la derecha -->
+    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+        <input type="password" 
+               id="regPass" 
+               placeholder="MÍNIMO 6 CARACTERES" 
+               required 
+               autocapitalize="none" 
+               autocorrect="off" 
+               style="flex: 1; text-transform: none !important; width: 100%; box-sizing: border-box;">
         
-        <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer;">← VOLVER</button>
-    </form>
+        <button type="button" 
+                id="btnTogglePass" 
+                onclick="toggleMostrarContrasena()" 
+                style="width: 50px; height: 42px; min-width: 50px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-shadow: none;">
+            👁️
+        </button>
+    </div>
 </div>
+
+
+                <button type="submit" style="width: 100%; margin-top: 1rem; padding: 12px; font-weight: bold;">CREAR MI CUENTA PROFESIONAL</button>
+                
+                <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer;">← VOLVER</button>
+            </form>
+        </div>
 
         <p style="text-align: center; margin-top: 2rem;">
             ¿Ya tienes cuenta? <a href="login.html" style="color: var(--primary); font-weight: bold; text-decoration: none;">Inicia Sesión aquí</a>
         </p>
     </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/registro-nuevo.js"></script>
 
-<script src="js/supabase-config.js"></script>
+    <script>
+        function seleccionarPerfil(tipo) {
+            document.getElementById('tipoPerfil').value = tipo;
+            document.getElementById('paso1').style.display = 'none';
+            document.getElementById('formRegistroNuevo').style.display = 'block';
+            
+            const txt = document.getElementById('txtBienvenida');
+            const labelClinica = document.getElementById('labelClinica');
+            const inputClinica = document.getElementById('regNombreClinica');
+            
+            if(tipo === 'DUEÑO') {
+                txt.innerText = "🏢 REGISTRO PARA DUEÑO DE CLÍNICA";
+                labelClinica.innerText = "NOMBRE DE TU CLÍNICA O EMPRESA";
+                inputClinica.placeholder = "EJ. FISIOCID MATRIZ";
+                inputClinica.readOnly = false;
+                inputClinica.style.backgroundColor = "#ffffff";
+            } else {
+                txt.innerText = "🩺 REGISTRO PARA PROFESIONAL INDEPENDIENTE";
+                labelClinica.innerText = "NOMBRE DE TU CONSULTORIO PERSONAL";
+                inputClinica.readOnly = true;
+                inputClinica.style.backgroundColor = "#f8fafc";
+                inputClinica.placeholder = "SE GENERARÁ AUTOMÁTICAMENTE";
+            }
+        }
 
-<script src="js/registro-nuevo.js"></script>
+        // 🎯 FUNCIÓN QUE HACE FUNCIONAR EL BOTÓN ← VOLVER
+        function regresarPaso1() {
+            document.getElementById('formRegistroNuevo').style.display = 'none';
+            document.getElementById('paso1').style.display = 'block';
+            document.getElementById('formRegistroNuevo').reset();
+        }
 
-<script>
-  function seleccionarPerfil(tipo) {
-    document.getElementById('tipoPerfil').value = tipo;
-    document.getElementById('paso1').style.display = 'none';
-    document.getElementById('formRegistroNuevo').style.display = 'block';
-    
-    const txt = document.getElementById('txtBienvenida');
-    const labelClinica = document.getElementById('labelClinica');
-    const inputClinica = document.getElementById('regNombreClinica');
-    
-    if(tipo === 'DUEÑO') {
-        txt.innerText = "🏢 REGISTRO PARA DUEÑO DE CLÍNICA";
-        labelClinica.innerText = "NOMBRE DE TU CLÍNICA O EMPRESA";
-        inputClinica.placeholder = "EJ. FISIOCID MATRIZ";
-        // Si es dueño, nos aseguramos que el campo esté habilitado para escribir
-        inputClinica.readOnly = false;
-        inputClinica.style.backgroundColor = "#ffffff";
+        function toggleMostrarContrasena() {
+    const inputPass = document.getElementById('regPass');
+    const btnToggle = document.getElementById('btnTogglePass');
+
+    if (inputPass.type === 'password') {
+        inputPass.type = 'text';
+        btnToggle.innerText = '🙈'; // Cambia el icono cuando se muestra la contraseña
     } else {
-        txt.innerText = "🩺 REGISTRO PARA PROFESIONAL INDEPENDIENTE";
-        labelClinica.innerText = "NOMBRE DE TU CONSULTORIO PERSONAL";
-        // Si es independiente, activamos el modo auto-relleno
-        inputClinica.readOnly = true;
-        inputClinica.style.backgroundColor = "#f8fafc";
-        inputClinica.placeholder = "SE GENERARÁ AUTOMÁTICAMENTE";
+        inputPass.type = 'password';
+        btnToggle.innerText = '👁️'; // Cambia el icono cuando se oculta
     }
 }
-</script>
+    </script>
 
 </body>
 </html>
