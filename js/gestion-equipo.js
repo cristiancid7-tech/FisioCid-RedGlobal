@@ -251,7 +251,7 @@ document.getElementById('btnEnviarInv')?.addEventListener('click', async () => {
 });
 
 // ==========================================
-// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (CORREGIDO - BEARER TOKEN FIX)
+// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (MANTENIENDO SESIÓN DE ADMIN)
 // ==========================================
 document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async () => {
     // 1. Recolección de datos
@@ -287,8 +287,15 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
             throw new Error("¡ALERTA! El ID de la clínica está vacío en el sistema.");
         }
 
-        // A. CREAR USUARIO EN AUTH (Usando el método de registro seguro sin requerir Bearer Admin Token)
-        const { data: authData, error: authErr } = await fisioNet.auth.signUp({
+        // 💡 CREACIÓN DE CLIENTE INDEPENDIENTE PARA NO CERRAR LA SESIÓN DEL ADMIN
+        const supabaseUrl = fisioNet.supabaseUrl;
+        const supabaseKey = fisioNet.supabaseKey;
+        const clienteAuxiliarSupabase = supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: { persistSession: false }
+        });
+
+        // A. CREAR USUARIO EN AUTH
+        const { data: authData, error: authErr } = await clienteAuxiliarSupabase.auth.signUp({
             email: correoCorporativo,
             password: password,
             options: { 
@@ -304,7 +311,7 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
         if (!uid) throw new Error("No se pudo obtener el ID único del nuevo usuario.");
 
-        // B. CREAR EN TABLA PERFILES GENERAL
+        // B. CREAR EN TABLA PERFILES GENERAL (Usando fisioNet con los permisos del Admin)
         const { error: pErr } = await fisioNet.from('perfiles').upsert([{
             id: uid,
             nombre_completo: nombre,
@@ -316,7 +323,7 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
         if (pErr) throw new Error("Error creando perfil general: " + pErr.message);
 
-        // C. REGISTRO EN PERFILES_PROFESIONALES (Para satisfacer la clave foránea si existe)
+        // C. REGISTRO EN PERFILES_PROFESIONALES (Satisfacer FK)
         const { error: pProfErr } = await fisioNet.from('perfiles_profesionales').upsert([{
             id: uid,
             nombre_completo: nombre,
@@ -327,7 +334,7 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
         if (pProfErr) console.warn("Aviso en perfiles_profesionales:", pProfErr.message);
 
-        // Pausa táctica de 300ms para propagación
+        // Pausa táctica de 300ms
         await new Promise(resolve => setTimeout(resolve, 300));
 
         // D. VINCULAR EN COLABORADORES_CLINICA
