@@ -251,7 +251,7 @@ document.getElementById('btnEnviarInv')?.addEventListener('click', async () => {
 });
 
 // ==========================================
-// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA)
+// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA) - CORREGIDO
 // ==========================================
 document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async () => {
     // 1. Recolección de datos
@@ -268,7 +268,6 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
     if (!alias || !password || !cargo || !nombre) return alert("❌ Llena todos los campos (Nombre, Alias, Pass, Cargo).");
 
-    // Limpieza de alias por si el navegador autorrellenó un email completo
     if (alias.includes('@')) {
         alias = alias.split('@')[0];
     }
@@ -281,24 +280,48 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
     try {
         const { data: { user: admin } } = await fisioNet.auth.getUser();
         const datosClinica = await obtenerIdClinicaReal(admin.id);
-        
         const idClinicaReal = datosClinica?.id; 
 
         if (!idClinicaReal || idClinicaReal === "null" || idClinicaReal === "undefined") {
             throw new Error("¡ALERTA! El ID de la clínica está vacío en el sistema.");
         }
 
-        // A. CREAR USUARIO EN AUTH
-        const { data: authData, error: authErr } = await fisioAdmin.auth.signUp({
-            email: correoCorporativo,
-            password: password,
-            options: { data: { display_name: nombre } }
-        });
-        if (authErr) throw authErr;
+        // A. CREAR USUARIO EN AUTH (Uso de admin API si está disponible, o signUp con emailConfirm)
+        let uid = null;
 
-        const uid = authData.user.id;
+        if (typeof fisioAdmin.auth.admin?.createUser === 'function') {
+            // Método directo de administración (salta confirmación por correo)
+            const { data: adminAuthData, error: adminAuthErr } = await fisioAdmin.auth.admin.createUser({
+                email: correoCorporativo,
+                password: password,
+                email_confirm: true,
+                user_metadata: { display_name: nombre }
+            });
+            if (adminAuthErr) throw adminAuthErr;
+            uid = adminAuthData.user.id;
+        } else {
+            // Método estándar de Registro
+            const { data: authData, error: authErr } = await fisioAdmin.auth.signUp({
+                email: correoCorporativo,
+                password: password,
+                options: { data: { display_name: nombre } }
+            });
+            if (authErr) throw authErr;
+            uid = authData.user.id;
+        }
 
-        // B. CREAR PERFIL EN TABLA 'perfiles'
+        if (!uid) throw new Error("No se pudo obtener el ID único del nuevo usuario.");
+
+        // B. CREAR PERFIL PROFESIONAL / PERFIL GENERAL (Paso clave para la FK)
+        const { error: pProfErr } = await fisioAdmin.from('perfiles_profesionales').upsert([{
+            id: uid,
+            nombre_completo: nombre,
+            correo_institucional: correoCorporativo,
+            especialidad: cargo
+        }]);
+
+        if (pProfErr) console.warn("Aviso en perfiles_profesionales:", pProfErr.message);
+
         const { error: pErr } = await fisioAdmin.from('perfiles').upsert([{
             id: uid,
             nombre_completo: nombre,
@@ -307,9 +330,12 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
             id_clinica_principal: idClinicaReal
         }]);
 
-        if (pErr) throw new Error("Perfiles: " + pErr.message);
+        if (pErr) throw new Error("Error creando perfil: " + pErr.message);
 
-        // C. GUARDAR COLABORADOR
+        // Pequeña pausa (300ms) para garantizar la propagación de llaves foráneas en Supabase
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // C. GUARDAR COLABORADOR EN LA CLÍNICA
         const newCollabId = crypto.randomUUID(); 
         const { error: cErr } = await fisioAdmin.from('colaboradores_clinica').upsert([{
             id: newCollabId,
