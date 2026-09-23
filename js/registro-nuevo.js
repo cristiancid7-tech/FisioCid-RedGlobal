@@ -20,7 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 document.getElementById('formRegistroNuevo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+   
+
+    // 🛡️ VALIDACIÓN DE TÉRMINOS Y PRIVACIDAD DE PLATAFORMA
+    const checkTerminos = document.getElementById('checkTerminosLegales')?.checked;
+    const checkDeslinde = document.getElementById('checkDeslindeMedico')?.checked;
+
+    if (!checkTerminos || !checkDeslinde) {
+        alert("⚠️ Para continuar debes aceptar los Términos de Uso, el Aviso de Privacidad y la Declaración Jurada.");
+        return;
+    }
     // 1. CAPTURA DE DATOS
    const email = document.getElementById('regEmail').value.trim().toLowerCase();
     const pass = document.getElementById('regPass').value;
@@ -89,7 +98,12 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
             cargo_clinico: 'ADMINISTRADOR', // 👈 Cargo jerárquico supremo
             especialidad: especialidadCapturada,
             nivel_suscripcion: 'BASICO',
-            suscripcion_activa: true
+            suscripcion_activa: true,
+            // 🛡️ REGISTRO LEGAL DE PLATAFORMA (SEPARADO)
+             terminos_aceptados: true,
+            fecha_terminos: new Date().toISOString(),
+            version_legales: 'v1.0'
+
         }]);
         if (profileError) throw profileError;
 
