@@ -988,8 +988,8 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
 
             if (exp) {
                 console.log("✅ Folio encontrado:", exp.folio_personalizado);
-                inputFolio.value = exp.folio_personalizado;
-                statusFolio.innerHTML = '<i class="fas fa-check-circle"></i> EXPEDIENTE LOCALIZADO';
+                if (inputFolio) inputFolio.value = exp.folio_personalizado;
+                if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
             console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
@@ -998,34 +998,44 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         // 2. GENERAR NUEVO
         console.log("🏗️ Generando nuevo folio...");
         
-        // Ejecutamos ambas consultas al mismo tiempo para ganar velocidad
-        const [confRes, countRes] = await Promise.all([
-            fisioNet.from('clinicas').select('folio_prefijo, folio_sede, folio_separador').eq('id', idClinica).single(),
-            fisioNet.from('expedientes_clinicos').select('*', { count: 'exact', head: true }).eq('id_clinica', idClinica)
-        ]);
+        // A) Obtenemos la configuración de folios de la clínica
+        const { data: conf, error: errConf } = await fisioNet
+            .from('clinicas')
+            .select('folio_prefijo, folio_sede, folio_separador')
+            .eq('id', idClinica)
+            .single();
 
-        if (confRes.error) throw confRes.error;
+        if (errConf) throw errConf;
 
-        const conf = confRes.data;
-        const count = countRes.count || 0;
+        // B) Obtenemos el conteo real de expedientes registrados en esta clínica
+        const { count, error: errCount } = await fisioNet
+            .from('expedientes_clinicos')
+            .select('id', { count: 'exact', head: true })
+            .eq('id_clinica', idClinica);
+
+        if (errCount) throw errCount;
+
+        // C) Formateo e incremento del consecutivo
+        const totalRegistrados = count !== null && count !== undefined ? count : 0;
+        const siguiente = totalRegistrados + 1;
 
         const prefijo = (conf.folio_prefijo || 'FC').toUpperCase();
         const sede = (conf.folio_sede || 'MIA').toUpperCase();
         const sep = conf.folio_separador || '-';
         const anio = new Date().getFullYear();
-        const siguiente = count + 1;
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        console.log("✨ Folio generado con éxito:", nuevoFolio);
-        inputFolio.value = nuevoFolio;
-        statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
+        console.log(`✨ Conteo actual: ${totalRegistrados} | Siguiente asignado: ${siguiente} | Folio: ${nuevoFolio}`);
+        
+        if (inputFolio) inputFolio.value = nuevoFolio;
+        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
         
         return { folio: nuevoFolio, numero_consecutivo: siguiente, nuevo: true };
 
     } catch (error) {
         console.error("❌ ERROR CRÍTICO EN FOLIOS:", error);
-        statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ERROR DE CONEXIÓN';
+        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ERROR DE CONEXIÓN';
     }
 }
 
