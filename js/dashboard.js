@@ -1,3 +1,23 @@
+// Verificar estado de sesión al cargar la página
+async function verificarSesionSegura() {
+    // 1. Verificar sesión activa con Supabase
+    const { data: { session } } = await fisioNet.auth.getSession();
+    const clinicaActiva = localStorage.getItem('id_clinica_activa');
+
+    // Si no hay sesión válida o faltan credenciales locales
+    if (!session || !clinicaActiva) {
+        // Limpiar memoria residual por seguridad
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Redirigir usando replace() para que no se guarde el dashboard en la pila del navegador
+        window.location.replace("index.html"); // Cambia por el nombre de tu archivo de Login
+    }
+}
+
+// Ejecutar verificación de inmediato
+verificarSesionSegura();
+
 async function comprobarConfiguracionInicialRequerida() {
     try {
         const { data: { user } } = await fisioNet.auth.getUser();

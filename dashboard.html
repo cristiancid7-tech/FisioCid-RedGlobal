@@ -990,6 +990,19 @@
         `;
         contenedor.appendChild(nuevoBloque);
     });
+
+    // Detectar si la página fue restaurada desde la memoria caché al presionar "Regresar"
+window.addEventListener('pageshow', async function(event) {
+    if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+        // La página se cargó desde la memoria caché ("Regresar")
+        const { data: { session } } = await fisioNet.auth.getSession();
+        
+        if (!session) {
+            // Si ya se había cerrado sesión, forzar redirigir sin mostrar la caché
+            window.location.replace("index.html");
+        }
+    }
+});
 </script>
 </body>
 </html>
