@@ -68,18 +68,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             inputSede.value = clinica.folio_sede || 'MIA';
             inputSeparador.value = clinica.folio_separador || '-';
 
-            // 🛡️ CANDADO LEGAL DE FOLIO: Si ya fue guardado previamente, se inhabilita la edición
-            if (clinica.folio_prefijo && clinica.folio_prefijo.trim() !== "") {
-                inputPrefijo.disabled = true;
-                inputSede.disabled = true;
-                inputSeparador.disabled = true;
+          
+          // 🛡️ CANDADO LEGAL DE FOLIO: Solo se bloquea si el usuario ya confirmó formalmente su configuración
+if (clinica.folio_confirmado === true) {
+    inputPrefijo.disabled = true;
+    inputSede.disabled = true;
+    inputSeparador.disabled = true;
 
-                // Estilo gris elegante indicando el estado de solo lectura / bloqueado
-                inputPrefijo.style.backgroundColor = "#e2e8f0";
-                inputSede.style.backgroundColor = "#e2e8f0";
-                inputSeparador.style.backgroundColor = "#e2e8f0";
-                inputPrefijo.title = "Formato de folio bloqueado para preservar la trazabilidad legal del expediente.";
-            }
+    // Estilo de solo lectura / bloqueado
+    inputPrefijo.style.backgroundColor = "#e2e8f0";
+    inputSede.style.backgroundColor = "#e2e8f0";
+    inputSeparador.style.backgroundColor = "#e2e8f0";
+    inputPrefijo.title = "Formato de folio bloqueado para preservar la trazabilidad legal del expediente.";
+} else {
+    // Si aún no lo ha confirmado, aseguramos que los inputs estén habilitados para edición
+    inputPrefijo.disabled = false;
+    inputSede.disabled = false;
+    inputSeparador.disabled = false;
+    inputPrefijo.style.backgroundColor = "#ffffff";
+    inputSede.style.backgroundColor = "#ffffff";
+    inputSeparador.style.backgroundColor = "#ffffff";
+}
 
     const inputDom = document.getElementById('dom-empresa');
             if (inputDom) {
@@ -202,6 +211,7 @@ if (vDominio) {
                 especialidad_principal: vEspecialidad,
                 folio_prefijo: vPrefijo,
                 folio_sede: vSede,
+                folio_confirmado: true,
                 folio_separador: vSep,
                 estado: true,
                 entidad_federativa: vEntidad
