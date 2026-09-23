@@ -452,11 +452,9 @@ async function renderizarTablaEquipo() {
     }
 }
 
+
 // ==========================================
-// RENDEREAR TABLA ALIANZAS Y EXTERNOS
-// ==========================================
-// ==========================================
-// 🟢 RENDEREAR ALIANZAS Y DOCTORES EXTERNOS (UNIFICADO)
+// 🟢 RENDEREAR ALIANZAS Y DOCTORES EXTERNOS (CORREGIDO)
 // ==========================================
 async function renderizarTablaAlianzas() {
     const tbody = document.getElementById('tablaCuerpoAlianzas');
@@ -468,7 +466,7 @@ async function renderizarTablaAlianzas() {
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
         if (!user || !idClinica) return;
 
-        // 1. Obtener Convenios y Empresas de red_colaboracion
+        // 1. Obtener Convenios y Alianzas de red_colaboracion
         const { data: conveniosRed, error: errRed } = await fisioNet
             .from('red_colaboracion')
             .select('*')
@@ -486,7 +484,6 @@ async function renderizarTablaAlianzas() {
 
         if (errColab) console.error("Error al consultar colaboradores_clinica:", errColab);
 
-        // Filtrar solo los externos de la clínica
         const doctoresExternos = (colabsClinica || []).filter(c => {
             const vinculo = (c.tipo_vinculo || '').toUpperCase();
             const cargo = (c.cargo_clinico || '').toUpperCase();
@@ -499,19 +496,31 @@ async function renderizarTablaAlianzas() {
                    rol === 'SOCIOS_EXTERNOS';
         });
 
-        // 3. Mapear nombres de los doctores externos desde perfiles_profesionales / perfiles
-        let mapaDoctores = {};
-        const idsProf = doctoresExternos.map(d => d.id_profesional).filter(Boolean);
+        // 3. Mapear IDs de la contraparte para traer perfiles reales
+        let idsAConsultar = new Set();
 
-        if (idsProf.length > 0) {
+        (conveniosRed || []).forEach(c => {
+            // Determinar contraparte: Si soy el emisor, la contraparte es el receptor; y viceversa.
+            const idContraparte = (c.id_doctor_emisor === user.id) ? c.id_doctor_receptor : c.id_doctor_emisor;
+            if (idContraparte) idsAConsultar.add(idContraparte);
+        });
+
+        doctoresExternos.forEach(d => {
+            if (d.id_profesional) idsAConsultar.add(d.id_profesional);
+        });
+
+        const arrayIdsProf = Array.from(idsAConsultar);
+        let mapaDoctores = {};
+
+        if (arrayIdsProf.length > 0) {
             const { data: perfilesProf } = await fisioNet
                 .from('perfiles_profesionales')
-                .select('id, nombre_completo, correo_institucional, telefono_contacto')
-                .in('id', idsProf);
+                .select('id, nombre_completo, correo_institucional, especialidad')
+                .in('id', arrayIdsProf);
 
             (perfilesProf || []).forEach(p => { mapaDoctores[p.id] = p; });
 
-            const idsFaltantes = idsProf.filter(id => !mapaDoctores[id]);
+            const idsFaltantes = arrayIdsProf.filter(id => !mapaDoctores[id]);
             if (idsFaltantes.length > 0) {
                 const { data: perfilesGen } = await fisioNet
                     .from('perfiles')
@@ -527,23 +536,24 @@ async function renderizarTablaAlianzas() {
             }
         }
 
-        // 4. Consolidar ambas fuentes en una lista única para renderizar
+        // 4. Consolidar la lista
         let listaUnificada = [];
 
-        // Agregar convenios empresariales
         (conveniosRed || []).forEach(c => {
+            const idContraparte = (c.id_doctor_emisor === user.id) ? c.id_doctor_receptor : c.id_doctor_emisor;
+            const perfilSocio = mapaDoctores[idContraparte] || {};
+
             listaUnificada.push({
                 id: c.id,
                 origen: 'RED_COLABORACION',
-                nombre: c.nombre_entidad || c.contacto_principal || 'EMPRESA / SOCIO',
-                tipo: c.tipo_entidad || 'CONVENIO',
+                nombre: perfilSocio.nombre_completo || c.nombre_entidad || c.contacto_principal || 'EMPRESA / SOCIO',
+                tipo: perfilSocio.especialidad || c.tipo_entidad || 'CONVENIO',
                 beneficio: c.porcentaje_descuento ? `${c.porcentaje_descuento}% DESC` : 'SIN DESC',
-                contacto: c.contacto_principal ? `👤 ${c.contacto_principal}` : 'Contacto directo',
-                correo: c.email_contacto || 'Sin correo'
+                contacto: `👤 ${perfilSocio.nombre_completo || c.contacto_principal || 'Contacto directo'}`,
+                correo: perfilSocio.correo_institucional || c.email_contacto || 'Sin correo'
             });
         });
 
-        // Agregar doctores/especialistas externos
         doctoresExternos.forEach(d => {
             const perfil = mapaDoctores[d.id_profesional] || {};
             listaUnificada.push({
@@ -557,7 +567,6 @@ async function renderizarTablaAlianzas() {
             });
         });
 
-        // Actualizar contador global
         if (contador) {
             const totalInternos = window.totalEquipoInternoNum || 0;
             contador.innerText = `${listaUnificada.length + totalInternos} En Red`;
@@ -1884,17 +1893,19 @@ async function enviarSolicitudColaboracion(idReceptor) {
         const especialidadEmisor = (perfilEmisor?.especialidad || 'ESPECIALISTA').toUpperCase().trim();
 
         // 6. Insertar en red_colaboracion
-        const { error } = await fisioNet
-            .from('red_colaboracion')
-            .insert([{
-                id_doctor_emisor: user.id,
-                id_doctor_receptor: idReceptor,
-                id_usuario_socio: idReceptor,
-                nombre_entidad: nombreEmisor,        // 👈 Guarda el nombre de quien ENVÍA
-                contacto_principal: nombreEmisor,
-                tipo_entidad: especialidadEmisor,    // 👈 Guarda la especialidad real (ej. INTERNISTA)
-                estado_conexion: 'PENDIENTE'
-            }]);
+     const nombreReceptor = perfilReceptor?.nombre_completo || 'DOCTOR / ESPECIALISTA';
+
+const { error } = await fisioNet
+    .from('red_colaboracion')
+    .insert([{
+        id_doctor_emisor: user.id,
+        id_doctor_receptor: idReceptor,
+        id_usuario_socio: idReceptor,
+        nombre_entidad: nombreReceptor, // 👈 Se guarda el receptor como nombre de entidad por defecto
+        contacto_principal: nombreReceptor,
+        tipo_entidad: especialidadEmisor,
+        estado_conexion: 'PENDIENTE'
+    }]);
 
         if (error) throw error;
 
