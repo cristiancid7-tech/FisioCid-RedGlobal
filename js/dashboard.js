@@ -986,15 +986,19 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
     if (!idPaciente) { alert("Selecciona un paciente."); return; }
     if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
 
-    const { data: perfil } = await fisioNet.from('perfiles_profesionales').select('costo_consulta_base, costo_domicilio_base, horario_atencion').eq('id', user.id).single();
+    const { data: perfil } = await fisioNet
+        .from('perfiles_profesionales')
+        .select('costo_consulta_base, costo_domicilio_base, horario_atencion')
+        .eq('id', user.id)
+        .single();
 
+    // Validar horario laborable...
     if (perfil?.horario_atencion) {
         const horarios = JSON.parse(perfil.horario_atencion);
         const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 60; 
         
         const fechaObj = new Date(fechaElegida + "T12:00:00");
         const diaSemana = fechaObj.getDay();
-
         const horarioHoy = horarios.find(h => Number(h.dia) === diaSemana);
 
         if (!horarioHoy) {
@@ -1012,20 +1016,28 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         const minCierre = (hF * 60) + mF;
 
         if (horaElegida < hIni || (minElegidos + intervalo) > minCierre) {
-            alert(`❌ HORARIO NO DISPONIBLE: Tu hora límite de salida es a las ${hFin}. Selecciona una hora donde te dé tiempo de terminar la consulta.`);
+            alert(`❌ HORARIO NO DISPONIBLE: Tu hora límite de salida es a las ${hFin}.`);
             return; 
         }
     }
 
+    // MANEJO SEGURO DE CONVENIOS (Evita errores FK si idConvenio está vacío)
     const selectorConvenio = document.getElementById('selectConvenioPaciente');
-    const idConvenio = (selectorConvenio && selectorConvenio.value) ? selectorConvenio.value : null;
+    let idConvenio = null;
     let porcentaje = 0;
-    
-    if (idConvenio && selectorConvenio.selectedOptions.length > 0) {
-        porcentaje = parseFloat(selectorConvenio.selectedOptions[0].dataset.descuento) || 0;
+
+    if (selectorConvenio && selectorConvenio.value && selectorConvenio.value !== "") {
+        idConvenio = selectorConvenio.value;
+        if (selectorConvenio.selectedIndex >= 0) {
+            porcentaje = parseFloat(selectorConvenio.options[selectorConvenio.selectedIndex].dataset.descuento) || 0;
+        }
     }
 
-    const precioBase = (modalidad === 'CONSULTORIO') ? (perfil?.costo_consulta_base || 800) : (perfil?.costo_domicilio_base || 1200);
+    // TARIFA INDEPENDIENTE (Sin sumar base + domicilio)
+    const costoConsultorio = perfil?.costo_consulta_base || 800;
+    const costoDomicilio = perfil?.costo_domicilio_base || 1200;
+    const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
+    
     const descuentoCalculado = (precioBase * porcentaje) / 100;
     const precioFinal = precioBase - descuentoCalculado;
 
@@ -1036,7 +1048,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         fecha: fechaElegida, 
         hora_inicio_cita: horaElegida,
         modalidad: modalidad, 
-        id_convenio_aplicado: idConvenio, 
+        id_convenio_aplicado: idConvenio, // Pasa como null si es particular
         descuento_aplicado: descuentoCalculado, 
         monto_base: precioBase,
         monto_total: precioFinal, 
@@ -1444,19 +1456,46 @@ window.abrirModalConvenio = () => {
     if (modal) { modal.style.display = 'flex'; }
 };
 
-function actualizarPrecioVisual() {
-    const modalidad = document.getElementById('modalidadCita').value;
+async function actualizarPrecioVisual() {
+    const modalidad = document.getElementById('modalidadCita')?.value || 'CONSULTORIO';
     const selector = document.getElementById('selectConvenioPaciente');
     const vistaPrevia = document.getElementById('vistaPreviaPago');
     const textoMonto = document.getElementById('textoMontoFinal');
 
-    let precioBase = (modalidad === 'CONSULTORIO') ? parseFloat(document.getElementById('baseConsultorio')?.value || 800) : parseFloat(document.getElementById('baseDomicilio')?.value || 1200);
+    // 1. Obtener la sesión activa para leer las tarifas configuradas del perfil
+    const { data: { user } } = await fisioNet.auth.getUser();
+    let costoConsultorio = parseFloat(document.getElementById('baseConsultorio')?.value) || 800;
+    let costoDomicilio = parseFloat(document.getElementById('baseDomicilio')?.value) || 1200;
 
-    if (selector && selector.value) {
-        const porcentaje = parseFloat(selector.selectedOptions[0].dataset.descuento) || 0;
-        precioBase = precioBase - (precioBase * porcentaje / 100);
+    if (user) {
+        const { data: perfil } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('costo_consulta_base, costo_domicilio_base')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (perfil) {
+            if (perfil.costo_consulta_base) costoConsultorio = Number(perfil.costo_consulta_base);
+            if (perfil.costo_domicilio_base) costoDomicilio = Number(perfil.costo_domicilio_base);
+        }
     }
-    if (textoMonto) textoMonto.innerText = `$${precioBase.toFixed(2)}`;
+
+    // 2. Selección estricta e independiente del precio base según modalidad
+    let precioBaseFinal = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
+
+    // 3. Aplicar descuento solo si hay opción seleccionada con convenio
+    let porcentajeDescuento = 0;
+    if (selector && selector.selectedIndex >= 0) {
+        const opcionSeleccionada = selector.options[selector.selectedIndex];
+        if (opcionSeleccionada && opcionSeleccionada.dataset.descuento) {
+            porcentajeDescuento = parseFloat(opcionSeleccionada.dataset.descuento) || 0;
+        }
+    }
+
+    const descuentoCalculado = (precioBaseFinal * porcentajeDescuento) / 100;
+    const precioFinal = Math.max(0, precioBaseFinal - descuentoCalculado);
+
+    if (textoMonto) textoMonto.innerText = `$${precioFinal.toFixed(2)}`;
     if (vistaPrevia) vistaPrevia.style.display = 'block';
 }
 
@@ -1481,108 +1520,31 @@ document.getElementById('selectConvenioPaciente')?.addEventListener('change', ac
 
 async function inicializarFormularioConvenio() {
     const select = document.getElementById('selectConvenioPaciente');
-    const formConvenio = document.getElementById('formNuevoConvenio');
+    if (!select) return;
 
-    if (select) {
+    try {
         const { data: convenios, error } = await fisioNet
             .from('red_colaboracion')
-            .select('*')
+            .select('id, nombre_entidad, porcentaje_descuento')
             .eq('estado_conexion', 'ACTIVO')
             .order('nombre_entidad', { ascending: true });
 
-        if (!error && convenios) {
-            select.innerHTML = '<option value="">👤 PACIENTE PARTICULAR (SIN CONVENIO)</option>';
+        // Siempre dejamos la opción por defecto sin lanzar error
+        select.innerHTML = '<option value="" data-descuento="0">👤 PACIENTE PARTICULAR (SIN CONVENIO)</option>';
+
+        if (!error && convenios && convenios.length > 0) {
             convenios.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c.id;
-                opt.dataset.descuento = c.porcentaje_descuento;
-                opt.textContent = `🤝 ${c.nombre_entidad} (${c.porcentaje_descuento}% DESC)`;
+                opt.dataset.descuento = c.porcentaje_descuento || 0;
+                opt.textContent = `🤝 ${c.nombre_entidad} (${c.porcentaje_descuento || 0}% DESC)`;
                 select.appendChild(opt);
             });
         }
-    }
-
-    if (formConvenio) {
-        formConvenio.onsubmit = async (e) => {
-            e.preventDefault();
-            
-            const { data: { user: doctorActual } } = await fisioNet.auth.getUser();
-            if (!doctorActual) {
-                alert("⚠️ Error: Sesión de doctor no detectada.");
-                return;
-            }
-            const MI_ID_DOCTOR = doctorActual.id;
-
-            const emailSocio = document.getElementById('email_contacto').value.toLowerCase().trim();
-            const nombreEntidad = document.getElementById('nomConvenio').value.trim().toUpperCase();
-            const passPredeterminada = "Temporal123";
-
-            let idDelSocioFinal = null;
-
-            if (typeof fisioAdmin !== 'undefined' && fisioAdmin.auth) {
-                const { data: authData, error: authError } = await fisioAdmin.auth.signUp({
-                    email: emailSocio,
-                    password: passPredeterminada
-                });
-
-                if (authError) {
-                    if (authError.message.includes("already registered")) {
-                        const { data: socioRecuperado } = await fisioNet
-                            .from('red_colaboracion')
-                            .select('id_usuario_socio')
-                            .eq('email_contacto', emailSocio)
-                            .maybeSingle();
-                        
-                        idDelSocioFinal = socioRecuperado?.id_usuario_socio || null;
-                    } else {
-                        alert("Error en Auth: " + authError.message);
-                        return;
-                    }
-                } else if (authData && authData.user) {
-                    idDelSocioFinal = authData.user.id;
-                }
-            }
-
-            const datosSocio = {
-                nombre_entidad: nombreEntidad,
-                contacto_principal: document.getElementById('contactoNombre').value.trim().toUpperCase(),
-                tipo_entidad: document.getElementById('tipoConvenio').value,
-                telefono_contacto: document.getElementById('contactoTel').value.trim(),
-                email_contacto: emailSocio,
-                porcentaje_descuento: parseFloat(document.getElementById('porcentajeDesc').value) || 0,
-                id_doctor_emisor: MI_ID_DOCTOR,
-                id_usuario_socio: idDelSocioFinal, 
-                estado_conexion: 'ACTIVO'
-            };
-
-            const { data: existe } = await fisioNet.from('red_colaboracion')
-                .select('id').eq('nombre_entidad', nombreEntidad).maybeSingle();
-
-            if (existe) {
-                if (!confirm(`⚠️ EL SOCIO "${nombreEntidad}" YA EXISTE. ¿Actualizar?`)) return;
-                
-                const { error: errUpd } = await fisioNet.from('red_colaboracion')
-                    .update(datosSocio)
-                    .eq('id', existe.id);
-                
-                if (!errUpd) alert("✅ ¡ALIANZA ACTUALIZADA!");
-                else console.error("Error en Update:", errUpd);
-
-            } else {
-                const { error: errIns } = await fisioNet.from('red_colaboracion').insert([datosSocio]);
-                
-                if (!errIns) {
-                    alert(`🚀 ¡ALIANZA GUARDADA!\n📧 ${emailSocio}\n🔑 ${passPredeterminada}`);
-                } else {
-                    alert(`Error: ${errIns.message}`); 
-                }
-            }
-
-            document.getElementById('modalConvenios').style.display = 'none';
-            formConvenio.reset();
-            if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas();
-            await inicializarFormularioConvenio();
-        };
+    } catch (err) {
+        console.error("Error al cargar convenios:", err);
+        // Fallback seguro en caso de error de red
+        select.innerHTML = '<option value="" data-descuento="0">👤 PACIENTE PARTICULAR (SIN CONVENIO)</option>';
     }
 }
 
