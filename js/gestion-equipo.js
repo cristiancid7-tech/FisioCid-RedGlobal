@@ -251,7 +251,7 @@ document.getElementById('btnEnviarInv')?.addEventListener('click', async () => {
 });
 
 // ==========================================
-// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (DERECHA) - CORREGIDO
+// 🚀 MOTOR 2: CREAR APOYO CORPORATIVO (CORREGIDO - BEARER TOKEN FIX)
 // ==========================================
 document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async () => {
     // 1. Recolección de datos
@@ -260,13 +260,14 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
     const password = document.getElementById('passTemporal').value;
     const cargo = document.getElementById('cargoInvitarAPOYO').value; 
     const nombre = document.getElementById('nombreCompletoAPOYO').value.trim().toUpperCase();
+    const telefono = document.getElementById('telAPOYO')?.value.trim() || null;
     const rol = document.getElementById('rolInvitarapoyo').value;
     const area = document.getElementById('areaInvitarAPOYO').value.toUpperCase();
     const turno = document.getElementById('turnoInvitarAPOYO').value;
     const superior = document.getElementById('superiorInvitarAPOYO').value || null;
     const tipoVinculo = document.getElementById('tipoVinculoInvitarAPOYO')?.value || 'INTERNO';
 
-    if (!alias || !password || !cargo || !nombre) return alert("❌ Llena todos los campos (Nombre, Alias, Pass, Cargo).");
+    if (!alias || !password || !cargo || !nombre) return alert("❌ Llena todos los campos obligatorios (Nombre, Alias, Pass, Cargo).");
 
     if (alias.includes('@')) {
         alias = alias.split('@')[0];
@@ -286,58 +287,52 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
             throw new Error("¡ALERTA! El ID de la clínica está vacío en el sistema.");
         }
 
-        // A. CREAR USUARIO EN AUTH (Uso de admin API si está disponible, o signUp con emailConfirm)
-        let uid = null;
+        // A. CREAR USUARIO EN AUTH (Usando el método de registro seguro sin requerir Bearer Admin Token)
+        const { data: authData, error: authErr } = await fisioNet.auth.signUp({
+            email: correoCorporativo,
+            password: password,
+            options: { 
+                data: { 
+                    display_name: nombre,
+                    phone: telefono 
+                } 
+            }
+        });
 
-        if (typeof fisioAdmin.auth.admin?.createUser === 'function') {
-            // Método directo de administración (salta confirmación por correo)
-            const { data: adminAuthData, error: adminAuthErr } = await fisioAdmin.auth.admin.createUser({
-                email: correoCorporativo,
-                password: password,
-                email_confirm: true,
-                user_metadata: { display_name: nombre }
-            });
-            if (adminAuthErr) throw adminAuthErr;
-            uid = adminAuthData.user.id;
-        } else {
-            // Método estándar de Registro
-            const { data: authData, error: authErr } = await fisioAdmin.auth.signUp({
-                email: correoCorporativo,
-                password: password,
-                options: { data: { display_name: nombre } }
-            });
-            if (authErr) throw authErr;
-            uid = authData.user.id;
-        }
+        if (authErr) throw authErr;
+        const uid = authData.user?.id;
 
         if (!uid) throw new Error("No se pudo obtener el ID único del nuevo usuario.");
 
-        // B. CREAR PERFIL PROFESIONAL / PERFIL GENERAL (Paso clave para la FK)
-        const { error: pProfErr } = await fisioAdmin.from('perfiles_profesionales').upsert([{
+        // B. CREAR EN TABLA PERFILES GENERAL
+        const { error: pErr } = await fisioNet.from('perfiles').upsert([{
+            id: uid,
+            nombre_completo: nombre,
+            rol_sistema: rol,
+            correo_institucional: correoCorporativo,
+            telefono: telefono,
+            id_clinica_principal: idClinicaReal
+        }]);
+
+        if (pErr) throw new Error("Error creando perfil general: " + pErr.message);
+
+        // C. REGISTRO EN PERFILES_PROFESIONALES (Para satisfacer la clave foránea si existe)
+        const { error: pProfErr } = await fisioNet.from('perfiles_profesionales').upsert([{
             id: uid,
             nombre_completo: nombre,
             correo_institucional: correoCorporativo,
+            telefono_contacto: telefono,
             especialidad: cargo
         }]);
 
         if (pProfErr) console.warn("Aviso en perfiles_profesionales:", pProfErr.message);
 
-        const { error: pErr } = await fisioAdmin.from('perfiles').upsert([{
-            id: uid,
-            nombre_completo: nombre,
-            rol_sistema: rol,
-            correo_institucional: correoCorporativo,
-            id_clinica_principal: idClinicaReal
-        }]);
-
-        if (pErr) throw new Error("Error creando perfil: " + pErr.message);
-
-        // Pequeña pausa (300ms) para garantizar la propagación de llaves foráneas en Supabase
+        // Pausa táctica de 300ms para propagación
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        // C. GUARDAR COLABORADOR EN LA CLÍNICA
+        // D. VINCULAR EN COLABORADORES_CLINICA
         const newCollabId = crypto.randomUUID(); 
-        const { error: cErr } = await fisioAdmin.from('colaboradores_clinica').upsert([{
+        const { error: cErr } = await fisioNet.from('colaboradores_clinica').upsert([{
             id: newCollabId,
             id_profesional: uid,
             id_clinica: idClinicaReal,
@@ -353,7 +348,7 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 
         if (cErr) throw new Error("Colaboradores: " + cErr.message);
 
-        alert(`✅ ¡ÉXITO TOTAL! Acceso creado para: ${nombre}\nCorreo asignado: ${correoCorporativo}`);
+        alert(`✅ ¡ÉXITO TOTAL! Acceso y vinculación a clínica creados para: ${nombre}\nCorreo asignado: ${correoCorporativo}${telefono ? '\nTeléfono: ' + telefono : ''}`);
         location.reload();
 
     } catch (err) {
@@ -364,6 +359,7 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
         btn.disabled = false;
     }
 });
+
 // ==========================================
 // ⚙️ ARRANQUE PRINCIPAL
 // ==========================================
