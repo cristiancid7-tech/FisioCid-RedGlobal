@@ -531,27 +531,23 @@ document.addEventListener('focusin', (e) => ocultarListaSiEsExterno(e.target));
 document.getElementById('formRegistroPaciente')?.addEventListener('submit', async (e) => {
     e.preventDefault(); // Frenamos el envío para validar primero
 
-    // Capturamos el botón al inicio para poder manipularlo en el catch si algo truena desde las validaciones
+    // Capturamos el botón al inicio
     const btnSubmit = e.target.querySelector('button[type="submit"]');
 
-
     try {
-        // --- AQUÍ INSERTAMOS LA VALIDACIÓN DEL CHECKBOX ---
-        const aceptaPrivacidad = document.getElementById('checkConsentimiento').checked;
+        // --- 1. VALIDACIÓN DEL CHECKBOX PRIVACIDAD ---
+        const aceptaPrivacidad = document.getElementById('checkConsentimiento')?.checked;
         if (!aceptaPrivacidad) {
             alert("❌ ¡Espera! Debes aceptar el Aviso de Privacidad y la interoperabilidad para continuar.");
-            document.getElementById('checkConsentimiento').focus();
-            return; // Bloquea el guardado si no está marcado
+            document.getElementById('checkConsentimiento')?.focus();
+            return;
         }
 
         const telefonoAdulto = document.getElementById('valTelefono')?.value.trim() || "";
-        // 👁️ 'valemail' con la 'e' minúscula como tu mapa. Usamos 'let' para poder limpiarla abajo sin duplicar.
         let emailAdulto = document.getElementById('valemail')?.value.trim() || ""; 
-        
         const telefonoTutor = document.getElementById('tutor-tel')?.value.trim() || "";
         const correoTutor = document.getElementById('correo-tutor')?.value.trim() || "";
 
-        // Determinamos de forma inteligente si el formulario tiene activos los campos del tutor
         const inputTutor = document.getElementById('tutor-tel');
         const esMenorEdad = (inputTutor && inputTutor.offsetWidth > 0) || window.pacienteCargado?.es_menor_edad === true;
 
@@ -560,7 +556,7 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         let faltaContacto = false;
         let mensajeError = "";
 
-        // 2. APLICACIÓN DE LAS REGLAS ESTRICTAS DE CALIDAD DE DATOS
+        // --- 2. REGLAS ESTRICTAS DE CALIDAD DE DATOS ---
         if (esMenorEdad) {
             if (!telefonoTutor || telefonoTutor.length < 10 || !correoTutor || !correoTutor.includes('@')) {
                 faltaContacto = true;
@@ -573,7 +569,6 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             }
         }
 
-        // 3. FRENO DE MANO ABSOLUTO: Si falta algún dato, se cancela el guardado en Supabase
         if (faltaContacto) {
             alert(mensajeError);
             console.error("🛑 Registro bloqueado internamente por falta de datos maestros de comunicación.");
@@ -598,6 +593,45 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         console.log("🔑 [LOG 2] Solicitando usuario activo de Auth...");
         const { data: { user } } = await fisioNet.auth.getUser();
         console.log("👤 [LOG 3] Usuario obtenido con éxito ID:", user?.id);
+
+        if (!user) {
+            alert("⚠️ Sesión no encontrada. Por favor inicie sesión nuevamente.");
+            if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.innerHTML = "GUARDAR EXPEDIENTE"; }
+            return;
+        }
+
+        // =====================================================================
+        // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID (LÍMITE 10 EXPEDIENTES FREE)
+        // =====================================================================
+        const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
+
+        if (!esPacienteExistente) {
+            const { data: perfProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('nivel_suscripcion')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            const nivelActual = perfProf?.nivel_suscripcion || 'free';
+
+            if (nivelActual === 'free') {
+                const { count: conteoPacientes } = await fisioNet
+                    .from('pacientes_maestros')
+                    .select('id', { count: 'exact', head: true })
+                    .or(`creado_por.eq.${user.id},id_usuario_auth.eq.${user.id}`);
+
+                if (conteoPacientes !== null && conteoPacientes >= 10) {
+                    alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\nHas alcanzado el límite de 10 expedientes del Plan Semillero (Gratuito).\n\nPara continuar registrando nuevos pacientes de forma ilimitada, actualiza a tu Plan Básico ($150 MXN) o Plan Pro ($250 MXN).");
+                    
+                    if (btnSubmit) {
+                        btnSubmit.disabled = false;
+                        btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
+                    }
+                    return; // Detiene el guardado limpiamente
+                }
+            }
+        }
+        // =====================================================================
 
         const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
         console.log("🏢 [LOG 4] ID de clínica activa desde LocalStorage:", clinicaId);
@@ -624,10 +658,9 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         delete datos.id_convenio;
         delete datos.checkConsentimiento;
         
-        // 🔄 MANEJO SEGURO DE EDAD COGNITIVA
         let esMenor = false;
         if (datos.fecha_nacimiento && datos.fecha_nacimiento.trim() !== "") {
-            const fechaNac = new Date(datos.fecha_nacimiento + "T00:00:00"); // Forzamos formato local
+            const fechaNac = new Date(datos.fecha_nacimiento + "T00:00:00");
             const hoy = new Date();
             let edad = hoy.getFullYear() - fechaNac.getFullYear();
             if (hoy.getMonth() < fechaNac.getMonth() || (hoy.getMonth() === fechaNac.getMonth() && hoy.getDate() < fechaNac.getDate())) edad--;
@@ -638,13 +671,12 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
 
         const folioSede = document.getElementById('inputFolioExpediente')?.value || null;
         const emailTutor = document.getElementById('correo-tutor')?.value?.toLowerCase().trim() || null;
-        const accesoRed = document.getElementById('checkConsentimiento').checked;
+        const accesoRed = aceptaPrivacidad; 
+        const fechaConsentimiento = new Date().toISOString(); // Timestamp legal exacto
 
-        // 🎯 AQUÍ ESTABA TU ERROR: Ya no usamos 'const', solo formateamos la variable que declaramos arriba
         emailAdulto = emailAdulto.toLowerCase();
 
         console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
-// 1. Obtenemos el UUID del tutor guardado en el input hidden
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
         const payload = {
@@ -655,173 +687,124 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             id_clinica: clinicaId, 
             id_clinica_origen: clinicaId,
             nombre_clinica: localStorage.getItem('nombre_clinica'),
-
             es_menor_edad: esMenor,
-            id_tutor: esMenor ? uuidTutorSeleccionado : null, // 👈 Si es menor lleva su UUID; si es adulto va NULL limpio.
-
+            id_tutor: esMenor ? uuidTutorSeleccionado : null,
             nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
             telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
             parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
             correo_tutor: esMenor ? emailTutor : null,
             correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
-            numero_expediente_sede: folioSede,
+            numero_expediente_sede: folioSede,     
+            // 🛡️ CAMPOS OFICIALES DE CONSENTIMIENTO Y DESLINDE LEGAL
             acceso_red_activo: accesoRed,
-          notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null,
+            consentimiento_firmado: accesoRed,
+            fecha_firma_consentimiento: fechaConsentimiento,
+            notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null,
         };
 
-        const payloadSanitizado = Object.fromEntries(
-            Object.entries(payload).map(([clave, valor]) => [
-                clave, 
-                (typeof valor === 'string' && valor.trim() === '') ? null : valor
-            ])
-        );
-
         let resultado;
-        const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
         console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
 
-   // --- DENTRO DE LA FUNCIÓN SUBMIT, REEMPLAZA EL BLOQUE DE PACIENTE EXISTENTE ---
-
-if (esPacienteExistente) {
-    const idRealPaciente = pacienteExistenteId || window.pacienteCargado.id;
-    
-    // 1. Campos críticos para alerta
-    const camposCriticos = ['alergias', 'antecedentes_patologicos', 'antecedentes_heredofamiliares', 'farmacologia_activa'];
-    const huboCambiosCriticos = camposCriticos.some(campo => {
-        return (window.pacienteCargado[campo] || "").trim() !== (datos[campo] || "").trim();
-    });
-
-    let deseaEditarFicha = true; 
-    if (huboCambiosCriticos) {
-        deseaEditarFicha = confirm("⚠️ ALERTA: Estás modificando datos críticos. ¿Continuar?");
-    }
-
-    if (deseaEditarFicha) {
-        const payloadFinal = { ...payload };
-        delete payloadFinal.checkConsentimiento;
-        
-        // A) Actualizamos Paciente Maestro
-        resultado = await fisioNet.from('pacientes_maestros').update(payloadFinal).eq('id', idRealPaciente).select();
-        if (resultado.error) throw resultado.error;
-
-       // ============================================================================
-// B) SINCRONIZACIÓN DEL FOLIO (Paciente Existente)
-// ============================================================================
-const { data: expExistente } = await fisioNet
-    .from('expedientes_clinicos')
-    .select('id')
-    .eq('id_paciente', idRealPaciente)
-    .eq('id_clinica', clinicaId)
-    .maybeSingle();
-
-// Extraemos limpiamente el consecutivo (ej. de PL-OK-2026-0001 toma solo el 1)
-const partesFolioActual = (folioSede || "").split('-');
-const consecutivoFinal = parseInt((partesFolioActual[partesFolioActual.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
-
-if (expExistente) {
-    // Si ya existe en esta sede, actualizamos
-    await fisioNet.from('expedientes_clinicos')
-        .update({ 
-            folio_personalizado: folioSede, 
-            numero_consecutivo: consecutivoFinal 
-        })
-        .eq('id', expExistente.id);
-} else {
-    // Si no existía para esta sede, lo creamos limpiamente con el consecutivo correcto
-    await fisioNet.from('expedientes_clinicos').insert([{
-        id_paciente: idRealPaciente,
-        id_clinica: clinicaId,
-        folio_personalizado: folioSede,
-        numero_consecutivo: consecutivoFinal,
-        estado_expediente: 'ACTIVO'
-    }]);
-}
-console.log("✅ Paciente y Expediente sincronizados.");
-
-   } else {
-        // 🔓 Reactivamos el botón para que puedan corregir si se arrepintieron
-        if (btnSubmit) {
-            btnSubmit.disabled = false; 
-            btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
-        }
-        return; 
-    }
-}
-        
-        else {
-            // 🆕 PACIENTE NUEVO ABSOLUTO
-            console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO. Ejecutando insert en pacientes_maestros...");
-            payload.fecha_registro = new Date().toISOString();
-            console.log("📦 PAYLOAD EXACTO A ENVIAR:", payload);
-            resultado = await fisioNet.from('pacientes_maestros').insert([payload]).select();
-            console.log("📡 [LOG 10B] Respuesta cruda recibida de pacientes_maestros:", resultado);
+        if (esPacienteExistente) {
+            const idRealPaciente = pacienteExistenteId || window.pacienteCargado.id;
             
-            if (resultado.error) {
-                console.error("❌ Error detectado en insert de pacientes_maestros:", resultado.error);
-                throw resultado.error;
+            const camposCriticos = ['alergias', 'antecedentes_patologicos', 'antecedentes_heredofamiliares', 'farmacologia_activa'];
+            const huboCambiosCriticos = camposCriticos.some(campo => {
+                return (window.pacienteCargado[campo] || "").trim() !== (datos[campo] || "").trim();
+            });
+
+            let deseaEditarFicha = true; 
+            if (huboCambiosCriticos) {
+                deseaEditarFicha = confirm("⚠️ ALERTA: Estás modificando datos críticos. ¿Continuar?");
             }
+
+            if (deseaEditarFicha) {
+                const payloadFinal = { ...payload };
+                delete payloadFinal.checkConsentimiento;
+                
+                resultado = await fisioNet.from('pacientes_maestros').update(payloadFinal).eq('id', idRealPaciente).select();
+                if (resultado.error) throw resultado.error;
+
+                const { data: expExistente } = await fisioNet
+                    .from('expedientes_clinicos')
+                    .select('id')
+                    .eq('id_paciente', idRealPaciente)
+                    .eq('id_clinica', clinicaId)
+                    .maybeSingle();
+
+                const partesFolioActual = (folioSede || "").split('-');
+                const consecutivoFinal = parseInt((partesFolioActual[partesFolioActual.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+
+                if (expExistente) {
+                    await fisioNet.from('expedientes_clinicos')
+                        .update({ 
+                            folio_personalizado: folioSede, 
+                            numero_consecutivo: consecutivoFinal 
+                        })
+                        .eq('id', expExistente.id);
+                } else {
+                    await fisioNet.from('expedientes_clinicos').insert([{
+                        id_paciente: idRealPaciente,
+                        id_clinica: clinicaId,
+                        folio_personalizado: folioSede,
+                        numero_consecutivo: consecutivoFinal,
+                        estado_expediente: 'ACTIVO'
+                    }]);
+                }
+                console.log("✅ Paciente y Expediente sincronizados.");
+
+            } else {
+                if (btnSubmit) {
+                    btnSubmit.disabled = false; 
+                    btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
+                }
+                return; 
+            }
+        } else {
+            // PACIENTE NUEVO ABSOLUTO
+            console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO...");
+            payload.fecha_registro = new Date().toISOString();
+            
+            resultado = await fisioNet.from('pacientes_maestros').insert([payload]).select();
+            
+            if (resultado.error) throw resultado.error;
 
             if (resultado.data && resultado.data.length > 0) {
                 const nuevoPacienteId = resultado.data[0].id;
-                console.log("🎉 [LOG 11B] Paciente maestro creado con ID asignado:", nuevoPacienteId);
 
-                console.log("📌 [LOG 12B] Insertando relación en vinculos_clinicos...");
-                const resVincNuevo = await fisioNet.from('vinculos_clinicos').insert([{
+                await fisioNet.from('vinculos_clinicos').insert([{
                     paciente_id: nuevoPacienteId,
                     profesional_id: user.id,
                     id_clinica: clinicaId,
                     rol_en_relacion: rolReal,
                     estado_vinculo: 'ACTIVO'
                 }]);
-                if (resVincNuevo.error) {
-                    console.error("❌ Error en vinculos_clinicos:", resVincNuevo.error);
-                    throw resVincNuevo.error;
-                }
 
-              // ✅ CÓDIGO CORREGIDO:
-console.log("📌 [LOG 13B] Vínculo creado. Procesando números de consecutivo para el folio...");
-const partesFolioNuevo = (folioSede || "").split('-');
-const consecutivoFinal = parseInt((partesFolioNuevo[partesFolioNuevo.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
-                console.log(`🔢 [LOG 14B] Folio en texto: ${folioSede} | Consecutivo parseado: ${consecutivoFinal}`);
+                const partesFolioNuevo = (folioSede || "").split('-');
+                const consecutivoFinal = parseInt((partesFolioNuevo[partesFolioNuevo.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
 
-                console.log("📌 [LOG 15B] Insertando registro final en expedientes_clinicos...");
-                const resExpNuevo = await fisioNet.from('expedientes_clinicos').insert([{
+                await fisioNet.from('expedientes_clinicos').insert([{
                     id_paciente: nuevoPacienteId,
                     id_clinica: clinicaId,
                     folio_personalizado: folioSede,
                     numero_consecutivo: consecutivoFinal,
                     estado_expediente: 'ACTIVO'
                 }]);
-                if (resExpNuevo.error) {
-                    console.error("❌ Error en expedientes_clinicos:", resExpNuevo.error);
-                    throw resExpNuevo.error;
-                }
-                console.log("📌 [LOG 16B] ¡Fila de expediente clínico creada con total éxito!");
-            } else {
-                console.warn("⚠️ [LOG 11B-Alerta] Supabase guardó el registro pero no retornó datos de la fila creada.");
             }
         }
 
-        console.log("🏁 [LOG 17] Llegamos al bloque de redirección final. Evaluando el ID de destino...");
-        let idFinalRedireccion = null;
-        if (resultado?.data && resultado.data[0]?.id) {
-            idFinalRedireccion = resultado.data[0].id;
-        } else if (pacienteExistenteId) {
-            idFinalRedireccion = pacienteExistenteId;
-        }
-        console.log("🎯 [LOG 18] ID Final de redirección calculado:", idFinalRedireccion);
+        let idFinalRedireccion = resultado?.data?.[0]?.id || pacienteExistenteId;
 
         alert("🎉 ¡Proceso completado con éxito y expediente asegurado en FisioCid!");
         
         if (idFinalRedireccion) {
             window.location.href = `historia-clinica.html?id=${idFinalRedireccion}`;
         } else {
-            console.warn("⚠️ Redirección de emergencia activada.");
             window.location.href = "historia-clinica.html";
         }
 
     } catch (err) {
-        console.error("💥 [CATCH ERROR] Se detectó una falla crítica en el proceso:", err);
+        console.error("💥 [CATCH ERROR] Falla en el proceso:", err);
         alert("⚠️ ATENCIÓN: " + (err.message || err.details || "Error inesperado de sincronización"));
         
         if (btnSubmit) {

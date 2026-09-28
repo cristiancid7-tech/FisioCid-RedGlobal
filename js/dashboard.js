@@ -1097,14 +1097,37 @@ document.querySelectorAll('.cerrar-modal').forEach(boton => {
     boton.addEventListener('click', () => { document.getElementById('modalCita').style.display = 'none'; });
 });
 
-document.getElementById('btnCerrarSesion')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (confirm("¿Deseas salir de FisioCid?")) {
-        await fisioNet.auth.signOut();
-        localStorage.clear();
-        window.location.href = 'login.html';
-    }
-});
+// 🚪 CONTROL DE CIERRE DE SESIÓN BLINDADO FISIOCID
+const btnCerrar = document.getElementById('btnCerrarSesion');
+
+if (btnCerrar) {
+    // 1. Clonamos el botón para LIMPIAR cualquier listener duplicado colgado en memoria
+    const nuevoBtn = btnCerrar.cloneNode(true);
+    btnCerrar.parentNode.replaceChild(nuevoBtn, btnCerrar);
+
+    // 2. Escuchador único de evento
+    nuevoBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation(); // Frena en seco cualquier otra función colgada al clic
+
+        const deseaSalir = confirm("¿Deseas salir de FisioCid?");
+
+        if (deseaSalir) {
+            console.log("👋 Cerrando sesión de FisioCid...");
+            try {
+                await fisioNet.auth.signOut();
+            } catch (err) {
+                console.error("Error al cerrar sesión en Supabase:", err);
+            }
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.replace("login.html"); // Reemplaza por 'login.html' si así se llama tu archivo
+        } else {
+            console.log("🛑 Cierre de sesión cancelado. Permanece en el sistema.");
+        }
+    });
+}
 
 document.getElementById('btnAbrirConfig')?.addEventListener('click', async () => {
     const modal = document.getElementById('modalConfigInicial');
@@ -2188,53 +2211,49 @@ function cerrarModalColega() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Obtener usuario auténtico en tiempo real desde Supabase Auth
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) { window.location.href = 'login.html'; return; }
 
+    // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO
+    const { data: perfilProf } = await fisioNet
+        .from('perfiles_profesionales')
+        .select('nombre_completo')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    const nombreReal = perfilProf?.nombre_completo || user.user_metadata?.full_name || "COLABORADOR ACTIVO";
+    
+    // Sobrescribimos localStorage con la verdad de la base de datos
+    localStorage.setItem('nombre_completo', nombreReal);
+    localStorage.setItem('usuarioId', user.id);
+
+    // Actualizamos la bienvenida en pantalla
+    const txtSaludo = document.getElementById('txtSaludo');
+    if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
+
     const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
-    // 1. Aplicar UI básica e Identidad Visual
+    // Aplicar UI básica e Identidad Visual de la clínica seleccionada
     await aplicarIdentidadVisual(); 
     await actualizarInterfazSede(); 
 
-    // 2. OBTENER EL ROL PRIMERO (Paso crítico para evitar que fallen las consultas posteriores)
     if (clinicaActiva) {
         await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
     }
 
-    // 3. Renderizar componentes de UI basados en el rol
     renderizarBotonesPorRol();
-
-    // 4. Cargar nombre de usuario
-    let nombreTrabajador = localStorage.getItem('nombre_completo');
-    if (!nombreTrabajador || nombreTrabajador === 'null') {
-        try {
-            const { data: perfilProf } = await fisioNet
-                .from('perfiles_profesionales')
-                .select('nombre_completo')
-                .eq('id', user.id)
-                .maybeSingle();
-
-            nombreTrabajador = perfilProf?.nombre_completo || user.user_metadata?.full_name || "COLABORADOR ACTIVO";
-            localStorage.setItem('nombre_completo', nombreTrabajador);
-        } catch (e) {
-            nombreTrabajador = "COLABORADOR ACTIVO";
-        }
-    }
-
-    const txtSaludo = document.getElementById('txtSaludo');
-    if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreTrabajador.toUpperCase()}`;
 
     const hoy = new Date();
     const inputFecha = document.getElementById('filtroFechaAgenda');
     if (inputFecha) inputFecha.value = hoy.toISOString().split('T')[0];
 
-    // 5. Cargar módulos secuencialmente
+    // Cargar los módulos secuenciales
     await cargarAgenda('semana');
     await cargarEstadisticas();
     await cargarMonitorBoxes(); 
-    await cargarSolicitudesRecibidas(); // Carga las solicitudes de cita y estudios sin parpadeos
-    await cargarSolicitudesRedPendientes(); // Carga las invitaciones de red
+    await cargarSolicitudesRecibidas();
+    await cargarSolicitudesRedPendientes();
     await inicializarFormularioConvenio(); 
 
     if (typeof renderizarTablaEquipo === 'function') await renderizarTablaEquipo();

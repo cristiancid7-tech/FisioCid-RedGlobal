@@ -81,7 +81,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // 👨‍⚕️ FLUJO 1: INICIO DE SESIÓN EXCLUSIVO PARA PROFESIONALES
 // ============================================================================
 async function procesarLoginDoctor(event) {
+   
     event.preventDefault();
+    
+    // 🧹 LIMPIEZA ABSOLUTA DE RESIDUOS PREVIOS
+    localStorage.clear();
+    sessionStorage.clear();
+
     const btn = document.getElementById('btnEntrarDoc');
     const email = document.getElementById('docEmail').value.trim();
     const pass = document.getElementById('docPass').value;
@@ -92,6 +98,9 @@ async function procesarLoginDoctor(event) {
     try {
         const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email, password: pass });
         if (authError) throw authError;
+
+        // Sobrescribimos el ID autenticado real
+        localStorage.setItem('usuarioId', user.id);
 
         console.log("🏢 [CLÍNICO] Buscando sedes para profesional:", user.id);
         const [resDueno, resColab] = await Promise.all([
