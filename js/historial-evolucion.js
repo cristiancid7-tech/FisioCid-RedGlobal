@@ -171,12 +171,17 @@ function cambiarTabEvolucion(tipo) {
 
 function renderizarNotas(notas) {
     const feed = document.getElementById('feedEvoluciones');
+    if (!feed) return;
+    
     feed.innerHTML = '';
     
     if (notas.length === 0) {
         feed.innerHTML = '<p style="text-align:center; padding:2rem; color:#64748b;">No hay notas registradas en este periodo.</p>';
         return;
     }
+
+    // Nombre del paciente en pantalla para asegurar que se incluya en la nota si no viene en el objeto
+    const nombreEnPantalla = document.getElementById('nombre')?.innerText?.trim() || "";
 
     notas.forEach((n, index) => {
         const evaColor = n.eva >= 7 ? '#ef4444' : (n.eva >= 4 ? '#f59e0b' : '#10b981');
@@ -225,24 +230,28 @@ function renderizarNotas(notas) {
         `;
         feed.appendChild(tarjeta);
 
-        // 🎯 ASIGNACIÓN LIMPIA POR JAVASCRIPT: Pasamos la referencia 'n' pura en memoria sin convertirla a texto
+        // 🎯 ASIGNACIÓN DIRECTA A pdf-generator.js
         document.getElementById(`btnPdf-${index}`).onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (typeof generarPDF === 'function') {
-                generarPDF(n);
+            if (typeof window.generarPDF === 'function') {
+                // Aseguramos que el nombre del paciente viaje si no venía en la nota
+                if (!n.nombre_paciente && nombreEnPantalla) {
+                    n.nombre_paciente = nombreEnPantalla;
+                }
+                window.generarPDF(n);
             } else {
-                alert("Módulo de PDF no encontrado.");
+                alert("⚠️ No se encontró el módulo pdf-generator.js");
             }
         };
     });
 }
 
 window.descargarIndividual = (n) => { 
-    if(typeof generarPDF === 'function') {
-        generarPDF(n);
+    if (typeof window.generarPDF === 'function') {
+        window.generarPDF(n);
     } else {
-        alert("Módulo de PDF no encontrado.");
+        alert("⚠️ No se encontró el módulo pdf-generator.js");
     }
 };
 
