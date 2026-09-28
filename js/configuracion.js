@@ -20,30 +20,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         const perfil = perfilRes.data;
         const clinica = clinicaRes.data;
 
-       if (perfil) {
+        // =========================================================================
+        // 1. CARGA Y LLENADO DEL PERFIL PROFESIONAL
+        // =========================================================================
+        if (perfil) {
             const inputNombre = document.getElementById('nombreProfesional');
             const inputCedula = document.getElementById('cedulaProf');
             const inputEspecialidad = document.getElementById('especialidad');
 
-            // Asignamos valores iniciales
             inputNombre.value = perfil.nombre_completo || '';
             inputCedula.value = perfil.cedula_profesional || '';
             inputEspecialidad.value = perfil.especialidad || '';
             document.getElementById('institucionEgreso').value = perfil.institucion_egreso || '';
 
-            // 🛡️ CANDADO LEGAL: Bloqueo de Identidad Profesional para evitar alteraciones
+            // 🛡️ CANDADO LEGAL: Bloqueo de Identidad Profesional
             if (perfil.cedula_profesional && perfil.cedula_profesional.trim() !== "") {
-              //  inputNombre.disabled = true;
                 inputCedula.disabled = true;
                 inputEspecialidad.disabled = true;
 
-                // Inyectamos el aviso monetizado y legal en la UI
                 if (typeof mostrarAvisoCandadoLegal === "function") {
                     mostrarAvisoCandadoLegal();
                 }
             }
 
-            // Cargar postgrados o cédulas adicionales si existen
+            // Cargar cédulas adicionales
             if (perfil.cedulas_adicionales && Array.isArray(perfil.cedulas_adicionales)) {
                 const contenedor = document.getElementById('listaEspecialidades');
                 contenedor.innerHTML = ''; 
@@ -53,8 +53,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             document.getElementById('checkDeslinde').checked = perfil.deslinde_aceptado || false;
+
+            // 🖨️ CARGA DE OPCIONES DE PDF DEL PERFIL
+            if (document.getElementById('formatoImpresion')) {
+                document.getElementById('formatoImpresion').value = perfil.formato_impresion || 'CARTA';
+            }
+            if (document.getElementById('firmaUrl')) {
+                document.getElementById('firmaUrl').value = perfil.firma_digital_url || '';
+            }
         }
-       if (clinica) {
+
+        // =========================================================================
+        // 2. CARGA Y LLENADO DE DATOS DE LA CLÍNICA Y PDF
+        // =========================================================================
+        if (clinica) {
             document.getElementById('nombreClinica').value = clinica.nombre_clinica || '';
             document.getElementById('telefonoContacto').value = clinica.telefono_contacto || '';
             document.getElementById('direccionConsultorio').value = clinica.direccion || '';
@@ -68,29 +80,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             inputSede.value = clinica.folio_sede || 'MIA';
             inputSeparador.value = clinica.folio_separador || '-';
 
-          
-          // 🛡️ CANDADO LEGAL DE FOLIO: Solo se bloquea si el usuario ya confirmó formalmente su configuración
-if (clinica.folio_confirmado === true) {
-    inputPrefijo.disabled = true;
-    inputSede.disabled = true;
-    inputSeparador.disabled = true;
+            // 🛡️ CANDADO LEGAL DE FOLIO
+            if (clinica.folio_confirmado === true) {
+                inputPrefijo.disabled = true;
+                inputSede.disabled = true;
+                inputSeparador.disabled = true;
 
-    // Estilo de solo lectura / bloqueado
-    inputPrefijo.style.backgroundColor = "#e2e8f0";
-    inputSede.style.backgroundColor = "#e2e8f0";
-    inputSeparador.style.backgroundColor = "#e2e8f0";
-    inputPrefijo.title = "Formato de folio bloqueado para preservar la trazabilidad legal del expediente.";
-} else {
-    // Si aún no lo ha confirmado, aseguramos que los inputs estén habilitados para edición
-    inputPrefijo.disabled = false;
-    inputSede.disabled = false;
-    inputSeparador.disabled = false;
-    inputPrefijo.style.backgroundColor = "#ffffff";
-    inputSede.style.backgroundColor = "#ffffff";
-    inputSeparador.style.backgroundColor = "#ffffff";
-}
+                inputPrefijo.style.backgroundColor = "#e2e8f0";
+                inputSede.style.backgroundColor = "#e2e8f0";
+                inputSeparador.style.backgroundColor = "#e2e8f0";
+                inputPrefijo.title = "Formato de folio bloqueado para preservar la trazabilidad legal del expediente.";
+            } else {
+                inputPrefijo.disabled = false;
+                inputSede.disabled = false;
+                inputSeparador.disabled = false;
+                inputPrefijo.style.backgroundColor = "#ffffff";
+                inputSede.style.backgroundColor = "#ffffff";
+                inputSeparador.style.backgroundColor = "#ffffff";
+            }
 
-    const inputDom = document.getElementById('dom-empresa');
+            const inputDom = document.getElementById('dom-empresa');
             if (inputDom) {
                 inputDom.value = clinica.dominio_corporativo || '';
                 if (clinica.dominio_corporativo && clinica.dominio_corporativo.trim() !== "") {
@@ -112,6 +121,16 @@ if (clinica.folio_confirmado === true) {
                 document.getElementById('logoUrl').value = clinica.logo_url;
                 mostrarPreview(clinica.logo_url);
             }
+
+            // 🖨️ CARGA DE CONFIGURACIÓN JSONB DEL PDF (SI EXISTE)
+            if (clinica.config_pdf) {
+                const conf = clinica.config_pdf;
+                if (document.getElementById('modoMembretado')) document.getElementById('modoMembretado').value = conf.modo_membretado || 'DIGITAL';
+                if (document.getElementById('checkMostrarVitales')) document.getElementById('checkMostrarVitales').checked = conf.mostrar_vitales !== false;
+                if (document.getElementById('checkMostrarCIE10')) document.getElementById('checkMostrarCIE10').checked = conf.mostrar_cie10 !== false;
+                if (document.getElementById('checkMostrarQR')) document.getElementById('checkMostrarQR').checked = conf.mostrar_qr !== false;
+                if (document.getElementById('leyendaPie')) document.getElementById('leyendaPie').value = conf.leyenda_pie || '';
+            }
         }
 
     } catch (error) {
@@ -119,6 +138,9 @@ if (clinica.folio_confirmado === true) {
     }
 });
 
+// =========================================================================
+// 3. FUNCIONES AUXILIARES Y PREVISUALIZACIONES
+// =========================================================================
 function agregarCampoEspecialidad(numero = "", nombre = "") {
     const contenedor = document.getElementById('listaEspecialidades');
     const div = document.createElement('div');
@@ -139,10 +161,25 @@ function verificarEnSep() {
     window.open(`https://www.buholegal.com/consultasep/?cedula=${num}`, '_blank');
 }
 
+function mostrarPreview(url) {
+    const img = document.getElementById('previewLogo');
+    if (img && url) {
+        img.src = url;
+        img.classList.remove('d-none');
+    }
+}
+
+// Previsualización dinámica de URL de logo
+document.getElementById('logoUrl')?.addEventListener('input', (e) => {
+    mostrarPreview(e.target.value.trim());
+});
+
+// =========================================================================
+// 4. GUARDADO DE CONFIGURACIÓN Y PDF EN SUPABASE
+// =========================================================================
 document.getElementById('formConfiguracion').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // --- RECOLECCIÓN DE VARIABLES (No olvides estas líneas) ---
     const vPrefijo = document.getElementById('conf_prefijo').value.trim().toUpperCase();
     const vSede = document.getElementById('conf_sede').value.trim().toUpperCase();
     const vSep = document.getElementById('conf_separador').value;
@@ -157,16 +194,21 @@ document.getElementById('formConfiguracion').addEventListener('submit', async (e
     const vEntidad = document.getElementById('entidadfederativa').value;
     const vDominio = document.getElementById('dom-empresa').value.trim().toLowerCase();
 
+    // 🖨️ CAPTURA DE VARIABLES DE PDF
+    const vFormatoImpresion = document.getElementById('formatoImpresion')?.value || 'CARTA';
+    const vFirmaUrl = document.getElementById('firmaUrl')?.value.trim() || '';
+    const vModoMembretado = document.getElementById('modoMembretado')?.value || 'DIGITAL';
+    const vMostrarVitales = document.getElementById('checkMostrarVitales')?.checked ?? true;
+    const vMostrarCIE10 = document.getElementById('checkMostrarCIE10')?.checked ?? true;
+    const vMostrarQR = document.getElementById('checkMostrarQR')?.checked ?? true;
+    const vLeyendaPie = document.getElementById('leyendaPie')?.value.trim().toUpperCase() || '';
 
     if (!checkAceptado) return alert("Debes aceptar el deslinde.");
-// Expresión regular que exige nombre de dominio + punto + extensión (ej. fisiocid.com, mi-clinica.net, etc.)
-const regexDominio = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/;
 
-if (vDominio) {
-    if (!regexDominio.test(vDominio)) {
+    const regexDominio = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/;
+    if (vDominio && !regexDominio.test(vDominio)) {
         return alert("❌ El dominio no es válido. Debe tener una extensión válida como '.com', '.net', '.mx', etc. (Ejemplo: fisiocid.com)");
     }
-}
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> GUARDANDO...';
@@ -174,7 +216,7 @@ if (vDominio) {
     const { data: { user } } = await fisioNet.auth.getUser();
 
     try {
-        // 🚀 A. ACTUALIZAR PERFIL PROFESIONAL
+        // 🚀 A. ACTUALIZAR PERFIL PROFESIONAL (DATOS + PDF)
         const especialidadesExtra = [];
         document.querySelectorAll('#listaEspecialidades > div').forEach(div => {
             const num = div.querySelector('.input-ced-ext').value.trim();
@@ -191,11 +233,22 @@ if (vDominio) {
                 especialidad: vEspecialidad,
                 cedulas_adicionales: especialidadesExtra,
                 deslinde_aceptado: checkAceptado,
-                fecha_deslinde: new Date().toISOString()
+                fecha_deslinde: new Date().toISOString(),
+                formato_impresion: vFormatoImpresion,
+                firma_digital_url: vFirmaUrl
             })
             .eq('id', user.id);
 
         if (errPerfil) throw new Error("Error en Perfil: " + errPerfil.message);
+
+        // Objeto de configuración avanzada de PDF para la clínica
+        const configPdfObjeto = {
+            modo_membretado: vModoMembretado,
+            mostrar_vitales: vMostrarVitales,
+            mostrar_cie10: vMostrarCIE10,
+            mostrar_qr: vMostrarQR,
+            leyenda_pie: vLeyendaPie
+        };
 
         // 🚀 B. UPSERT CLÍNICA
         const { data: nuevaClinica, error: errClinica } = await fisioNet
@@ -214,32 +267,37 @@ if (vDominio) {
                 folio_confirmado: true,
                 folio_separador: vSep,
                 estado: true,
-                entidad_federativa: vEntidad
+                entidad_federativa: vEntidad,
+                config_pdf: configPdfObjeto
             }, { onConflict: 'id_dueno' })
-                .select()
-                .single();
+            .select()
+            .single();
 
         if (errClinica) throw new Error("Error en Clínica: " + errClinica.message);
 
-    // 🚀 C. SINCRONIZAR LOCALSTORAGE (Actualización en tiempo real)
+        // 🚀 C. SINCRONIZAR LOCALSTORAGE PARA ACCESO RÁPIDO EN IMPRESIÓN
         if (nuevaClinica) { 
-            // 1. IDs de referencia
-            localStorage.setItem('id_clinica_activa', nuevaClinica.id); // La que busca tu nuevo Dashboard
-            localStorage.setItem('clinica_activa_id', nuevaClinica.id); // Compatibilidad
+            localStorage.setItem('id_clinica_activa', nuevaClinica.id);
+            localStorage.setItem('clinica_activa_id', nuevaClinica.id);
             localStorage.setItem('fisiocid_id_clinica', nuevaClinica.id);
             
-            // 2. Identidad Visual (La clave del color)
             localStorage.setItem('nombre_clinica', nuevaClinica.nombre_clinica);
-            localStorage.setItem('clinica_color', nuevaClinica.color_institucional); // Para el Dashboard nuevo
-            localStorage.setItem('fisiocid_color', nuevaClinica.color_institucional); // Para scripts viejos
+            localStorage.setItem('clinica_color', nuevaClinica.color_institucional);
+            localStorage.setItem('fisiocid_color', nuevaClinica.color_institucional);
             localStorage.setItem('clinica_logo', nuevaClinica.logo_url);
             localStorage.setItem('dominio_corporativo', nuevaClinica.dominio_corporativo || '');
-            // 3. Formato de Folio
             localStorage.setItem('clinica_entidad_federativa', nuevaClinica.entidad_federativa);
             localStorage.setItem('formato_folio', `${vPrefijo}${vSep}${vSede}`);
+
+            // 🖨️ LOCALSTORAGE PARA EL GENERADOR DE PDF (window.generarPDF)
+            localStorage.setItem('pdf_formato_papel', vFormatoImpresion);
+            localStorage.setItem('pdf_firma_url', vFirmaUrl);
+            localStorage.setItem('pdf_modo_membretado', vModoMembretado);
+            localStorage.setItem('pdf_mostrar_vitales', vMostrarVitales);
+            localStorage.setItem('pdf_mostrar_cie10', vMostrarCIE10);
+            localStorage.setItem('pdf_mostrar_qr', vMostrarQR);
+            localStorage.setItem('pdf_leyenda_pie', vLeyendaPie);
             
-            // 🎯 APLICAR CAMBIO VISUAL INMEDIATO
-            // Esto cambia el color en la pantalla actual de configuración
             document.documentElement.style.setProperty('--primary', nuevaClinica.color_institucional);
             document.documentElement.style.setProperty('--color-institucional', nuevaClinica.color_institucional);
         }
@@ -256,57 +314,34 @@ if (vDominio) {
     }
 });
 
-function aplicarEfectoCamaleon() {
-    const color = localStorage.getItem('fisiocid_color');
-    const tipoUnidad = localStorage.getItem('fisiocid_tipo_unidad');
-
-    if (color) {
-        // Pintamos elementos clave (botones, headers, bordes)
-        document.querySelectorAll('.btn-principal, .header-clinica, .sidebar-active').forEach(el => {
-            el.style.backgroundColor = color;
-        });
-        // Seteamos una variable CSS para uso general
-        document.documentElement.style.setProperty('--color-institucional', color);
-    }
-
-    // Lógica para mostrar/ocultar Boxes según el tipo de unidad
-    if (tipoUnidad === 'CONSULTORIO') {
-        // Si es consultorio, ocultamos la complejidad de los boxes/camas
-        const areaBoxes = document.getElementById('area-gestion-recursos');
-        if (areaBoxes) areaBoxes.style.display = 'none';
-    }
-}
+// =========================================================================
+// 5. EFECTOS VISUALES Y VISTA PREVIA DE FOLIO Y COLOR
+// =========================================================================
 const actualizarVistaPrevia = () => {
-    // Jalamos los valores y les aplicamos mayúsculas a fuerza con JS
     const prefijo = (document.getElementById('conf_prefijo').value || 'FC').toUpperCase();
     const sede = (document.getElementById('conf_sede').value || 'MIA').toUpperCase();
     const separador = document.getElementById('conf_separador').value || '-';
     
     const anio = new Date().getFullYear();
     
-    // Actualizamos el cuadro de texto de la vista previa
     const previewElement = document.getElementById('previewFolio');
     if (previewElement) {
         previewElement.innerText = `${prefijo}${separador}${sede}${separador}${anio}${separador}0001`;
     }
 };
 
-// Escuchar cambios en los inputs
 ['conf_prefijo', 'conf_sede', 'conf_separador'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', actualizarVistaPrevia);
 });
 
 function aplicarColorEnVivo(nuevoColor) {
-    // 1. Cambiamos la variable principal del sistema
     document.documentElement.style.setProperty('--primary', nuevoColor);
     
-    // 2. Pintamos el encabezado de los folios (el que acabamos de hacer)
     const headerLegal = document.getElementById('headerFolio');
     if (headerLegal) {
         headerLegal.style.backgroundColor = nuevoColor;
     }
     
-    // 3. Opcional: Pintar el texto de la vista previa
     const previewTxt = document.getElementById('previewFolio');
     if (previewTxt) {
         previewTxt.style.color = nuevoColor;
@@ -318,8 +353,6 @@ const inputDominio = document.getElementById('dom-empresa');
 if (inputDominio) {
     inputDominio.addEventListener('blur', () => {
         let valor = inputDominio.value.trim().toLowerCase();
-        
-        // Si escribió algo y no incluye un punto, le agregamos .com automáticamente
         if (valor !== '' && !valor.includes('.')) {
             inputDominio.value = valor + '.com';
         }

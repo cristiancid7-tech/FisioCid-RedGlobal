@@ -242,7 +242,7 @@ window.calcularIMC = () => {
 
 
 // ============================================================================
-// 3. GUARDAR HISTORIA Y GENERAR PDF
+// 3. GUARDAR HISTORIA Y GENERAR PDF (OFICIAL NOM-004)
 // ============================================================================
 
 const formHistoria = document.getElementById('formHistoria');
@@ -295,14 +295,14 @@ if (formHistoria) {
 
             // 3. ACTUALIZAR PACIENTE MAESTRO
             await fisioNet.from('pacientes_maestros').update({
-                alergias: document.getElementById('alergias').value,
-                antecedentes_quirurgicos: document.getElementById('quirurgicos').value,
-                antecedentes_patologicos: document.getElementById('cronicos').value,
-                farmacologia_activa: document.getElementById('medicamentos').value,
-                ocupacion: document.getElementById('ocupacion').value
+                alergias: document.getElementById('alergias')?.value || '',
+                antecedentes_quirurgicos: document.getElementById('quirurgicos')?.value || '',
+                antecedentes_patologicos: document.getElementById('cronicos')?.value || '',
+                farmacologia_activa: document.getElementById('medicamentos')?.value || '',
+                ocupacion: document.getElementById('ocupacion')?.value || ''
             }).eq('id', idPaciente);
 
-            // 4. CREAR NUEVA NOTA
+            // 4. CREAR NUEVA NOTA CLÍNICA
             const nuevaNota = {
                 id_paciente: idPaciente,
                 id_profesional: user.id,
@@ -337,26 +337,165 @@ if (formHistoria) {
             const { error: errHistorial } = await fisioNet.from('historial_clinico').insert([nuevaNota]);
             if (errHistorial) throw errHistorial;
 
-            // 5. IMPRESIÓN OPCIONAL
-            const deseaImprimir = confirm("✅ ¡Consulta guardada! ¿Deseas generar la receta/reporte en PDF?");
-            if (deseaImprimir && typeof window.generarPDF === 'function') {
-                await window.generarPDF(nuevaNota); 
-            }
-
-            // 6. 🔒 LIMPIAR PERMISO OTP Y REDIRIGIR AL FINAL DE TODO
+            // 5. 🔒 LIMPIAR PERMISO OTP DE SESIÓN
             const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
             if (idPacienteLimpio) {
                 sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
             }
 
+            // 6. IMPRESIÓN / GENERACIÓN DE PDF Y REDIRECCIÓN CONTROLADA
+            const deseaImprimir = confirm("✅ ¡Consulta guardada con éxito!\n\n¿Deseas generar e imprimir la Nota Clínica / Receta en PDF?");
+            
+            if (deseaImprimir) {
+                if (typeof window.generarPDF === 'function') {
+                    await window.generarPDF(nuevaNota);
+                } else {
+                    alert("⚠️ La función de generación de PDF no está cargada. Redirigiendo...");
+                }
+            }
+
+            // Redirigir a la lista de pacientes
             window.location.href = 'lista-pacientes.html';
 
         } catch (error) {
-            alert("Error al guardar: " + error.message);
+            console.error("Error al guardar la nota:", error);
+            alert("Error al guardar la consulta: " + error.message);
             if (btn) { btn.innerText = "REINTENTAR"; btn.disabled = false; }
         }
     });
 }
+
+// ============================================================================
+// 🖨️ MOTOR DE GENERACIÓN E IMPRESIÓN DE NOTA CLÍNICA EN PDF
+// ============================================================================
+window.generarPDF = async (nota) => {
+    return new Promise((resolve) => {
+        // Datos del médico y paciente visibles en pantalla
+        const docNombre = document.getElementById('doc-nombre')?.innerText?.trim() || "PROFESIONAL ACTIVO";
+        const docEspecialidad = document.getElementById('doc-especialidad')?.innerText?.trim() || "GENERAL";
+        const docCedula = document.getElementById('doc-cedula')?.innerText?.trim() || "S/N";
+        
+        const pacienteNombre = document.getElementById('nombre')?.innerText?.trim() || "PACIENTE";
+        const datosFiliacion = document.getElementById('datosFiliacionLinea')?.innerText?.trim() || "";
+        const numExpediente = document.getElementById('num-expediente')?.innerText?.trim() || "EXP: S/N";
+
+        const fechaHoy = new Date(nota.fecha_nota || Date.now()).toLocaleDateString('es-MX', {
+            year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        // Crear una ventana limpia de impresión
+        const ventanaImpresion = window.open('', '_blank', 'width=900,height=800');
+
+        const contenidoHTML = `
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Nota Clínica - ${pacienteNombre}</title>
+                <style>
+                    body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; }
+                    .header { border-bottom: 2px solid #10b981; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+                    .header-title { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin: 0; }
+                    .header-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
+                    .doc-info { text-align: right; font-size: 11px; color: #475569; }
+                    
+                    .box-paciente { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; }
+                    .box-paciente strong { color: #0f172a; }
+                    
+                    .grid-vitales { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; background: #f0fdf4; padding: 10px; border-radius: 8px; font-size: 11px; text-align: center; }
+                    .vital-item strong { display: block; color: #10b981; font-size: 13px; }
+                    
+                    .seccion { margin-bottom: 16px; }
+                    .seccion-titulo { font-size: 12px; font-weight: bold; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin-bottom: 6px; text-transform: uppercase; }
+                    .seccion-contenido { font-size: 12px; color: #334155; white-space: pre-wrap; }
+                    
+                    .footer-firma { margin-top: 50px; text-align: center; font-size: 11px; color: #64748b; }
+                    .linea-firma { border-top: 1px solid #94a3b8; width: 220px; margin: 0 auto 8px auto; }
+                    
+                    @media print {
+                        body { padding: 0; margin: 15mm; }
+                        @page { size: letter; margin: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div>
+                        <h1 class="header-title">FisioCid — Nota Médica de Evolución</h1>
+                        <div class="header-sub">FECHA Y HORA: ${fechaHoy} | ${numExpediente}</div>
+                    </div>
+                    <div class="doc-info">
+                        <strong>${docNombre}</strong><br>
+                        ${docEspecialidad}<br>
+                        CÉDULA PROF: ${docCedula}
+                    </div>
+                </div>
+
+                <div class="box-paciente">
+                    <strong>PACIENTE:</strong> ${pacienteNombre.toUpperCase()}<br>
+                    <strong>FILIACIÓN:</strong> ${datosFiliacion}
+                </div>
+
+                <!-- SIGNOS VITALES Y SOMATOMETRÍA -->
+                <div class="grid-vitales">
+                    <div class="vital-item"><strong>${nota.ta_sistolica || '--'}/${nota.ta_diastolica || '--'} mmHg</strong> T. Arterial</div>
+                    <div class="vital-item"><strong>${nota.frecuencia_cardiaca || '--'} bpm</strong> F. Cardíaca</div>
+                    <div class="vital-item"><strong>${nota.temperatura || '--'} °C</strong> Temp.</div>
+                    <div class="vital-item"><strong>${nota.spo2 || '--'} %</strong> SpO2</div>
+                    <div class="vital-item"><strong>${nota.peso || '--'} kg</strong> Peso</div>
+                    <div class="vital-item"><strong>${nota.talla || '--'} m</strong> Talla</div>
+                    <div class="vital-item"><strong>${nota.imc || '--'}</strong> IMC</div>
+                    <div class="vital-item"><strong>${nota.eva || 0}/10</strong> Dolor (EVA)</div>
+                </div>
+
+                <div class="seccion">
+                    <div class="seccion-titulo">1. Motivo de Consulta y Subjetivo</div>
+                    <div class="seccion-contenido">${nota.motivo_consulta || 'Sin datos registrados'}</div>
+                </div>
+
+                <div class="seccion">
+                    <div class="seccion-titulo">2. Exploración Física / Hallazgos</div>
+                    <div class="seccion-contenido">${nota.exploracion_fisica || 'Sin hallazgos registrados'}</div>
+                </div>
+
+                <div class="seccion">
+                    <div class="seccion-titulo">3. Diagnóstico Principal (CIE-10)</div>
+                    <div class="seccion-contenido"><strong>${nota.codigo_cie10 || 'N/A'}</strong> - ${nota.diagnostico_principal || 'A DETERMINAR'}</div>
+                </div>
+
+                <div class="seccion">
+                    <div class="seccion-titulo">4. Plan de Tratamiento y Recomendaciones</div>
+                    <div class="seccion-contenido">${nota.plan_tratamiento || 'Sin plan especificado'}</div>
+                </div>
+
+                <div class="seccion">
+                    <div class="seccion-titulo">5. Pronóstico</div>
+                    <div class="seccion-contenido">${nota.pronostico || 'Reservado a evolución'}</div>
+                </div>
+
+                <div class="footer-firma">
+                    <div class="linea-firma"></div>
+                    <strong>${docNombre}</strong><br>
+                    Firma del Profesional / Cédula ${docCedula}
+                </div>
+
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(function() {
+                            window.close();
+                        }, 500);
+                    };
+                </script>
+            </body>
+            </html>
+        `;
+
+        ventanaImpresion.document.write(contenidoHTML);
+        ventanaImpresion.document.close();
+        resolve();
+    });
+};
 
 // ============================================================================
 // 4. BUSCADOR CIE-10 (CON APOYO INTELIGENTE)

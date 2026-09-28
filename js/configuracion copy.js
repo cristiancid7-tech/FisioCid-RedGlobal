@@ -54,25 +54,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             document.getElementById('checkDeslinde').checked = perfil.deslinde_aceptado || false;
         }
-        if (clinica) {
+       if (clinica) {
             document.getElementById('nombreClinica').value = clinica.nombre_clinica || '';
             document.getElementById('telefonoContacto').value = clinica.telefono_contacto || '';
             document.getElementById('direccionConsultorio').value = clinica.direccion || '';
             document.getElementById('entidadfederativa').value = clinica.entidad_federativa || "";
-            //document.getElementById('dom-empresa').value = clinica.dominio_corporativo || '';
-            document.getElementById('conf_prefijo').value = clinica.folio_prefijo || 'FC';
-            document.getElementById('conf_sede').value = clinica.folio_sede || 'MIA';
-            document.getElementById('conf_separador').value = clinica.folio_separador || '-';
 
-    // 🛡️ CANDADO TOTAL DEL DOMINIO EMPRESA
-            const inputDom = document.getElementById('dom-empresa');
-            inputDom.value = clinica.dominio_corporativo || '';
+            const inputPrefijo = document.getElementById('conf_prefijo');
+            const inputSede = document.getElementById('conf_sede');
+            const inputSeparador = document.getElementById('conf_separador');
 
-    if (clinica.dominio_corporativo && clinica.dominio_corporativo.trim() !== "") {
-        inputDom.disabled = true;
-        // Opcional: Le cambiamos el color de fondo para que se note bloqueado de forma elegante
-        inputDom.style.backgroundColor = "#e2e8f0"; 
-    }
+            inputPrefijo.value = clinica.folio_prefijo || 'FC';
+            inputSede.value = clinica.folio_sede || 'MIA';
+            inputSeparador.value = clinica.folio_separador || '-';
+
+          
+          // 🛡️ CANDADO LEGAL DE FOLIO: Solo se bloquea si el usuario ya confirmó formalmente su configuración
+if (clinica.folio_confirmado === true) {
+    inputPrefijo.disabled = true;
+    inputSede.disabled = true;
+    inputSeparador.disabled = true;
+
+    // Estilo de solo lectura / bloqueado
+    inputPrefijo.style.backgroundColor = "#e2e8f0";
+    inputSede.style.backgroundColor = "#e2e8f0";
+    inputSeparador.style.backgroundColor = "#e2e8f0";
+    inputPrefijo.title = "Formato de folio bloqueado para preservar la trazabilidad legal del expediente.";
+} else {
+    // Si aún no lo ha confirmado, aseguramos que los inputs estén habilitados para edición
+    inputPrefijo.disabled = false;
+    inputSede.disabled = false;
+    inputSeparador.disabled = false;
+    inputPrefijo.style.backgroundColor = "#ffffff";
+    inputSede.style.backgroundColor = "#ffffff";
+    inputSeparador.style.backgroundColor = "#ffffff";
+}
+
+    const inputDom = document.getElementById('dom-empresa');
+            if (inputDom) {
+                inputDom.value = clinica.dominio_corporativo || '';
+                if (clinica.dominio_corporativo && clinica.dominio_corporativo.trim() !== "") {
+                    inputDom.disabled = true;
+                    inputDom.style.backgroundColor = "#e2e8f0"; 
+                }
+            }
+
             if (typeof actualizarVistaPrevia === "function") {
                 actualizarVistaPrevia();
             }
@@ -131,12 +157,23 @@ document.getElementById('formConfiguracion').addEventListener('submit', async (e
     const vEntidad = document.getElementById('entidadfederativa').value;
     const vDominio = document.getElementById('dom-empresa').value.trim().toLowerCase();
 
+    const vFormatoImpresion = document.getElementById('formatoImpresion')?.value || 'CARTA';
+    const vFirmaUrl = document.getElementById('firmaUrl')?.value.trim() || '';
+    const vModoMembretado = document.getElementById('modoMembretado')?.value || 'DIGITAL';
+    const vMostrarVitales = document.getElementById('checkMostrarVitales')?.checked ?? true;
+    const vMostrarCIE10 = document.getElementById('checkMostrarCIE10')?.checked ?? true;
+    const vMostrarQR = document.getElementById('checkMostrarQR')?.checked ?? true;
+    const vLeyendaPie = document.getElementById('leyendaPie')?.value.trim().toUpperCase() || '';
 
     if (!checkAceptado) return alert("Debes aceptar el deslinde.");
-const regexDominio = /^[a-z0-9.-]+$/;
-    if (vDominio && !regexDominio.test(vDominio)) {
-        return alert("❌ El dominio no es válido. No uses espacios, mayúsculas, ni caracteres como @ o $.");
+// Expresión regular que exige nombre de dominio + punto + extensión (ej. fisiocid.com, mi-clinica.net, etc.)
+const regexDominio = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/;
+
+if (vDominio) {
+    if (!regexDominio.test(vDominio)) {
+        return alert("❌ El dominio no es válido. Debe tener una extensión válida como '.com', '.net', '.mx', etc. (Ejemplo: fisiocid.com)");
     }
+}
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> GUARDANDO...';
@@ -181,6 +218,7 @@ const regexDominio = /^[a-z0-9.-]+$/;
                 especialidad_principal: vEspecialidad,
                 folio_prefijo: vPrefijo,
                 folio_sede: vSede,
+                folio_confirmado: true,
                 folio_separador: vSep,
                 estado: true,
                 entidad_federativa: vEntidad
@@ -280,4 +318,17 @@ function aplicarColorEnVivo(nuevoColor) {
     if (previewTxt) {
         previewTxt.style.color = nuevoColor;
     }
+}
+
+// Auto-completar .com si el usuario olvida poner la extensión
+const inputDominio = document.getElementById('dom-empresa');
+if (inputDominio) {
+    inputDominio.addEventListener('blur', () => {
+        let valor = inputDominio.value.trim().toLowerCase();
+        
+        // Si escribió algo y no incluye un punto, le agregamos .com automáticamente
+        if (valor !== '' && !valor.includes('.')) {
+            inputDominio.value = valor + '.com';
+        }
+    });
 }

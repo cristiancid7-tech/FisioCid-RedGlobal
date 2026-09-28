@@ -327,6 +327,75 @@
                
             </div>
 
+
+            <!-- 🟢 4. NUEVA SECCIÓN: PERSONALIZACIÓN DE IMPRESIÓN Y RECETA EN PDF -->
+            <div class="card-seccion" style="border-left: 5px solid #3b82f6;">
+                <h5 class="mb-3 text-secondary" style="font-size: 0.9rem;">
+                    <i class="bi bi-printer-fill text-primary"></i> FORMATO DE IMPRESIÓN Y RECETA MÉDICA (PDF)
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">TAMAÑO Y FORMATO DE HOJA</label>
+                        <select id="formatoImpresion" class="form-select">
+                            <option value="CARTA">📄 HOJA TAMAÑO CARTA (COMPLETA)</option>
+                            <option value="MEDIA_CARTA">📑 MEDIA HOJA / A5</option>
+                            <option value="TICKET">🧾 TICKET TÉRMICO (80MM)</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">ESTILO DE ENCABEZADO</label>
+                        <select id="modoMembretado" class="form-select">
+                            <option value="DIGITAL">🖼️ GENERAR ENCABEZADO Y LOGO DIGITAL</option>
+                            <option value="MEMBRETADO">📄 USAR HOJA IMPRESA DE IMPRENTA (OCULTAR LOGO)</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">FIRMA DIGITALIZADA (URL DE IMAGEN PNG)</label>
+                        <input type="url" id="firmaUrl" class="form-control no-caps" placeholder="https://tuweb.com/firma.png">
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <!-- OPCIONES DE VISIBILIDAD DE CONTENIDO -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="checkMostrarVitales" checked>
+                            <label class="form-check-label small fw-bold" for="checkMostrarVitales">
+                                INCLUIR SIGNOS VITALES Y IMC
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="checkMostrarCIE10" checked>
+                            <label class="form-check-label small fw-bold" for="checkMostrarCIE10">
+                                MOSTRAR CÓDIGO CIE-10 TÉCNICO
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="checkMostrarQR" checked>
+                            <label class="form-check-label small fw-bold" for="checkMostrarQR">
+                                IMPRIMIR QR DE VERIFICACIÓN LEGAL
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small fw-bold">LEYENDA AL PIE DE PÁGINA / NOTAS LEGALES</label>
+                    <textarea id="leyendaPie" class="form-control" rows="2" placeholder="EJ: CONSERVE ESTA RECETA. CUALQUIER REAGENDACIÓN DEBERÁ HACERSE CON 24 HRS DE ANTICIPACIÓN."></textarea>
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-primary w-100 mt-2 py-3 fw-bold" id="btnGuardarConfig">
                 <i class="bi bi-save"></i> GUARDAR Y APLICAR CONFIGURACIÓN
             </button>

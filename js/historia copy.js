@@ -1,3 +1,20 @@
+// A) LIMPIAR PERMISOS AL CARGAR LA PÁGINA (Si vienes de la lista de pacientes, se reinicia la seguridad)
+document.addEventListener('DOMContentLoaded', () => {
+    const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+    if (idPacienteLimpio) {
+        // Al entrar a una nueva consulta/recargar, eliminamos el pase anterior
+        sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+    }
+});
+
+// B) LIMPIAR PERMISOS AL CERRAR O SALIR DE LA PÁGINA
+window.addEventListener('beforeunload', () => {
+    const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+    if (idPacienteLimpio) {
+        sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+    }
+});
+
 const urlParams = new URLSearchParams(window.location.search);
 let idPaciente = urlParams.get('id') || localStorage.getItem('paciente_seleccionado_id');
 
@@ -202,6 +219,7 @@ const cargarExpedienteFijo = async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     cargarExpedienteFijo();
+    detectarEstudiosPendientesEnNota(idLimpio);
 });
 
 
@@ -226,6 +244,7 @@ window.calcularIMC = () => {
 // ============================================================================
 // 3. GUARDAR HISTORIA Y GENERAR PDF
 // ============================================================================
+
 const formHistoria = document.getElementById('formHistoria');
 let alertaActual = ""; 
 
@@ -233,18 +252,48 @@ if (formHistoria) {
     formHistoria.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('btnGuardar');
-        if(btn) { btn.innerText = "PROCESANDO..."; btn.disabled = true; }
+        if (btn) { btn.innerText = "PROCESANDO..."; btn.disabled = true; }
 
         try {
             const { data: { user } } = await fisioNet.auth.getUser();
-            if (!user) throw new Error("Sesión expirada");
+            if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
 
-            const specialty = localStorage.getItem('especialidadUsuario');
-            const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
-            
-            if (!specialty || !idClinica) {
-                throw new Error("Falta configuración de especialidad o sede. Por favor, regresa al Dashboard.");
+            // 🛡️ 1. AUTO-RECUPERACIÓN DE SEDE
+            let idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+            if (!idClinica) {
+                const { data: colab } = await fisioNet
+                    .from('colaboradores_clinica')
+                    .select('id_clinica')
+                    .eq('id_profesional', user.id)
+                    .eq('estado', 'ACTIVO')
+                    .limit(1)
+                    .maybeSingle();
+                
+                idClinica = colab?.id_clinica;
+                if (idClinica) {
+                    localStorage.setItem('id_clinica_activa', idClinica);
+                    localStorage.setItem('clinica_activa_id', idClinica);
+                }
             }
+
+            // 🛡️ 2. AUTO-RECUPERACIÓN DE ESPECIALIDAD
+            let specialty = localStorage.getItem('especialidadUsuario');
+            if (!specialty) {
+                const { data: perfilDoc } = await fisioNet
+                    .from('perfiles_profesionales')
+                    .select('especialidad')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                specialty = perfilDoc?.especialidad || 'FISIOTERAPIA GENERAL';
+                localStorage.setItem('especialidadUsuario', specialty);
+            }
+
+            if (!idClinica) {
+                throw new Error("No se detectó una sede vinculada activa para tu usuario.");
+            }
+
+            // 3. ACTUALIZAR PACIENTE MAESTRO
             await fisioNet.from('pacientes_maestros').update({
                 alergias: document.getElementById('alergias').value,
                 antecedentes_quirurgicos: document.getElementById('quirurgicos').value,
@@ -253,6 +302,7 @@ if (formHistoria) {
                 ocupacion: document.getElementById('ocupacion').value
             }).eq('id', idPaciente);
 
+            // 4. CREAR NUEVA NOTA
             const nuevaNota = {
                 id_paciente: idPaciente,
                 id_profesional: user.id,
@@ -287,15 +337,23 @@ if (formHistoria) {
             const { error: errHistorial } = await fisioNet.from('historial_clinico').insert([nuevaNota]);
             if (errHistorial) throw errHistorial;
 
+            // 5. IMPRESIÓN OPCIONAL
             const deseaImprimir = confirm("✅ ¡Consulta guardada! ¿Deseas generar la receta/reporte en PDF?");
             if (deseaImprimir && typeof window.generarPDF === 'function') {
                 await window.generarPDF(nuevaNota); 
             }
+
+            // 6. 🔒 LIMPIAR PERMISO OTP Y REDIRIGIR AL FINAL DE TODO
+            const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+            if (idPacienteLimpio) {
+                sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+            }
+
             window.location.href = 'lista-pacientes.html';
 
         } catch (error) {
             alert("Error al guardar: " + error.message);
-            if(btn) { btn.innerText = "REINTENTAR"; btn.disabled = false; }
+            if (btn) { btn.innerText = "REINTENTAR"; btn.disabled = false; }
         }
     });
 }
@@ -557,78 +615,473 @@ document.addEventListener('DOMContentLoaded', () => {
     inicializarEscuchaMotivo();
 });
 
+
+
+// ============================================================================
+// 🕵️ MOTOR OTP CON MEMORIA DE SESIÓN (SESIÓN AUTORIZADA)
+// ============================================================================
+
 let solicitudOTPActivaId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Control del botón SOLICITAR HISTORIA CONECTADO A SUPABASE REALTIME
-    const btnSolicitar = document.getElementById('btnSolicitarHistoria');
-    if (btnSolicitar) {
-        btnSolicitar.addEventListener('click', async () => {
-            // Jalamos el ID del paciente definido globalmente en tu script
-            const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+// Función para comprobar si la sesión actual del paciente ya fue autorizada
+function sesionEstaAutorizada(pacienteId) {
+    const claveSesion = `otp_aprobado_paciente_${pacienteId}`;
+    return sessionStorage.getItem(claveSesion) === 'true';
+}
 
-            if (!idPacienteLimpio) {
-                alert("⚠️ Por favor selecciona un paciente válido para solicitar su historial.");
-                return;
-            }
+// A) BOTÓN SOLICITAR / VER HISTORIA (INTELIGENTE)
+document.getElementById('btnSolicitarHistoria')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
-            try {
-                btnSolicitar.disabled = true;
-                btnSolicitar.innerText = "⌛ ENVIANDO...";
-
-                const { data: { user } } = await fisioNet.auth.getUser();
-                const nombreDoctor = document.getElementById('doc-nombre')?.innerText?.trim() || "Dr. Cristian";
-
-                // Generamos código aleatorio de 6 dígitos
-                const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
-
-                // A) Insertamos la solicitud en Supabase para que brinque la alerta en el celular del paciente
-                const { data, error } = await fisioNet
-                    .from('solicitudes_acceso_otp')
-                    .insert([{
-                        id_paciente: idPacienteLimpio,
-                        id_doctor: user ? user.id : null,
-                        nombre_doctor: nombreDoctor,
-                        codigo_otp: codigoOTP,
-                        estado_solicitud: 'PENDIENTE'
-                    }])
-                    .select();
-
-                if (error) throw error;
-
-                solicitudOTPActivaId = data[0].id;
-
-                // B) Limpiamos el input y mostramos el modal
-                document.getElementById('otp-seguridad').value = "";
-                const modalEl = document.getElementById('modalSolicitudAcceso');
-                if (modalEl) {
-                    new bootstrap.Modal(modalEl).show();
-                }
-
-                console.log("🚀 Solicitud transmitida en tiempo real al paciente. OTP:", codigoOTP);
-
-            } catch (err) {
-                console.error("💥 Error al emitir solicitud OTP:", err.message);
-                alert("Ocurrió un problema al enviar la solicitud al portal del paciente.");
-            } finally {
-                btnSolicitar.disabled = false;
-                btnSolicitar.innerHTML = "📝🔍 SOLICITAR HISTORIA";
-            }
-        });
+    if (!idPacienteLimpio) {
+        alert("⚠️ Por favor selecciona un paciente válido.");
+        return;
     }
 
-    // 2. Control del botón VER NOTAS
-    const btnVerNotas = document.getElementById('btnVerNotas'); 
-    if (btnVerNotas) {
-        btnVerNotas.addEventListener('click', () => {
-            const modalEl = document.getElementById('modalNotas');
-            if (modalEl) {
-                const notas = window.pacienteCargado?.notas_precaucion || "Sin observaciones.";
-                document.getElementById('textoNotasContenido').innerText = notas;
-                new bootstrap.Modal(modalEl).show();
-            } else {
-                console.error("❌ El modal #modalNotas no existe en el HTML.");
-            }
-        });
+    // 🔓 SI YA FUE AUTORIZADO EN ESTA SESIÓN, ABRIR VISOR DIRECTAMENTE
+    if (sesionEstaAutorizada(idPacienteLimpio)) {
+        console.log("🔓 [SESIÓN REUTILIZADA]: Paciente ya autorizado previamente. Abriendo visor sin OTP...");
+        await cargarYMostrarVisorExpediente(idPacienteLimpio);
+        return;
+    }
+
+    // 🔒 SI NO HA SIDO AUTORIZADO, GENERAR OTP Y MOSTRAR MODAL
+    const btnSolicitar = document.getElementById('btnSolicitarHistoria');
+
+    try {
+        btnSolicitar.disabled = true;
+        btnSolicitar.innerText = "⌛ TRANSMITIENDO...";
+
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const nombreDoc = document.getElementById('doc-nombre')?.innerText?.trim() || "DR. CRISTIAN MIGUEL CID ESPÍNDOLA";
+        const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+        console.log("🔑 Generando nuevo OTP ->", codigoOTP);
+
+        const { data, error } = await fisioNet
+            .from('solicitudes_acceso_otp')
+            .insert([{
+                id_paciente: idPacienteLimpio,
+                id_profesional: user ? user.id : null,
+                nombre_profesional: nombreDoc,
+                codigo_otp: codigoOTP,
+                estado_solicitud: 'PENDIENTE',
+                permisos_concedidos: { notas: true, estudios: true, laboratorio: true },
+                id_clinica: idClinicaActiva || null,
+                expira_en: expiraEn
+            }])
+            .select();
+
+        if (error) throw error;
+
+        solicitudOTPActivaId = data[0].id;
+
+        const campoInput = document.getElementById('otp-seguridad');
+        if (campoInput) campoInput.value = "";
+
+        const modalEl = document.getElementById('modalSolicitudAcceso');
+        if (modalEl) {
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modalInstance.show();
+        }
+
+    } catch (err) {
+        console.error("💥 Error al solicitar acceso:", err.message);
+        alert("Error al solicitar acceso: " + err.message);
+    } finally {
+        btnSolicitar.disabled = false;
+        btnSolicitar.innerHTML = '📝🔍 SOLICITAR HISTORIA';
     }
 });
+
+
+// B) VALIDAR Y REGISTRAR AUTORIZACIÓN EN SESIÓN
+document.addEventListener('click', async (e) => {
+    const btnVal = e.target.closest('#btnValidarAcceso');
+    if (!btnVal) return;
+
+    e.preventDefault();
+    const otpIngresado = document.getElementById('otp-seguridad')?.value?.trim();
+
+    if (!otpIngresado || otpIngresado.length < 6) {
+        alert("⚠️ Ingresa el código completo de 6 dígitos.");
+        return;
+    }
+
+    if (!solicitudOTPActivaId) {
+        alert("⚠️ No hay una solicitud activa pendiente.");
+        return;
+    }
+
+    btnVal.disabled = true;
+    btnVal.innerText = "VERIFICANDO...";
+
+    try {
+        const { data: solicitud, error: errSelect } = await fisioNet
+            .from('solicitudes_acceso_otp')
+            .select('*')
+            .eq('id', solicitudOTPActivaId)
+            .single();
+
+        if (errSelect) throw errSelect;
+
+        if (solicitud.codigo_otp === otpIngresado) {
+            const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+
+            // 1. Marcar estado APROBADO en DB
+            await fisioNet
+                .from('solicitudes_acceso_otp')
+                .update({ 
+                    estado_solicitud: 'APROBADO', 
+                    fecha_autorizacion: new Date().toISOString() 
+                })
+                .eq('id', solicitudOTPActivaId);
+
+            // 2. 🔑 GUARDAR PERMISO DE SESIÓN LOCAL (Dura mientras el navegador/pestaña siga abierta)
+            if (idPacienteLimpio) {
+                sessionStorage.setItem(`otp_aprobado_paciente_${idPacienteLimpio}`, 'true');
+            }
+
+            // 3. Cambiar visualmente el botón a estado "Desbloqueado"
+            const btnSolicitar = document.getElementById('btnSolicitarHistoria');
+            if (btnSolicitar) {
+                btnSolicitar.style.background = "#dcfce7";
+                btnSolicitar.style.color = "#15803d";
+                btnSolicitar.style.borderColor = "#86efac";
+                btnSolicitar.innerHTML = "🔓 VER HISTORIAL AUTORIZADO";
+            }
+
+            // 4. Cerrar modal de clave OTP
+            const modalSolicitudEl = document.getElementById('modalSolicitudAcceso');
+            if (modalSolicitudEl) {
+                const modalSolInstance = bootstrap.Modal.getInstance(modalSolicitudEl) || bootstrap.Modal.getOrCreateInstance(modalSolicitudEl);
+                modalSolInstance.hide();
+            }
+
+            // 5. Desbloquear botón de Asistente
+            const btnAsistente = document.getElementById('btn-asistente-exploracion');
+            if (btnAsistente) {
+                btnAsistente.disabled = false;
+                btnAsistente.style.opacity = "1";
+                btnAsistente.style.cursor = "pointer";
+            }
+
+            // 6. Desplegar el Visor
+            await cargarYMostrarVisorExpediente(idPacienteLimpio);
+
+        } else {
+            alert("❌ Código incorrecto. Verifique los 6 dígitos.");
+        }
+
+    } catch (err) {
+        console.error("💥 Error de validación:", err.message || err);
+        alert("Error al verificar la clave: " + (err.message || "Error de conexión"));
+    } finally {
+        btnVal.disabled = false;
+        btnVal.innerText = "VALIDAR Y VER HISTORIAL";
+    }
+});
+
+
+// ============================================================================
+// 📑 CARGAR Y MOSTRAR CONTENIDO DEL EXPEDIENTE DENTRO DEL MODAL
+// ============================================================================
+async function cargarYMostrarVisorExpediente(pacienteId) {
+    const contenedorNotas = document.getElementById('listaNotasHistorial');
+    const contenedorImagen = document.getElementById('listaEstudiosImagen');
+    const contenedorLab = document.getElementById('listaEstudiosLab');
+
+    // 1. Mostrar modal inmediatamente en estado de carga
+    const modalVisorEl = document.getElementById('modalVisorExpediente');
+    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalVisorEl);
+    modalInstance.show();
+
+    try {
+        // A) CONSULTAR HISTORIAL CLÍNICO (NOTAS)
+        const { data: notas } = await fisioNet
+            .from('historial_clinico')
+            .select('*')
+            .eq('id_paciente', pacienteId)
+            .order('fecha_nota', { ascending: false });
+
+        if (contenedorNotas) {
+            if (notas && notas.length > 0) {
+                contenedorNotas.innerHTML = notas.map(n => `
+                    <div class="card border-0 shadow-sm p-3 style="border-left: 5px solid var(--primary) !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-dark">${new Date(n.fecha_nota).toLocaleDateString('es-MX')}</span>
+                            <span class="fw-bold text-primary small">${n.diagnostico_principal || 'SIN DIAGNÓSTICO'} (${n.codigo_cie10 || 'N/A'})</span>
+                        </div>
+                        <p class="mb-1 small"><strong>Motivo:</strong> ${n.motivo_consulta || 'N/A'}</p>
+                        <p class="mb-1 small"><strong>Exploración:</strong> ${n.exploracion_fisica || 'N/A'}</p>
+                        <p class="mb-2 small"><strong>Tratamiento:</strong> ${n.plan_tratamiento || 'N/A'}</p>
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" 
+                                onclick="inyectardatoEnConsulta('exploracion', 'HISTORIAL PREVIO (${new Date(n.fecha_nota).toLocaleDateString()}): ${n.exploracion_fisica || ''}')">
+                            ➕ Inyectar Exploración a la Nota
+                        </button>
+                    </div>
+                `).join('');
+            } else {
+                contenedorNotas.innerHTML = `<div class="alert alert-info">Sin notas de evolución registradas previamente.</div>`;
+            }
+        }
+
+        // B) CONSULTAR ESTUDIOS DE GABINETE (IMAGEN Y LABS)
+        const { data: estudios } = await fisioNet
+            .from('estudios_gabinete')
+            .select('*')
+            .eq('paciente_id', pacienteId)
+            .order('fecha_registro', { ascending: false });
+
+        if (estudios && estudios.length > 0) {
+            const imagenes = estudios.filter(e => e.tipo_estudio !== 'LABORATORIO CLÍNICO');
+            const laboratorios = estudios.filter(e => e.tipo_estudio === 'LABORATORIO CLÍNICO');
+
+            // Render Imagenología
+            if (contenedorImagen) {
+                contenedorImagen.innerHTML = imagenes.length > 0 ? imagenes.map(img => `
+                    <div class="col-md-6">
+                        <div class="card h-100 shadow-sm p-3">
+                            <h6 class="fw-bold text-primary mb-1">${img.tipo_estudio}</h6>
+                            <span class="text-muted small mb-2">${new Date(img.fecha_registro).toLocaleDateString('es-MX')}</span>
+                            <p class="small text-dark fw-bold mb-2">${img.hallazgos_resumen}</p>
+                            ${img.archivo_url ? `<a href="${img.archivo_url}" target="_blank" class="btn btn-sm btn-warning fw-bold mb-2">🔗 Ver Archivo / PACS</a>` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-dark fw-bold mt-auto" 
+                                    onclick="inyectardatoEnConsulta('exploracion', 'ESTUDIO (${img.tipo_estudio}): ${img.hallazgos_resumen}')">
+                                ➕ Copiar Hallazgos a la Consulta
+                            </button>
+                        </div>
+                    </div>
+                `).join('') : `<div class="alert alert-info">Sin estudios de imagenología registrados.</div>`;
+            }
+
+            // Render Laboratorios
+            if (contenedorLab) {
+                contenedorLab.innerHTML = laboratorios.length > 0 ? laboratorios.map(lab => `
+                    <div class="col-md-6">
+                        <div class="card h-100 shadow-sm p-3">
+                            <h6 class="fw-bold text-danger mb-1">🧪 ${lab.tipo_estudio}</h6>
+                            <span class="text-muted small mb-2">${new Date(lab.fecha_registro).toLocaleDateString('es-MX')}</span>
+                            <p class="small text-dark mb-2">${lab.hallazgos_resumen}</p>
+                            ${lab.archivo_url ? `<a href="${lab.archivo_url}" target="_blank" class="btn btn-sm btn-danger fw-bold mb-2">🔗 Ver Resultados PDF</a>` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-danger fw-bold mt-auto" 
+                                    onclick="inyectardatoEnConsulta('sintomas', 'LABORATORIO (${new Date(lab.fecha_registro).toLocaleDateString()}): ${lab.hallazgos_resumen}')">
+                                ➕ Copiar a Síntomas / Acompañantes
+                            </button>
+                        </div>
+                    </div>
+                `).join('') : `<div class="alert alert-info">Sin exámenes de laboratorio registrados.</div>`;
+            }
+
+        } else {
+            if (contenedorImagen) contenedorImagen.innerHTML = `<div class="alert alert-info">Sin archivos multimedia de imagen.</div>`;
+            if (contenedorLab) contenedorLab.innerHTML = `<div class="alert alert-info">Sin informes de laboratorio.</div>`;
+        }
+
+    } catch (e) {
+        console.error("💥 Error al recuperar el visor:", e);
+    }
+}
+
+// 📌 FUNCIÓN AUXILIAR PARA INYECTAR TEXTO EN LOS CAMPOS DE LA HISTORIA CLÍNICA
+window.inyectardatoEnConsulta = (targetInputId, texto) => {
+    const el = document.getElementById(targetInputId);
+    if (el) {
+        el.value += (el.value ? "\n\n" : "") + texto;
+        el.style.backgroundColor = "#e0f2fe";
+        setTimeout(() => el.style.backgroundColor = "white", 1000);
+        alert("✅ Información agregada a la consulta activa.");
+    }
+};
+
+// ============================================================================
+// 🔬 VINCULACIÓN DIRECTA DE ESTUDIOS A PACIENTE Y MÉDICO
+// ============================================================================
+
+function abrirModalVincularEstudio() {
+    const modalEl = document.getElementById('modalVincularEstudioDirecto');
+    if (modalEl) {
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+    }
+}
+
+document.getElementById('formVincularEstudio')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+    if (!idPacienteLimpio) {
+        alert("⚠️ No hay un paciente activo seleccionado.");
+        return;
+    }
+
+    const btn = document.getElementById('btnGuardarEstudio');
+    btn.disabled = true;
+    btn.innerText = "PROCESANDO VINCULACIÓN...";
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        const nuevoEstudio = {
+            paciente_id: idPacienteLimpio,
+            id_profesional: user ? user.id : null,
+            id_clinica: idClinicaActiva || null,
+            tipo_estudio: document.getElementById('estudio_tipo').value,
+            hallazgos_resumen: document.getElementById('estudio_hallazgos').value.toUpperCase(),
+            archivo_url: document.getElementById('estudio_url').value || null,
+            fecha_registro: new Date().toISOString()
+        };
+
+        const { error } = await fisioNet.from('estudios_gabinete').insert([nuevoEstudio]);
+
+        if (error) throw error;
+
+        alert("✅ Estudio vinculado exitosamente al paciente y al expediente médico.");
+
+        const modalEl = document.getElementById('modalVincularEstudioDirecto');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) modalInstance.hide();
+
+        document.getElementById('formVincularEstudio').reset();
+
+    } catch (err) {
+        console.error("💥 Error al vincular estudio:", err.message);
+        alert("Error al vincular el estudio: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "💾 VINCULAR A PACIENTE Y MÉDICO";
+    }
+});
+
+// ============================================================================
+// 🚨 VERIFICACIÓN AUTOMÁTICA DE ESTUDIOS PREVIOS AL CARGAR PACIENTE
+// ============================================================================
+async function verificarEstudiosVinculadosEnCarga(pacienteId) {
+    try {
+        const { data: estudios, error } = await fisioNet
+            .from('estudios_gabinete')
+            .select('id, tipo_estudio, hallazgos_resumen, fecha_registro')
+            .eq('paciente_id', pacienteId)
+            .order('fecha_registro', { ascending: false });
+
+        if (!error && estudios && estudios.length > 0) {
+            const ultimo = estudios[0];
+            const fecha = new Date(ultimo.fecha_registro).toLocaleDateString('es-MX');
+
+            console.log(`📸 El paciente cuenta con ${estudios.length} estudios cargados en gabinete.`);
+
+            // Notificación visual rápida en la interfaz para el doctor
+            const divNotif = document.createElement('div');
+            divNotif.className = 'alert alert-warning border-0 shadow-sm d-flex justify-content-between align-items-center mb-3';
+            divNotif.style.borderRadius = '12px';
+            divNotif.innerHTML = `
+                <div>
+                    <strong>📂 ESTUDIO REGISTRADO (${fecha}):</strong> 
+                    ${ultimo.tipo_estudio} - <em>${ultimo.hallazgos_resumen.substring(0, 80)}...</em>
+                </div>
+                <button class="btn btn-sm btn-dark rounded-pill" onclick="if(modalEngine) modalEngine.cargarEstudiosAnteriores('${pacienteId}')">
+                    🔍 VER GABINETE (${estudios.length})
+                </button>
+            `;
+
+            const contenedorNotificaciones = document.getElementById('contenedor-apoyo-fisiocid');
+            if (contenedorNotificaciones) {
+                contenedorNotificaciones.appendChild(divNotif);
+            }
+        }
+    } catch (e) {
+        console.warn("Error al verificar estudios vinculados:", e);
+    }
+}
+
+// ============================================================================
+// 🔍 DETECTOR DE ESTUDIOS PENDIENTES AL ABRIR LA CONSULTA
+// ============================================================================
+async function detectarEstudiosPendientesEnNota(pacienteId) {
+    if (!pacienteId) return;
+
+    try {
+        // Consultamos estudios de gabinete y laboratorio cargados recientemente
+        const { data: estudios, error } = await fisioNet
+            .from('estudios_gabinete')
+            .select('*')
+            .eq('paciente_id', pacienteId)
+            .order('fecha_registro', { ascending: false })
+            .limit(3);
+
+        if (error) throw error;
+
+        const contenedorBanners = document.getElementById('contenedor-apoyo-fisiocid');
+        if (!contenedorBanners) return;
+
+        // Limpiamos avisos previos
+        contenedorBanners.innerHTML = '';
+
+        if (estudios && estudios.length > 0) {
+            estudios.forEach(est => {
+                const fechaEstudio = new Date(est.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+                
+                const cardAviso = document.createElement('div');
+                cardAviso.className = 'card border-0 shadow-sm mb-3';
+                cardAviso.style.background = 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
+                cardAviso.style.borderLeft = '5px solid #3b82f6 !important';
+                cardAviso.style.borderRadius = '12px';
+
+                cardAviso.innerHTML = `
+                    <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <span class="badge bg-primary text-uppercase mb-1" style="font-size: 0.65rem;">
+                                📂 ESTUDIO PENDIENTE POR REVISAR (${fechaEstudio})
+                            </span>
+                            <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">
+                                🩻 ${est.tipo_estudio || 'Estudio de Gabinete'}
+                            </h6>
+                            <p class="text-secondary small mb-0" style="font-size: 0.8rem;">
+                                <strong>Hallazgos:</strong> ${est.hallazgos_resumen || 'Sin interpretación previa.'}
+                            </p>
+                        </div>
+                        
+                        <div class="d-flex gap-2 align-items-center ms-auto">
+                            ${est.archivo_url ? `
+                                <a href="${est.archivo_url}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" style="font-size: 0.75rem;">
+                                    👁️ Ver Placa / PDF
+                                </a>
+                            ` : ''}
+                            
+                            <button type="button" class="btn btn-sm btn-primary fw-bold text-white shadow-sm" style="font-size: 0.75rem; border-radius: 8px;"
+                                    onclick="inyectarEstudioAExploracion('${est.tipo_estudio}', '${est.hallazgos_resumen || ''}', '${fechaEstudio}')">
+                                ➕ Cargar a esta Consulta
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                contenedorBanners.appendChild(cardAviso);
+            });
+        }
+    } catch (err) {
+        console.warn("⚠️ No se pudieron consultar los estudios pendientes:", err.message);
+    }
+}
+
+// Función auxiliar para inyectar limpia y formateada la información en la nota
+window.inyectarEstudioAExploracion = (tipo, hallazgos, fecha) => {
+    const campoExploracion = document.getElementById('exploracion');
+    if (campoExploracion) {
+        const bloqueTexto = `\n--- ESTUDIO ANEXO DE GABINETE (${fecha}) ---\nTIPO: ${tipo.toUpperCase()}\nHALLAZGOS/REPORTE: ${hallazgos}\n`;
+        
+        campoExploracion.value += (campoExploracion.value ? "\n" : "") + bloqueTexto;
+        
+        // Animación visual de confirmación
+        campoExploracion.style.backgroundColor = "#e0f2fe";
+        campoExploracion.style.transition = "background-color 0.5s ease";
+        setTimeout(() => {
+            campoExploracion.style.backgroundColor = "white";
+        }, 800);
+    }
+};
