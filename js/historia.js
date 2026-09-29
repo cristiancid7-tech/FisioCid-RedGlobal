@@ -350,7 +350,7 @@ if (formHistoria) {
                 if (typeof window.generarPDF === 'function') {
                     await window.generarPDF(nuevaNota);
                 } else {
-                    alert("⚠️ El módulo de PDF (jsPDF) no se encuentra cargado.");
+                    alert("⚠️ El módulo de PDF (pdf-generator.js) no se encuentra cargado.");
                 }
             }
 
@@ -364,7 +364,6 @@ if (formHistoria) {
         }
     });
 }
-
 
 // ============================================================================
 // 4. BUSCADOR CIE-10 (CON APOYO INTELIGENTE)
