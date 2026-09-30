@@ -37,7 +37,7 @@ const cargarExpedienteFijo = async () => {
             const fechaFormateada = ahora.toLocaleDateString('es-MX', opcionesFecha);
             const horaFormateada = ahora.toLocaleTimeString('es-MX', { hour12: false });
             
-            contenedorReloj.innerText = `${fechaFormateada} - ${horaFormateada}`;
+            contenedorReloj.innerText = `${fechaFormateada}\n${horaFormateada}`;
         };
         pintarFechaHora();
         setInterval(pintarFechaHora, 1000); 
@@ -215,13 +215,58 @@ const cargarExpedienteFijo = async () => {
         console.log("📸 Sincronizando galería de gabinete para:", idLimpio);
         modalEngine.cargarEstudiosAnteriores(idLimpio);
     }
+    detectarEstudiosPendientesEnNota(idLimpio);
+    adaptarInterfazPorEspecialidad();
+
 };
+    // ============================================================================
+// 🎨 ADAPTADOR CAMALEÓNICO POR ESPECIALIDAD
+// ============================================================================
+function adaptarInterfazPorEspecialidad() {
+    const especialidad = (localStorage.getItem('especialidadUsuario') || 'GENERAL').toUpperCase().trim();
+    console.log("🎨 Aplicando modo visual para especialidad:", especialidad);
+
+    const esFisio = especialidad.includes('FISIO') || especialidad.includes('REHABILITA');
+    const esDental = especialidad.includes('DENT') || especialidad.includes('ODONTO');
+    const esMedicina = !esFisio && !esDental;
+
+    // 1. Campo Odontológico
+    const contDental = document.getElementById('contenedor-hallazgos-dentales');
+    if (contDental) {
+        contDental.style.display = esDental ? 'block' : 'none';
+    }
+
+    // 2. Etiqueta del Diagnóstico Secundario / Funcional
+    const lblDiag = document.getElementById('lbl-diagnostico-funcional');
+    if (lblDiag) {
+        if (esFisio) {
+            lblDiag.innerText = "📝 IMPRESIÓN DIAGNÓSTICA / DIAGNÓSTICO FUNCIONAL";
+        } else if (esDental) {
+            lblDiag.innerText = "📝 DIAGNÓSTICO BUCAL / DIAGNÓSTICO PRESUNTIVO";
+        } else {
+            lblDiag.innerText = "📝 IMPRESIÓN DIAGNÓSTICA / JUICIO CLÍNICO";
+        }
+    }
+
+    // 3. Ajuste del Slider EVA (Dolor)
+    const contenedorEva = document.getElementById('eva_slider')?.parentNode;
+    if (contenedorEva && esDental) {
+        // En odontología o medicina general de rutina, si no se requiere el EVA, se mantiene discreto
+        contenedorEva.style.opacity = "0.9";
+    }
+
+    // 4. Cambiar texto del botón Asistente
+    const btnAsistente = document.getElementById('btn-asistente-exploracion');
+    if (btnAsistente) {
+        btnAsistente.innerText = esFisio ? "🛠️ ASISTENTE DE VALORACIÓN" : "🛠️ ASISTENTE CLÍNICO";
+    }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     cargarExpedienteFijo();
-    detectarEstudiosPendientesEnNota(idLimpio);
+    inicializarEscuchaMotivo();
+    adaptarInterfazPorEspecialidad();
 });
-
 
 window.calcularIMC = () => {
     const peso = parseFloat(document.getElementById('valPeso').value);
@@ -331,7 +376,7 @@ if (formHistoria) {
                 imc: parseFloat(document.getElementById('valIMC')?.value) || null,
                 hallazgos_dentales: document.getElementById('hallazgosDentales')?.value || '',
                 diagnostico_funcional: document.getElementById('diagnostico_funcional')?.value || '',
-                pronostico: `${document.getElementById('pronostico_select')?.value || ''} - ${document.getElementById('pronostico_detalle')?.value || ''}`,
+               pronostico: `${document.getElementById('pronostico_select')?.value || ''}\n${document.getElementById('pronostico_detalle')?.value || ''}`,
                 fecha_nota: new Date().toISOString()
             };
 
@@ -989,7 +1034,7 @@ async function verificarEstudiosVinculadosEnCarga(pacienteId) {
             divNotif.innerHTML = `
                 <div>
                     <strong>📂 ESTUDIO REGISTRADO (${fecha}):</strong> 
-                    ${ultimo.tipo_estudio} - <em>${ultimo.hallazgos_resumen.substring(0, 80)}...</em>
+                    ${ultimo.tipo_estudio} <em>${ultimo.hallazgos_resumen.substring(0, 80)}...</em>
                 </div>
                 <button class="btn btn-sm btn-dark rounded-pill" onclick="if(modalEngine) modalEngine.cargarEstudiosAnteriores('${pacienteId}')">
                     🔍 VER GABINETE (${estudios.length})

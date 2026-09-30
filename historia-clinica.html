@@ -401,21 +401,59 @@
             <i class="fas fa-stethoscope" style="color: #3b82f6;"></i> 4. VALORACIÓN Y CONDUCTA CLÍNICA
         </h3>
 
-<button type="button" class="btn btn-outline-primary btn-sm rounded-pill font-weight-bold" onclick="abrirModalVincularEstudio()" 
-style="font-size: 0.75rem;">
-                📎 🔬 VINCULAR NUEVO ESTUDIO / GABINETE
-            </button>
+
 
 <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
     <button type="button" id="btn-asistente-exploracion" 
             onclick="modalEngine.abrirAsistente('exploracion')" 
             class="btn-gold-mini btn-asistente-exploracion" disabled 
             style="opacity:0.5; cursor:not-allowed; height: 40px;">
-        🛠️ ASISTENTE EXPLORACIÓN
+        🛠️ ASISTENTE CLINICO
     </button>
 </div>
 
+<!-- 🦷 MÓDULO ODONTOGRAMA INTERACTIVO (SOLO SE MUESTRA EN ODONTOLOGÍA) -->
+        <div id="contenedor-odontograma-modulo" class="card border-0 shadow-sm p-3 mb-4" style="display: none; background: #0f172a; color: white; border-radius: 12px;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0" style="color: #38bdf8;">🦷 ODONTOGRAMA INTERACTIVO Y PERIODONCIA</h6>
+                
+                <!-- Interruptor Dentición Adulto / Infantil -->
+                <div class="form-check form-switch me-2">
+                    <input class="form-check-input" type="checkbox" id="chkModoDenticion" checked onchange="window.PeriodontoFisioCid.toggleArcada(this)">
+                    <label class="form-check-label small text-slate-300" for="chkModoDenticion">Dentición Permanente (Adulto)</label>
+                </div>
+            </div>
 
+            <!-- Paleta de Herramientas Odontológicas -->
+            <div class="d-flex flex-wrap gap-2 mb-3 p-2 rounded" style="background: rgba(255,255,255,0.05);">
+                <button type="button" class="btn btn-sm paleta-color btn-outline-light" onclick="window.PeriodontoFisioCid.setBrush('#f8fafc', this, 'sano')">⚪ Sano</button>
+                <button type="button" class="btn btn-sm paleta-color btn-danger" onclick="window.PeriodontoFisioCid.setBrush('#ef4444', this, 'caries')">🔴 Caries</button>
+                <button type="button" class="btn btn-sm paleta-color btn-primary" onclick="window.PeriodontoFisioCid.setBrush('#3b82f6', this, 'obturado')">🔵 Obturado</button>
+                <button type="button" class="btn btn-sm paleta-color" style="background: #f472b6; color: white;" onclick="window.PeriodontoFisioCid.setBrush('#f472b6', this, 'placa')">🌸 Placa (O'Leary)</button>
+                <button type="button" class="btn btn-sm paleta-color btn-dark border-secondary" onclick="window.PeriodontoFisioCid.setBrush('#000000', this, 'extraer')">❌ Ausente / Extraer</button>
+                <button type="button" class="btn btn-sm paleta-color btn-warning" onclick="window.PeriodontoFisioCid.setBrush('#eab308', this, 'corona')">👑 Corona / Sellador</button>
+            </div>
+
+            <!-- Contenedores de las Arcadas SVG -->
+            <div id="arcada-superior" class="arcada-container"></div>
+            <div id="temporales-superior" class="arcada-container" style="display:none !important;"></div>
+            
+            <div id="arcada-inferior" class="arcada-container"></div>
+            <div id="temporales-inferior" class="arcada-container" style="display:none !important;"></div>
+
+            <!-- Panel de Resultados Dinámicos (O'Leary, Caries, Extracciones) -->
+            <div id="texto-resumen-dinamico" class="mt-2"></div>
+        </div>
+
+        <!-- CAMPO DENTAL DE TEXTO (SE MUESTRA SOLO EN ODONTOLOGÍA) -->
+        <div id="contenedor-hallazgos-dentales" class="form-group mb-3" style="display: none;">
+            <label style="font-weight: 800; color: #0284c7; font-size: 0.85rem; margin-bottom: 8px; display: block;">
+                🦷 ODONTOGRAMA / HALLAZGOS DENTALES Y CAVIDAD ORAL
+            </label>
+            <textarea id="hallazgosDentales" class="form-control" rows="3" 
+                      style="border: 2px solid #bae6fd; background: #f0f9ff;"
+                      placeholder="Describa piezas dentales afectadas, estado periodontal, procedimiento realizado..."></textarea>
+        </div>
         <!-- EXPLORACIÓN FÍSICA -->
         <div class="form-group" style="margin-bottom: 25px;">
             <label style="font-weight: 800; color: #475569; font-size: 0.85rem; margin-bottom: 10px; display: block; text-transform: uppercase;">
@@ -430,7 +468,7 @@ style="font-size: 0.75rem;">
         <div class="form-group" style="margin-bottom: 30px;">
             <div style="background: #f5f3ff; border-left: 6px solid #8b5cf6; padding: 20px; border-radius: 10px;">
                 <label style="font-weight: 900; color: #5b21b6; font-size: 0.8rem; display: block; margin-bottom: 10px; text-transform: uppercase;">
-                    📝 IMPRESIÓN DIAGNÓSTICA / DIAGNÓSTICO FUNCIONAL
+                    📝 IMPRESIÓN DIAGNÓSTICA / JUICIO CLINICO
                 </label>
                 <textarea id="diagnostico_funcional" class="form-control" rows="2" 
                           style="font-size: 1rem; font-weight: 700; color: #6d28d9; border: 1px solid #ddd6fe; background: #fff;"
@@ -452,7 +490,7 @@ style="font-size: 0.75rem;">
             </label>
             <textarea id="plan_tratamiento" class="form-control" rows="3" 
                       style="border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; padding: 15px;"
-                      placeholder="Medios físicos, ejercicios específicos, etc..."></textarea>
+                      placeholder="Indicaciones terapéuticas, prescripción farmacológica, conducta o plan de manejo"></textarea>
        
         <div class="form-group" style="background: #fffbeb; padding: 10px; border-radius: 8px; margin-bottom: 20px;">
         <label style="color: #b45309; font-weight: bold; margin-bottom: 5px; display: block;">💊 CAMBIOS / NUEVA MEDICACIÓN RECETADA</label>
