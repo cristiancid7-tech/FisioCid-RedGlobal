@@ -16,14 +16,7 @@ window.modalEngine = {
     datosTemporales: [],
     diagnosticosActivos: [], 
 
-    buscarProtocolo: function() {
-        const biblioteca = window.BIBLIOTECA_PROTOCOLOS || null;
-        if (!biblioteca) return null;
-        const motivo = document.getElementById('motivo')?.value.toLowerCase() || "";
-        const lista = biblioteca.fisioterapia || [];
-        const p = lista.find(proto => proto.triggers.some(t => motivo.includes(t)));
-        return p || lista[0];
-    },
+
     
 abrirAsistente: function(paso, protocoloDirecto = null) {
     this.pasoActual = paso;
@@ -38,7 +31,7 @@ abrirAsistente: function(paso, protocoloDirecto = null) {
 
     // 🚩 SINCRONIZAR EL EVA DESDE EL SLIDER (Para que el motor sepa el dolor antes de abrir)
     const sliderPrincipal = document.getElementById('valEva') || document.getElementById('eva_slider');
-    if (sliderPrincipal) {
+    if (sliderPrincipal && window.FisioCidEngine) {
         window.FisioCidEngine.valorDolorEVA = parseInt(sliderPrincipal.value) || 0;
     }
 
@@ -59,7 +52,7 @@ abrirAsistente: function(paso, protocoloDirecto = null) {
     overlay.innerHTML = `
         <div style="background: white; width: 95%; max-width: 1300px; border-radius: 20px; overflow: hidden; display: flex; flex-direction: column; max-height: 95vh; border: 2px solid #d4af37;">
             <div style="background: #1e293b; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #d4af37;">
-                <h3 style="margin: 0; font-size: 1rem; font-weight: 800;">🛠️ ${titulos[paso]} | ${p.titulo.toUpperCase()}</h3>
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 800;">🛠️️ ${titulos[paso] || "ASISTENTE CLÍNICO"} | ${(p.titulo || "").toUpperCase()}</h3>
                 <button onclick="document.getElementById('modal-cid-universal').remove()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">✕</button>
             </div>
             <div style="padding: 20px; flex: 1; overflow: hidden; background: #f8fafc;">
@@ -70,31 +63,28 @@ abrirAsistente: function(paso, protocoloDirecto = null) {
             </div>
         </div>`;
 
-// ... (Todo tu código anterior de abrirAsistente hasta el appendChild)
     document.body.appendChild(overlay);
 
-    // 🚀 UNIFICACIÓN DE DISPARADORES (Ajuste de Cristian)
+    // 🚀 UNIFICACIÓN DE DISPARADORES Y MONTAJE EN EL DOM
     setTimeout(() => {
-        // 1. Primero activamos el diagnóstico diferencial (Lógica de Fisio)
+        // 1. Diagnóstico diferencial / Panel
         if (typeof this.actualizarPanelDiagnostico === 'function') {
             this.actualizarPanelDiagnostico();
         }
 
-        // 2. Luego, si es exploración, activamos la interfaz de especialidad
+        // 2. Disparador por especialidad para la exploración
         if (this.pasoActual === 'exploracion') {
             const rol = (localStorage.getItem('especialidadUsuario') || "").toUpperCase();
-            const p = protocoloDirecto || this.buscarProtocolo(); // Aseguramos acceso al protocolo
-
-            // 🦷 Activación de Odontología
-            if (rol.includes("ODONTOLOGO") || (p && p.id && p.id.startsWith("DENT"))) {
-                if (window.PeriodontoFisioCid) {
-                    console.log("🦷 FisioCid: Renderizando arcadas...");
-                    window.PeriodontoFisioCid.inicializar('arcada-superior', 'arcada-inferior');
-                    FisioCidEngine.cargarConfiguracionDental();
+            
+            if (rol.includes("ODONTOLOGO") || rol.includes("DENT")) {
+                if (window.FisioCidEngine) {
+                    console.log("🚀 Disparando motor odontológico FisioCidEngine...");
+                    window.FisioCidEngine.lanzarCuestionario('PERIODONTOGRAMA');
+                    window.FisioCidEngine.cargarConfiguracionDental();
                 }
             }
         }
-    }, 150); // 150ms es el "punto dulce" para que el modal ya esté pintado
+    }, 150); // 150ms exactos para asegurar que el HTML del modal terminó de agregarse al DOM
 },
      
 
@@ -307,28 +297,34 @@ if (rol === "ODONTOLOGO" || p.id.startsWith("DENT")) {
     input:checked + .slider-fisiocid:before { transform: translateX(20px); }
 </style>
 
-    <!-- 🦷 EXPLORACIÓN DENTAL COMPLETA (4 FILAS) -->
-    <div id="contenedor-periodontograma" style="background: rgba(15, 23, 42, 0.8); padding: 20px; border-radius: 12px; border: 2px solid #1e293b; display: flex; flex-direction: column; gap: 15px;">
-<div class="text-center txt-permanente" style="font-size: 0.8rem; font-weight: 800; color: #f1f5f9; letter-spacing: 3px; margin-bottom: 5px; text-transform: uppercase;">
-    🦷 Permanentes Superiores
-</div>
-<div id="arcada-superior" class="d-flex justify-content-center gap-1 flex-wrap"></div>
+<!-- 🦷 CONTENEDOR DE ARCADAS -->
+<div id="contenedor-periodontograma" style="background: rgba(15, 23, 42, 0.95); padding: 15px; border-radius: 12px; border: 2px solid #334155; display: flex; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;">
 
-<div class="text-center txt-temporal" style="font-size: 0.75rem; font-weight: 800; color: #fbbf24; letter-spacing: 2px; margin: 10px 0; text-transform: uppercase;">
-    👶 Temporales superiores
-</div>
-<div id="temporales-superior" class="d-flex justify-content-center gap-1 flex-wrap"></div>
+    <!-- PERMANENTES SUPERIORES -->
+    <div class="text-center txt-permanente" style="font-size: 0.75rem; font-weight: 800; color: #f1f5f9; letter-spacing: 2px; text-transform: uppercase;">
+        🦷 Permanentes Superiores
+    </div>
+    <div id="arcada-superior" style="display: flex !important; justify-content: center; align-items: center; gap: 4px; flex-wrap: nowrap; min-height: 60px !important; width: 100% !important; overflow: visible !important;"></div>
 
-<div id="temporales-inferior" class="d-flex justify-content-center gap-1 flex-wrap"></div>
-<div class="text-center txt-temporal" style="font-size: 0.75rem; font-weight: 800; color: #fbbf24; letter-spacing: 2px; margin-top: 10px; text-transform: uppercase;">
-    👶 Temporales inferiores
-</div>
+    <!-- TEMPORALES SUPERIORES -->
+    <div class="text-center txt-temporal" style="font-size: 0.7rem; font-weight: 800; color: #fbbf24; letter-spacing: 2px; text-transform: uppercase;">
+        👶 Temporales Superiores
+    </div>
+    <div id="temporales-superior" style="display: flex !important; justify-content: center; align-items: center; gap: 4px; flex-wrap: nowrap; min-height: 50px !important; width: 100% !important; overflow: visible !important;"></div>
 
-<div id="arcada-inferior" class="d-flex justify-content-center gap-1 flex-wrap"></div>
-<div class="text-center txt-permanente" style="font-size: 0.8rem; font-weight: 800; color: #f1f5f9; letter-spacing: 3px; margin-top: 5px; text-transform: uppercase;">
-    🦷 Permanentes Inferiores
+    <!-- TEMPORALES INFERIORES -->
+    <div class="text-center txt-temporal" style="font-size: 0.7rem; font-weight: 800; color: #fbbf24; letter-spacing: 2px; text-transform: uppercase;">
+        👶 Temporales Inferiores
+    </div>
+    <div id="temporales-inferior" style="display: flex !important; justify-content: center; align-items: center; gap: 4px; flex-wrap: nowrap; min-height: 50px !important; width: 100% !important; overflow: visible !important;"></div>
+
+    <!-- PERMANENTES INFERIORES -->
+    <div id="arcada-inferior" style="display: flex !important; justify-content: center; align-items: center; gap: 4px; flex-wrap: nowrap; min-height: 60px !important; width: 100% !important; overflow: visible !important;"></div>
+    <div class="text-center txt-permanente" style="font-size: 0.75rem; font-weight: 800; color: #f1f5f9; letter-spacing: 2px; text-transform: uppercase;">
+        🦷 Permanentes Inferiores
+    </div>
+
 </div>
-     </div>
 
   <div style="background: #1e293b; padding: 15px; border-top: 2px solid #334155; box-shadow: 0 -4px 10px rgba(0,0,0,0.3);">
         
@@ -993,7 +989,7 @@ integrarFinal: function(paso) {
     if (paso === 'exploracion') {
         
         // 🏃 RAMA FISIOTERAPIA (Versión Blindada ante COFEPRIS)
-        if (role === "FISIOTERAPEUTA") {
+        if (rol === "FISIOTERAPEUTA") {
             let reporteExploracion = `[EXPLORACIÓN FÍSICA DE COLUMNA LUMBAR]\n`;
             const eva = window.FisioCidEngine.valorDolorEVA || 0;
             
@@ -1097,22 +1093,47 @@ integrarFinal: function(paso) {
 },
 
 buscarProtocolo: function() {
-    const biblioteca = window.BIBLIOTECA_PROTOCOLOS;
-    if (!biblioteca) return null;
-
-    const motivo = document.getElementById('motivo')?.value.toLowerCase() || "";
+    const biblioteca = window.BIBLIOTECA_PROTOCOLOS || window.protocolos || {};
+    const motivo = document.getElementById('motivo')?.value?.toLowerCase() || "";
+    const espLimpia = (localStorage.getItem('especialidadUsuario') || 'GENERAL').toUpperCase().trim();
+    
     let encontrado = null;
 
-    // 🧠 BUSQUEDA OMNISCIENTE: Recorremos todas las ramas (Fisio, Nutri, Odonto, etc.)
+    // 1. Búsqueda por palabra clave (trigger) en cualquier rama
     Object.keys(biblioteca).forEach(rama => {
-        const match = biblioteca[rama].find(proto => 
-            proto.triggers.some(t => motivo.includes(t))
-        );
-        if (match) encontrado = match;
+        if (Array.isArray(biblioteca[rama])) {
+            const match = biblioteca[rama].find(proto => 
+                proto && proto.triggers && proto.triggers.some(t => motivo.includes(t))
+            );
+            if (match) encontrado = match;
+        }
     });
 
-    // Si no encuentra nada por texto, devolvemos el primero de Fisio como seguridad
-    return encontrado || biblioteca.fisioterapia[0];
+    if (encontrado) return encontrado;
+
+    // 2. Si no hay coincidencia por texto, tomamos el primer protocolo de la especialidad activa
+    let ramaActiva = 'fisioterapia';
+    if (espLimpia.includes('DENT') || espLimpia.includes('ODONTO')) {
+        ramaActiva = 'odontologia';
+    } else if (espLimpia.includes('NUTRI')) {
+        ramaActiva = 'nutricion';
+    } else if (espLimpia.includes('PSICO')) {
+        ramaActiva = 'psicologia';
+    }
+
+    const listaEspecialidad = biblioteca[ramaActiva] || biblioteca['ODONTOLOGIA'] || biblioteca['fisioterapia'] || biblioteca['general'] || [];
+
+    if (listaEspecialidad.length > 0) {
+        return listaEspecialidad[0];
+    }
+
+    // 3. Respaldo estático de seguridad si la biblioteca no tiene elementos
+    return {
+        id: "GENERAL_BASE",
+        titulo: "VALORACIÓN Y EVALUACIÓN CLÍNICA",
+        anamnesis: { sintomas: ["Dolor General", "Molestia Localizada", "Revisión de Rutina"], redFlags: [] },
+        exploracion: { neurologia: {}, escalas: [], pruebasOrtopedicas: [] }
+    };
 },
 
 rutaSubsecuente: function() {

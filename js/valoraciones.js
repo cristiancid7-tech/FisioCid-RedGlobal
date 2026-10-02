@@ -8,85 +8,96 @@ inicializar: function() {
         this.actualizarResumenVisual();
     },
 
+
+
 renderizarArcada: function(idContenedor, listaDientes) {
     const contenedor = document.getElementById(idContenedor);
     if (!contenedor || !listaDientes) return;
-    
-    contenedor.innerHTML = ""; 
-    contenedor.style = "display: flex; justify-content: center; gap: 6px; flex-wrap: nowrap; margin-bottom: 10px; padding: 5px;";
+
+    contenedor.innerHTML = "";
+    contenedor.style.setProperty('display', 'flex', 'important');
+    contenedor.style.setProperty('justify-content', 'center', 'important');
+    contenedor.style.setProperty('align-items', 'flex-start', 'important');
+    contenedor.style.setProperty('gap', '4px', 'important');
+    contenedor.style.setProperty('flex-wrap', 'wrap', 'important');
+    contenedor.style.setProperty('min-height', '75px', 'important');
+    contenedor.style.setProperty('width', '100%', 'important');
+    contenedor.style.setProperty('overflow', 'visible', 'important');
 
     listaDientes.forEach(num => {
         const div = document.createElement('div');
         div.className = "diente-wrapper";
-        div.style = "text-align: center; transition: all 0.3s;";
-        
-        const esTemporal = num >= 51 && num <= 85; 
-        
+        div.style.cssText = "display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; min-width: 32px !important; margin: 2px !important;";
+
+        const esTemporal = num >= 51 && num <= 85;
         let svgHtml = "";
+
         if (esTemporal) {
-            // 🍩 DISEÑO CIRCULAR (RESTAURADO)
+            // 👶 DENTICIÓN INFANTIL (CIRCULAR) -> Añadida la clase "cara-diente"
             svgHtml = `
-                <svg viewBox="0 0 40 40" width="32" height="32" class="diente-svg" data-diente="${num}" style="overflow: visible;">
-                    <path d="M20,20 L2,10 A20,20 0 0,1 38,10 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="V" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <path d="M20,20 L38,10 A20,20 0 0,1 38,30 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="D" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <path d="M20,20 L38,30 A20,20 0 0,1 2,30 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="L" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <path d="M20,20 L2,30 A20,20 0 0,1 2,10 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="M" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <circle cx="20" cy="20" r="8" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="O" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                <svg viewBox="0 0 40 40" width="30" height="30" class="diente-svg" data-diente="${num}" style="display: block !important; overflow: visible !important; cursor: pointer;">
+                    <path d="M20,20 L2,10 A20,20 0 0,1 38,10 Z" fill="#ffffff" stroke="#0ea5e9" stroke-width="1.5" class="cara-diente" data-cara="V" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <path d="M20,20 L38,10 A20,20 0 0,1 38,30 Z" fill="#ffffff" stroke="#0ea5e9" stroke-width="1.5" class="cara-diente" data-cara="D" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <path d="M20,20 L38,30 A20,20 0 0,1 2,30 Z" fill="#ffffff" stroke="#0ea5e9" stroke-width="1.5" class="cara-diente" data-cara="L" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <path d="M20,20 L2,30 A20,20 0 0,1 2,10 Z" fill="#ffffff" stroke="#0ea5e9" stroke-width="1.5" class="cara-diente" data-cara="M" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <circle cx="20" cy="20" r="8" fill="#ffffff" stroke="#0ea5e9" stroke-width="1.5" class="cara-diente" data-cara="O" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
                 </svg>`;
         } else {
-            // 💎 DISEÑO DIAMANTE (ADULTOS)
+            // 👨 DENTICIÓN ADULTA (DIAMANTE) -> Añadida la clase "cara-diente"
             svgHtml = `
-                <svg viewBox="0 0 40 40" width="35" height="35" class="diente-svg" data-diente="${num}" style="overflow: visible;">
-                    <path d="M0,0 L40,0 L30,10 L10,10 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="V" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <path d="M40,0 L40,40 L30,30 L30,10 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="D" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <path d="M40,40 L0,40 L10,30 L30,30 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="L" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <path d="M0,40 L0,0 L10,10 L10,30 Z" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="M" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
-                    <rect x="10" y="10" width="20" height="20" class="cara-diente" fill="#f8fafc" stroke="#334155" stroke-width="1.2" data-cara="O" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                <svg viewBox="0 0 40 40" width="34" height="34" class="diente-svg" data-diente="${num}" style="display: block !important; overflow: visible !important; cursor: pointer;">
+                    <path d="M0,0 L40,0 L30,10 L10,10 Z" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" class="cara-diente" data-cara="V" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <path d="M40,0 L40,40 L30,30 L30,10 Z" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" class="cara-diente" data-cara="D" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <path d="M40,40 L0,40 L10,30 L30,30 Z" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" class="cara-diente" data-cara="L" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <path d="M0,40 L0,0 L10,10 L10,30 Z" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" class="cara-diente" data-cara="M" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
+                    <rect x="10" y="10" width="20" height="20" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" class="cara-diente" data-cara="O" onclick="window.PeriodontoFisioCid.aplicarColor(this)"/>
                 </svg>`;
         }
 
-     div.innerHTML = `
-    <button class="btn-diente-fisiocid" onclick="window.PeriodontoFisioCid.abrirExamenFurca(${num})">
-        ${num}
-    </button>
-    ${svgHtml}
-`;
- contenedor.appendChild(div);
+        div.innerHTML = `
+            <button type="button" onclick="window.PeriodontoFisioCid.abrirExamenFurca(${num})" style="background: #334155 !important; color: #f8fafc !important; border: 1px solid #64748b !important; border-radius: 4px !important; padding: 1px 4px !important; font-size: 9px !important; font-weight: 900 !important; cursor: pointer !important; margin-bottom: 3px !important; line-height: 1 !important; display: inline-block !important;">
+                ${num}
+            </button>
+            ${svgHtml}
+        `;
+        contenedor.appendChild(div);
     });
 },
 
-
-
 toggleArcada: function(input) {
-    const modoAdulto = input.checked; 
+    let modoAdulto = true;
+    if (typeof input === 'boolean') {
+        modoAdulto = input;
+    } else if (input && typeof input.checked !== 'undefined') {
+        modoAdulto = input.checked;
+    }
 
-    // 1. Contenedores de Dientes
     const divsAdulto = [document.getElementById('arcada-superior'), document.getElementById('arcada-inferior')];
     const divsNiño = [document.getElementById('temporales-superior'), document.getElementById('temporales-inferior')];
 
-    // 2. Títulos de Texto
     const txtAdulto = document.querySelectorAll('.txt-permanente');
     const txtNiño = document.querySelectorAll('.txt-temporal');
 
     if (modoAdulto) {
-        // MOSTRAR ADULTO / OCULTAR NIÑO
+        // MODO ADULTO: Mostramos Permanentes, Ocultamos Temporales
         divsAdulto.forEach(el => { if(el) el.style.setProperty('display', 'flex', 'important'); });
-        txtAdulto.forEach(el => { if(el) el.style.display = 'block'; });
+        txtAdulto.forEach(el => { if(el) el.style.setProperty('display', 'block', 'important'); });
 
         divsNiño.forEach(el => { if(el) el.style.setProperty('display', 'none', 'important'); });
-        txtNiño.forEach(el => { if(el) el.style.display = 'none'; });
+        txtNiño.forEach(el => { if(el) el.style.setProperty('display', 'none', 'important'); });
     } else {
-        // OCULTAR ADULTO / MOSTRAR NIÑO
+        // MODO NIÑO: Ocultamos Permanentes, Mostramos Temporales
         divsAdulto.forEach(el => { if(el) el.style.setProperty('display', 'none', 'important'); });
-        txtAdulto.forEach(el => { if(el) el.style.display = 'none'; });
+        txtAdulto.forEach(el => { if(el) el.style.setProperty('display', 'none', 'important'); });
 
         divsNiño.forEach(el => { if(el) el.style.setProperty('display', 'flex', 'important'); });
-        txtNiño.forEach(el => { if(el) el.style.display = 'block'; });
+        txtNiño.forEach(el => { if(el) el.style.setProperty('display', 'block', 'important'); });
     }
 
-    this.actualizarResumenVisual();
+    if (typeof this.actualizarResumenVisual === 'function') {
+        this.actualizarResumenVisual();
+    }
 },
-
     // Cambia el color del pincel y da feedback visual
  setBrush: function(color, elemento, tipo = 'normal') { // 🚩 Agregamos '= "normal"'
     this.brushColor = color;

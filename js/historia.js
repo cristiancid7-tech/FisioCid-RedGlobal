@@ -255,11 +255,17 @@ function adaptarInterfazPorEspecialidad() {
         contenedorEva.style.opacity = "0.9";
     }
 
-    // 4. Cambiar texto del botón Asistente
-    const btnAsistente = document.getElementById('btn-asistente-exploracion');
-    if (btnAsistente) {
-        btnAsistente.innerText = esFisio ? "🛠️ ASISTENTE DE VALORACIÓN" : "🛠️ ASISTENTE CLÍNICO";
-    }
+
+   // 4. Cambiar texto del botón Asistente y asegurar que esté activo
+const btnAsistente = document.getElementById('btn-asistente-exploracion');
+if (btnAsistente) {
+    btnAsistente.disabled = false;
+    btnAsistente.style.opacity = "1";
+    btnAsistente.style.cursor = "pointer";
+    btnAsistente.innerText = esDental 
+        ? "🛠️ ASISTENTE ODONTOLÓGICO" 
+        : (esFisio ? "🛠️ ASISTENTE DE VALORACIÓN" : "🛠️ ASISTENTE CLÍNICO");
+}
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -814,12 +820,12 @@ document.addEventListener('click', async (e) => {
             }
 
             // 5. Desbloquear botón de Asistente
-            const btnAsistente = document.getElementById('btn-asistente-exploracion');
-            if (btnAsistente) {
-                btnAsistente.disabled = false;
-                btnAsistente.style.opacity = "1";
-                btnAsistente.style.cursor = "pointer";
-            }
+          //  const btnAsistente = document.getElementById('btn-asistente-exploracion');
+          //  if (btnAsistente) {
+           //     btnAsistente.disabled = false;
+           //     btnAsistente.style.opacity = "1";
+           //     btnAsistente.style.cursor = "pointer";
+           // }
 
             // 6. Desplegar el Visor
             await cargarYMostrarVisorExpediente(idPacienteLimpio);

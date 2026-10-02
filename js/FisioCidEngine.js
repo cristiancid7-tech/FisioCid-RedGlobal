@@ -88,7 +88,6 @@ lanzarCuestionario: function(id, dienteId = null) {
     if (!escala) return;
 
     this.escalaActiva = id; 
-    // 🚩 CAMBIO 2: Guardamos el diente para que no se nos olvide
     this.dienteActivoEnEscala = dienteId; 
 
     const titulo = document.getElementById('tituloEscala');
@@ -96,28 +95,37 @@ lanzarCuestionario: function(id, dienteId = null) {
     
     if (titulo) titulo.innerText = escala.nombre.toUpperCase();
 
+    if (id === 'PERIODONTOGRAMA') {
+        let intentos = 0;
+        const intentarRender = () => {
+            const sup = document.getElementById('arcada-superior');
+            const inf = document.getElementById('arcada-inferior');
 
-if (id === 'PERIODONTOGRAMA') {
-    const intentarRender = () => {
-        const sup = document.getElementById('arcada-superior');
-        const inf = document.getElementById('arcada-inferior');
+            if (sup && inf && window.PeriodontoFisioCid) {
+                console.log("🦷 [FisioCidEngine]: Contenedores detectados en DOM. Renderizando arcadas...");
+                
+                // Dientes Adultos
+                window.PeriodontoFisioCid.renderizarArcada('arcada-superior', [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28]);
+                window.PeriodontoFisioCid.renderizarArcada('arcada-inferior', [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]);
+                
+                // Dientes Temporales / Niños
+                window.PeriodontoFisioCid.renderizarArcada('temporales-superior', [55, 54, 53, 52, 51, 61, 62, 63, 64, 65]);
+                window.PeriodontoFisioCid.renderizarArcada('temporales-inferior', [85, 84, 83, 82, 81, 71, 72, 73, 74, 75]);
+                
+                // Aplicamos el switch por defecto
+                const switchEl = document.getElementById('switchAdultoNiño') || document.getElementById('chkModoDenticion');
+                if (switchEl) window.PeriodontoFisioCid.toggleArcada(switchEl);
+            } else if (intentos < 10) {
+                intentos++;
+                setTimeout(intentarRender, 100); // Reintenta hasta 10 veces (1 segundo)
+            } else {
+                console.warn("⚠️ [FisioCidEngine]: No se encontraron los contenedores de las arcadas en la pantalla.");
+            }
+        };
 
-        // Verificamos que ambos contenedores existan en el DOM
-        if (sup && inf) {
-            console.log("🦷 [FisioCid]: Contenedores listos. Dibujando dientes...");
-          // Dentro de lanzarCuestionario('PERIODONTOGRAMA')
-window.PeriodontoFisioCid.renderizarArcada('arcada-superior', [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28]);
-window.PeriodontoFisioCid.renderizarArcada('temporales-superior', [55, 54, 53, 52, 51, 61, 62, 63, 64, 65]);
-window.PeriodontoFisioCid.renderizarArcada('temporales-inferior', [85, 84, 83, 82, 81, 71, 72, 73, 74, 75]);
-window.PeriodontoFisioCid.renderizarArcada('arcada-inferior', [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]);
-        } else {
-            console.warn("⏳ [FisioCid]: Contenedores no detectados aún, reintentando...");
-            setTimeout(intentarRender, 100); // Reintenta cada 100ms
-        }
-    };
-
-    if (window.PeriodontoFisioCid) intentarRender();
-}
+        intentarRender();
+    }
+   
     // 📝 CASO NORMAL: ESCALAS DE PREGUNTAS
     else {
         if (!contenedor) return;
@@ -304,44 +312,44 @@ registrarHallazgoDental: function(diente, cara, estado) {
 
 
 cargarConfiguracionDental: async function() {
-    // 🚩 Agregamos una protección para esperar a que los datos existan
-    if (!this.pacienteActual || !this.pacienteActual.id) {
-        console.warn("⚠️ FisioCid: Esperando datos del paciente...");
+    // 🛡️ Puente omnisciente para obtener el ID del paciente activo
+    const idPac = this.pacienteActual?.id || window.idPaciente || new URLSearchParams(window.location.search).get('id');
+    
+    if (!idPac) {
+        console.warn("⚠️ FisioCidEngine: Esperando ID de paciente para cargar expediente dental...");
         return; 
     }
 
-    const idPaciente = this.pacienteActual.id;
-  
+    const client = window.fisioNet || window.supabase;
+    if (!client) {
+        console.warn("⚠️ FisioCidEngine: Cliente de Supabase no detectado.");
+        return;
+    }
 
     try {
-        // 1. Recuperamos el estado dental base (ADN) de la tabla pacientes_maestros
-        const { data, error } = await supabase
+        // 1. Recuperamos el estado dental base (ADN)
+        const { data, error } = await client
             .from('pacientes_maestros')
-            .select('estado_dental_base')
-            .eq('id', idPaciente)
+            .select('estado_dental_base, fecha_nacimiento')
+            .eq('id', idPac.trim())
             .single();
 
         if (error) throw error;
 
-        // 2. ¿Tiene historial previo?
         if (data && data.estado_dental_base) {
-            console.log("🦷 FisioCid: Recuperando historial dental...");
+            console.log("🦷 FisioCidEngine: ADN dental previo detectado. Restaurando piezas...");
             this.aplicarADNAlOdontograma(data.estado_dental_base);
-        } 
-        else {
-            // 3. Si es paciente nuevo, decidimos por EDAD (Ej. Valentín)
-            console.log("👶 FisioCid: Configurando por edad...");
+        } else if (data && data.fecha_nacimiento) {
+            // Configuración automática por Edad (Adulto vs Pediatría)
             const hoy = new Date();
-           const cumple = new Date(this.pacienteActual.fecha_nacimiento);
+            const cumple = new Date(data.fecha_nacimiento);
             let edad = hoy.getFullYear() - cumple.getFullYear();
-            
-            const esAdulto = edad >= 12; // Umbral clínico estándar
-            
-            // Movemos el switch visualmente
-            const switchEl = document.getElementById('switchAdultoNiño');
+            const esAdulto = edad >= 12;
+
+            const switchEl = document.getElementById('switchAdultoNiño') || document.getElementById('chkModoDenticion');
             if (switchEl) {
                 switchEl.checked = esAdulto;
-                window.PeriodontoFisioCid.toggleArcada(esAdulto);
+                if (window.PeriodontoFisioCid) window.PeriodontoFisioCid.toggleArcada(switchEl);
             }
         }
     } catch (err) {
@@ -350,24 +358,28 @@ cargarConfiguracionDental: async function() {
 },
 
 aplicarADNAlOdontograma: function(adn) {
-    // Recorremos el JSON y pintamos cada cara guardada
+    if (!adn || typeof adn !== 'object') return;
+
     Object.keys(adn).forEach(clave => {
         // clave ejemplo: "diente_18_V"
         const partes = clave.split('_');
-        const numDiente = partes[1];
-        const caraId = partes[2];
+        if (partes.length >= 3) {
+            const numDiente = partes[1];
+            const caraId = partes[2];
 
-        const selector = `.cara-diente[data-diente="${numDiente}"][data-cara="${caraId}"]`;
-        const el = document.querySelector(selector);
-        
-        if (el) {
-            el.setAttribute('fill', adn[clave]);
-            // Si es gris, nos aseguramos que el sistema sepa que no cuenta
-            if (adn[clave] === '#94a3b8') el.removeAttribute('data-tiene-placa');
+            const selector = `.cara-diente[data-diente="${numDiente}"][data-cara="${caraId}"]`;
+            const el = document.querySelector(selector);
+            
+            if (el) {
+                el.setAttribute('fill', adn[clave]);
+                if (adn[clave] === '#94a3b8') el.removeAttribute('data-tiene-placa');
+            }
         }
     });
-    window.PeriodontoFisioCid.ultimaEvaluacionPedia = resultado.g;
-    window.PeriodontoFisioCid.actualizarResumenVisual();
+
+    if (window.PeriodontoFisioCid && typeof window.PeriodontoFisioCid.actualizarResumenVisual === 'function') {
+        window.PeriodontoFisioCid.actualizarResumenVisual();
+    }
 }
 
 
