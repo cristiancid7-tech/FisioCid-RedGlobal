@@ -1,9 +1,9 @@
-
 window.estudiosCargadosLista = []; 
 window.cacheEstudiosGabineteLista = [];
 window.imagenACompararActiva = null; 
+
 window.modalEngine = {
-     cacheEstudiosGabinete: [],
+    cacheEstudiosGabinete: [],
     imagenAComparar: null,
     misHerramientas: {
         diatermia: true,
@@ -16,77 +16,74 @@ window.modalEngine = {
     datosTemporales: [],
     diagnosticosActivos: [], 
 
+    abrirAsistente: function(paso, protocoloDirecto = null) {
+        this.pasoActual = paso;
 
-    
-abrirAsistente: function(paso, protocoloDirecto = null) {
-    this.pasoActual = paso;
-
-    // 🎯 PRIORIDAD: Si viene del botón inteligente, usamos ese. Si no, lo buscamos en la biblioteca.
-    const p = protocoloDirecto || this.buscarProtocolo();
-    
-    if (!p) {
-        console.error("❌ FisioCid Error: No se pudo determinar el protocolo.");
-        return;
-    }
-
-    // 🚩 SINCRONIZAR EL EVA DESDE EL SLIDER (Para que el motor sepa el dolor antes de abrir)
-    const sliderPrincipal = document.getElementById('valEva') || document.getElementById('eva_slider');
-    if (sliderPrincipal && window.FisioCidEngine) {
-        window.FisioCidEngine.valorDolorEVA = parseInt(sliderPrincipal.value) || 0;
-    }
-
-    const existente = document.getElementById('modal-cid-universal');
-    if (existente) existente.remove();
-
-    const titulos = {
-        anamnesis: "APOYO DE SÍNTOMAS",
-        exploracion: "ASISTENTE DE EXPLORACIÓN",
-        plan: "APOYO PLAN DE TRATAMIENTO",
-        ejercicios: "EJERCICIOS EN CASA (TAREA)"
-    };
-
-    const overlay = document.createElement('div');
-    overlay.id = 'modal-cid-universal';
-    overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 9999;`;
-
-    overlay.innerHTML = `
-        <div style="background: white; width: 95%; max-width: 1300px; border-radius: 20px; overflow: hidden; display: flex; flex-direction: column; max-height: 95vh; border: 2px solid #d4af37;">
-            <div style="background: #1e293b; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #d4af37;">
-                <h3 style="margin: 0; font-size: 1rem; font-weight: 800;">🛠️️ ${titulos[paso] || "ASISTENTE CLÍNICO"} | ${(p.titulo || "").toUpperCase()}</h3>
-                <button onclick="document.getElementById('modal-cid-universal').remove()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">✕</button>
-            </div>
-            <div style="padding: 20px; flex: 1; overflow: hidden; background: #f8fafc;">
-                ${this.generarInterfaz(paso, p)}
-            </div>
-            <div style="padding: 15px; background: #f1f5f9; border-top: 1px solid #e2e8f0; text-align: right;">
-                <button onclick="modalEngine.integrarFinal('${paso}')" style="background: #d4af37; color: black; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 900; cursor: pointer;">✅ INTEGRAR A EXPEDIENTE</button>
-            </div>
-        </div>`;
-
-    document.body.appendChild(overlay);
-
-    // 🚀 UNIFICACIÓN DE DISPARADORES Y MONTAJE EN EL DOM
-    setTimeout(() => {
-        // 1. Diagnóstico diferencial / Panel
-        if (typeof this.actualizarPanelDiagnostico === 'function') {
-            this.actualizarPanelDiagnostico();
+        // 🎯 PRIORIDAD: Si viene del botón inteligente, usamos ese. Si no, lo buscamos en la biblioteca.
+        const p = protocoloDirecto || this.buscarProtocolo();
+        
+        if (!p) {
+            console.error("❌ FisioCid Error: No se pudo determinar el protocolo.");
+            return;
         }
 
-        // 2. Disparador por especialidad para la exploración
-        if (this.pasoActual === 'exploracion') {
-            const rol = (localStorage.getItem('especialidadUsuario') || "").toUpperCase();
-            
-            if (rol.includes("ODONTOLOGO") || rol.includes("DENT")) {
-                if (window.FisioCidEngine) {
-                    console.log("🚀 Disparando motor odontológico FisioCidEngine...");
-                    window.FisioCidEngine.lanzarCuestionario('PERIODONTOGRAMA');
-                    window.FisioCidEngine.cargarConfiguracionDental();
+        // 🚩 SINCRONIZAR EL EVA DESDE EL SLIDER
+        const sliderPrincipal = document.getElementById('valEva') || document.getElementById('eva_slider');
+        if (sliderPrincipal && window.FisioCidEngine) {
+            window.FisioCidEngine.valorDolorEVA = parseInt(sliderPrincipal.value) || 0;
+        }
+
+        const existente = document.getElementById('modal-cid-universal');
+        if (existente) existente.remove();
+
+        const titulos = {
+            anamnesis: "APOYO DE SÍNTOMAS",
+            exploracion: "ASISTENTE DE EXPLORACIÓN",
+            plan: "APOYO PLAN DE TRATAMIENTO",
+            ejercicios: "EJERCICIOS EN CASA (TAREA)"
+        };
+
+        const overlay = document.createElement('div');
+        overlay.id = 'modal-cid-universal';
+        overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 9999;`;
+
+        overlay.innerHTML = `
+            <div style="background: white; width: 95%; max-width: 1300px; border-radius: 20px; overflow: hidden; display: flex; flex-direction: column; max-height: 95vh; border: 2px solid #d4af37;">
+                <div style="background: #1e293b; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #d4af37;">
+                    <h3 style="margin: 0; font-size: 1rem; font-weight: 800;">🛠 ${titulos[paso] || "ASISTENTE CLÍNICO"} | ${(p.titulo || "").toUpperCase()}</h3>
+                    <button onclick="document.getElementById('modal-cid-universal').remove()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">✕</button>
+                </div>
+                <div style="padding: 20px; flex: 1; overflow: hidden; background: #f8fafc;">
+                    ${this.generarInterfaz(paso, p)}
+                </div>
+                <div style="padding: 15px; background: #f1f5f9; border-top: 1px solid #e2e8f0; text-align: right;">
+                    <button onclick="modalEngine.integrarFinal('${paso}')" style="background: #d4af37; color: black; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 900; cursor: pointer;">✅ INTEGRAR A EXPEDIENTE</button>
+                </div>
+            </div>`;
+
+        document.body.appendChild(overlay);
+
+        // 🚀 UNIFICACIÓN DE DISPARADORES Y MONTAJE EN EL DOM
+        setTimeout(() => {
+            if (typeof this.actualizarPanelDiagnostico === 'function') {
+                this.actualizarPanelDiagnostico();
+            }
+
+            if (this.pasoActual === 'exploracion') {
+                const rol = (localStorage.getItem('especialidadUsuario') || "").toUpperCase();
+                
+                if (rol.includes("ODONTOLOGO") || rol.includes("DENT")) {
+                    if (window.FisioCidEngine) {
+                        console.log("🚀 Disparando motor odontológico FisioCidEngine...");
+                        window.FisioCidEngine.lanzarCuestionario('PERIODONTOGRAMA');
+                        if (typeof window.FisioCidEngine.cargarConfiguracionDental === 'function') {
+                            window.FisioCidEngine.cargarConfiguracionDental();
+                        }
+                    }
                 }
             }
-        }
-    }, 150); // 150ms exactos para asegurar que el HTML del modal terminó de agregarse al DOM
-},
-     
+        }, 150);
+    },
 
 generarInterfaz: function(paso, p) {
 
@@ -853,53 +850,102 @@ renderizarTagsResumen: function() {
     },
 
  
-// UBICACIÓN: Dentro de FisioCidEngine en FisioCidEngine.js
 
-// UBICACIÓN: FisioCidEngine.js
-lanzarCuestionario: function(id) {
+    lanzarCuestionario: function(id, dienteId = null) {
     console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
 
-    // 1. Validación del Banco de Datos
+    // ==========================================
+    // 🦷 CASO 1: PERIODONTOGRAMA (DIBUJAR DIENTES EN EL PANEL)
+    // ==========================================
+    if (id === 'PERIODONTOGRAMA') {
+        if (timeoutRenderId) clearTimeout(timeoutRenderId);
+
+        let intentos = 0;
+        const intentarRender = () => {
+            const sup = document.getElementById('arcada-superior');
+            const inf = document.getElementById('arcada-inferior');
+
+            if (sup && inf && window.PeriodontoFisioCid) {
+                console.log("🦷 [FisioCidEngine]: Contenedores detectados en DOM. Renderizando arcadas...");
+
+                sup.innerHTML = '';
+                inf.innerHTML = '';
+
+                // Dientes Adultos
+                window.PeriodontoFisioCid.renderizarArcada('arcada-superior', [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28]);
+                window.PeriodontoFisioCid.renderizarArcada('arcada-inferior', [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]);
+
+                // Dientes Temporales / Niños (Solo si existen en el HTML actual)
+                const tempSup = document.getElementById('temporales-superior');
+                const tempInf = document.getElementById('temporales-inferior');
+
+                if (tempSup) {
+                    tempSup.innerHTML = '';
+                    window.PeriodontoFisioCid.renderizarArcada('temporales-superior', [55, 54, 53, 52, 51, 61, 62, 63, 64, 65]);
+                }
+                if (tempInf) {
+                    tempInf.innerHTML = '';
+                    window.PeriodontoFisioCid.renderizarArcada('temporales-inferior', [85, 84, 83, 82, 81, 71, 72, 73, 74, 75]);
+                }
+
+                // Sincronizar estado Adulto / Niño
+                const switchEl = document.getElementById('switchAdultoNiño') || document.getElementById('chkModoDenticion');
+                if (switchEl) window.PeriodontoFisioCid.toggleArcada(switchEl);
+
+            } else if (intentos < 15) {
+                intentos++;
+                timeoutRenderId = setTimeout(intentarRender, 100);
+            } else {
+                console.warn("⚠️ [FisioCidEngine]: No se encontraron los contenedores de las arcadas en el DOM.");
+            }
+        };
+
+        intentarRender();
+        return; // ⛔ Cortamos aquí para que NO intente abrir el modal de preguntas
+    }
+
+    // ==========================================
+    // 📝 CASO 2: CUESTIONARIOS FLOTANTES (MALLAMPATI, KENNEDY, ENDO, ETC.)
+    // ==========================================
     const banco = window.BANCO_ESCALAS;
     if (!banco || !banco[id]) {
-        console.warn(`⚠️ [FisioCid]: No existe la escala "${id}" en valoraciones.js`);
+        console.warn(`⚠️ [FisioCid]: No existe la escala "${id}" en BANCO_ESCALAS`);
         return;
     }
 
     const escala = banco[id];
     this.escalaActiva = id; 
+    this.dienteActivoEnEscala = dienteId;
 
-    // 2. Validación de Elementos HTML
     const titulo = document.getElementById('tituloEscala');
     const contenedor = document.getElementById('cuerpoEscala');
     const modalEl = document.getElementById('modalEscalaDinamica');
 
     if (!titulo || !contenedor || !modalEl) {
-        console.error("❌ [FisioCid]: No se encontraron los IDs necesarios en el HTML.");
+        console.error("❌ [FisioCid]: No se encontraron los IDs necesarios en el HTML para el modal.");
         return;
     }
 
-    // 3. Renderizado de Contenido
     titulo.innerText = escala.nombre.toUpperCase();
     let html = "";
-    escala.preguntas.forEach((p, i) => {
-        html += `
-            <div class="mb-4 p-3 border rounded bg-white shadow-sm">
-                <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
-                    ${i + 1}. ${p.t.toUpperCase()}
-                </label>
-                <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.calcularEscalaDinamica()">
-                    <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
-                    ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
-                </select>
-            </div>`;
-    });
+    
+    if (escala.preguntas && Array.isArray(escala.preguntas)) {
+        escala.preguntas.forEach((p, i) => {
+            html += `
+                <div class="mb-4 p-3 border rounded bg-white shadow-sm">
+                    <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
+                        ${i + 1}. ${p.t.toUpperCase()}
+                    </label>
+                    <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.calcularEscalaDinamica()">
+                        <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
+                        ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
+                    </select>
+                </div>`;
+        });
+    }
     contenedor.innerHTML = html;
 
-    // 4. Gestión del Modal (Corrección de Accesibilidad y Z-Index)
-    console.log("🎭 [FisioCid]: Mostrando modal de escala...");
-    
-    // 🚩 LIMPIEZA CLAVE: Evitamos la advertencia "Blocked aria-hidden" de la image_bbe75b.png
+    // Ajustes de accesibilidad y visualización
     modalEl.removeAttribute('aria-hidden'); 
     modalEl.style.zIndex = "10050";
 

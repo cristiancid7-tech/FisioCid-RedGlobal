@@ -1,3 +1,4 @@
+let timeoutRenderId = null;
 const FisioCidEngine = {
     datosTemporales: [],
     diagnosticosActivos: [],
@@ -83,73 +84,125 @@ const FisioCidEngine = {
     },
 
 
+
+
 lanzarCuestionario: function(id, dienteId = null) {
-    const escala = window.BANCO_ESCALAS ? window.BANCO_ESCALAS[id] : null;
-    if (!escala) return;
+    console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
 
-    this.escalaActiva = id; 
-    this.dienteActivoEnEscala = dienteId; 
-
-    const titulo = document.getElementById('tituloEscala');
-    const contenedor = document.getElementById('cuerpoEscala');
-    
-    if (titulo) titulo.innerText = escala.nombre.toUpperCase();
-
+    // ==========================================
+    // 🦷 CASO 1: PERIODONTOGRAMA (DIBUJAR DIENTES EN EL PANEL)
+    // ==========================================
     if (id === 'PERIODONTOGRAMA') {
+        if (timeoutRenderId) clearTimeout(timeoutRenderId);
+
         let intentos = 0;
         const intentarRender = () => {
+            // 🧹 PURGA AUTOMÁTICA DE FANTASMAS EN EL DOM
+            // Si existen modales viejos o duplicados en el fondo, los borramos para dejar solo el activo
+            ['arcada-superior', 'arcada-inferior', 'temporales-superior', 'temporales-inferior'].forEach(idEl => {
+                const nodos = document.querySelectorAll(`#${idEl}`);
+                if (nodos.length > 1) {
+                    for (let i = 0; i < nodos.length - 1; i++) {
+                        nodos[i].remove(); // Elimina los contenedores ocultos del fondo
+                    }
+                }
+            });
+
             const sup = document.getElementById('arcada-superior');
             const inf = document.getElementById('arcada-inferior');
 
             if (sup && inf && window.PeriodontoFisioCid) {
-                console.log("🦷 [FisioCidEngine]: Contenedores detectados en DOM. Renderizando arcadas...");
-                
-                // Dientes Adultos
+                console.log("🦷 [FisioCidEngine]: Contenedor activo detectado en DOM. Renderizando arcadas...");
+
+                sup.innerHTML = '';
+                inf.innerHTML = '';
+
+                // Dientes Adultos (Permanentes)
                 window.PeriodontoFisioCid.renderizarArcada('arcada-superior', [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28]);
                 window.PeriodontoFisioCid.renderizarArcada('arcada-inferior', [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]);
-                
-                // Dientes Temporales / Niños
-                window.PeriodontoFisioCid.renderizarArcada('temporales-superior', [55, 54, 53, 52, 51, 61, 62, 63, 64, 65]);
-                window.PeriodontoFisioCid.renderizarArcada('temporales-inferior', [85, 84, 83, 82, 81, 71, 72, 73, 74, 75]);
-                
-                // Aplicamos el switch por defecto
+
+                // Dientes Temporales (Niños - Solo si existen en el HTML)
+                const tempSup = document.getElementById('temporales-superior');
+                const tempInf = document.getElementById('temporales-inferior');
+
+                if (tempSup) {
+                    tempSup.innerHTML = '';
+                    window.PeriodontoFisioCid.renderizarArcada('temporales-superior', [55, 54, 53, 52, 51, 61, 62, 63, 64, 65]);
+                }
+                if (tempInf) {
+                    tempInf.innerHTML = '';
+                    window.PeriodontoFisioCid.renderizarArcada('temporales-inferior', [85, 84, 83, 82, 81, 71, 72, 73, 74, 75]);
+                }
+
+                // Sincronizar estado Adulto / Niño
                 const switchEl = document.getElementById('switchAdultoNiño') || document.getElementById('chkModoDenticion');
                 if (switchEl) window.PeriodontoFisioCid.toggleArcada(switchEl);
-            } else if (intentos < 10) {
+
+            } else if (intentos < 15) {
                 intentos++;
-                setTimeout(intentarRender, 100); // Reintenta hasta 10 veces (1 segundo)
+                timeoutRenderId = setTimeout(intentarRender, 100);
             } else {
-                console.warn("⚠️ [FisioCidEngine]: No se encontraron los contenedores de las arcadas en la pantalla.");
+                console.warn("⚠️ [FisioCidEngine]: No se encontraron los contenedores de las arcadas en el DOM.");
             }
         };
 
         intentarRender();
+        return; // ⛔ Detenemos aquí para que NO abra el modal flotante de preguntas
     }
-   
-    // 📝 CASO NORMAL: ESCALAS DE PREGUNTAS
-    else {
-        if (!contenedor) return;
-        let html = "";
+
+    // ==========================================
+    // 📝 CASO 2: CUESTIONARIOS FLOTANTES (MALLAMPATI, KENNEDY, ENDO, ETC.)
+    // ==========================================
+    const banco = window.BANCO_ESCALAS;
+    if (!banco || !banco[id]) {
+        console.warn(`⚠️ [FisioCid]: No existe la escala "${id}" en BANCO_ESCALAS`);
+        return;
+    }
+
+    const escala = banco[id];
+    this.escalaActiva = id; 
+    this.dienteActivoEnEscala = dienteId;
+
+    const titulo = document.getElementById('tituloEscala');
+    const contenedor = document.getElementById('cuerpoEscala');
+    const modalEl = document.getElementById('modalEscalaDinamica');
+
+    if (!titulo || !contenedor || !modalEl) {
+        console.error("❌ [FisioCid]: No se encontraron los IDs necesarios en el HTML para el modal.");
+        return;
+    }
+
+    titulo.innerText = escala.nombre.toUpperCase();
+    let html = "";
+    
+    if (escala.preguntas && Array.isArray(escala.preguntas)) {
         escala.preguntas.forEach((p, i) => {
             html += `
-                <div class="mb-3 border-bottom pb-2">
-                    <label class="form-label fw-bold small text-dark">${i+1}. ${p.t.toUpperCase()}</label>
+                <div class="mb-4 p-3 border rounded bg-white shadow-sm">
+                    <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
+                        ${i + 1}. ${p.t.toUpperCase()}
+                    </label>
                     <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.calcularEscalaDinamica()">
-                        <option value="none">Seleccione...</option>
-                        ${p.o.map((opcion, valor) => `<option value="${valor}">${opcion.toUpperCase()}</option>`).join('')}
+                        <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
+                        ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
                     </select>
                 </div>`;
         });
-        contenedor.innerHTML = html;
-        
-        // Solo mostramos el modal flotante si es una escala de preguntas
-        const modalEl = document.getElementById('modalEscalaDinamica');
-        if (modalEl) {
-            modalEl.style.zIndex = "10050"; 
-            const m = new bootstrap.Modal(modalEl, { backdrop: 'static' });
-            m.show();
-        }
     }
+    contenedor.innerHTML = html;
+
+    modalEl.removeAttribute('aria-hidden'); 
+    modalEl.style.zIndex = "10050";
+
+    let instanciaModal = bootstrap.Modal.getInstance(modalEl);
+    if (!instanciaModal) {
+        instanciaModal = new bootstrap.Modal(modalEl, { 
+            backdrop: 'static', 
+            keyboard: true 
+        });
+    }
+    
+    instanciaModal.show();
 },
 
 // UBICACIÓN: FisioCidEngine.js

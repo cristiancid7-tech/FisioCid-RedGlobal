@@ -166,60 +166,149 @@ obtenerAnalisisOleary: function() {
     },
     
 actualizarResumenVisual: function() {
-        const resumenEl = document.getElementById('texto-resumen-dinamico');
-        if (!resumenEl) return;
+    // 🎯 Seleccionar TODOS los contenedores (resuelve el problema de ID duplicado)
+    const listaContenedores = document.querySelectorAll('#texto-resumen-dinamico');
+    if (listaContenedores.length === 0) return;
 
-        // --- PARTE A: O'Leary y Caries ---
-        const caras = document.querySelectorAll('.cara-diente');
-        const totalCaras = caras.length || 1;
-        const conPlaca = Array.from(caras).filter(c => c.hasAttribute('data-tiene-placa')).length;
-        const porcentajePlaca = ((conPlaca / totalCaras) * 100).toFixed(1);
+    // 1. HIGIENE Y O'LEARY
+    const caras = document.querySelectorAll('.cara-diente');
+    const totalCaras = caras.length || 1;
+    const conPlaca = Array.from(caras).filter(c => c.hasAttribute('data-tiene-placa')).length;
+    const porcentajePlaca = ((conPlaca / totalCaras) * 100).toFixed(1);
+    
+    let colorRiesgo = porcentajePlaca < 20 ? "#22c55e" : (porcentajePlaca < 50 ? "#eab308" : "#ef4444");
+    let nivelHigiene = porcentajePlaca < 20 ? "EXCELENTE" : (porcentajePlaca < 50 ? "REGULAR" : "DEFICIENTE");
+    
+    // Conteo de Caries
+    const dientesConCaries = new Set();
+    caras.forEach(c => {
+        const fillAttr = (c.getAttribute('fill') || '').toLowerCase();
+        const fillStyle = (c.style.fill || '').toLowerCase();
+        if (fillAttr === "#ef4444" || fillStyle === "#ef4444" || fillStyle.includes("239, 68, 68")) {
+            const svg = c.closest('svg');
+            if (svg && svg.dataset.diente) dientesConCaries.add(svg.dataset.diente);
+        }
+    });
+    const cariesCount = dientesConCaries.size;
+    const cirugias = document.querySelectorAll('.marca-especial[stroke="white"]').length;
+
+    // 2. DETALLE PIEZA POR PIEZA
+    const hallazgosPorDiente = {};
+
+    document.querySelectorAll('.diente-svg').forEach(svg => {
+        const numDiente = svg.getAttribute('data-diente');
+        if (!numDiente) return;
+
+        const detalles = [];
         
-        let colorRiesgo = porcentajePlaca < 20 ? "#22c55e" : (porcentajePlaca < 50 ? "#eab308" : "#ef4444");
-        let nivelHigiene = porcentajePlaca < 20 ? "EXCELENTE" : (porcentajePlaca < 50 ? "REGULAR" : "DEFICIENTE");
-        
-        const cariesCount = Array.from(document.querySelectorAll('.cara-diente')).filter(c => c.getAttribute('fill') === "#ef4444").length;
-        const cirugias = document.querySelectorAll('.marca-especial[stroke="white"]').length;
+        // Caries
+        const tieneCaries = Array.from(svg.querySelectorAll('.cara-diente')).some(c => {
+            const fillAttr = (c.getAttribute('fill') || '').toLowerCase();
+            const fillStyle = (c.style.fill || '').toLowerCase();
+            return fillAttr === "#ef4444" || fillStyle === "#ef4444" || fillStyle.includes("239, 68, 68");
+        });
+        if (tieneCaries) detalles.push("Caries");
 
-        let html = `
-            <div style="background: rgba(30, 41, 59, 0.5); padding: 10px; border-radius: 8px; border-left: 4px solid ${colorRiesgo};">
-                <h6 style="color: ${colorRiesgo}; margin: 0; font-size: 0.8rem; font-weight: 800;">📉 HIGIENE: ${nivelHigiene} (${porcentajePlaca}%)</h6>
-            </div>
+        // Placa bacteriana (Rosa / Morado)
+        const tienePlaca = Array.from(svg.querySelectorAll('.cara-diente')).some(c => {
+            const fillAttr = (c.getAttribute('fill') || '').toLowerCase();
+            const fillStyle = (c.style.fill || '').toLowerCase();
+            return c.hasAttribute('data-tiene-placa') || 
+                   fillAttr.includes("f472b6") || fillAttr.includes("a855f7") ||
+                   fillStyle.includes("244, 114, 182") || fillStyle.includes("168, 85, 247");
+        });
+        if (tienePlaca) detalles.push("Placa Bacteriana");
 
-            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
-                <div style="background: #0f172a; padding: 5px; border-radius: 4px; border: 1px solid #334155;">
-                    <span style="color: #94a3b8; font-size: 0.6rem; display: block;">CARIES</span>
-                    <span style="color: #ef4444; font-weight: bold; font-size:0.7rem;">${cariesCount} piezas</span>
-                </div>
-                <div style="background: #0f172a; padding: 5px; border-radius: 4px; border: 1px solid #334155;">
-                    <span style="color: #94a3b8; font-size: 0.6rem; display: block;">EXTRACCIONES</span>
-                    <span style="color: #f8fafc; font-weight: bold; font-size:0.7rem;">${cirugias} piezas</span>
-                </div>
-            </div>
-            <div style="border-top: 1px solid #334155; padding-top: 8px; max-height: 180px; overflow-y: auto;">
-        `;
+        // Tratado
+        const tieneTratado = Array.from(svg.querySelectorAll('.cara-diente')).some(c => {
+            const fillAttr = (c.getAttribute('fill') || '').toLowerCase();
+            const fillStyle = (c.style.fill || '').toLowerCase();
+            return fillAttr === "#3b82f6" || fillStyle === "#3b82f6" || fillStyle.includes("59, 130, 246");
+        });
+        if (tieneTratado) detalles.push("Tratado");
 
-        // --- PARTE B: El Bucle de Especialidades ---
-        const escalas = this.hallazgosEscalas || {};
-        const nombresEscalas = Object.keys(escalas);
-
-        if (nombresEscalas.length > 0) {
-            nombresEscalas.forEach(llave => {
-                const nombreLimpio = llave.replace('_', ' ').toUpperCase();
-                html += `
-                    <div style="margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #d4af37; background: rgba(212, 175, 55, 0.05);">
-                        <span style="display:block; font-size: 0.55rem; color: #94a3b8; font-weight: 800;">${nombreLimpio}</span>
-                        <span style="font-size: 0.7rem; color: #f8fafc; line-height: 1.1;">${escalas[llave]}</span>
-                    </div>
-                `;
-            });
-        } else {
-            html += `<p style="color: #475569; font-size: 0.65rem; font-style: italic; text-align: center;">Sin escalas adicionales...</p>`;
+        // Extracción / Ausente
+        const marca = svg.querySelector('.marca-especial');
+        if (marca) {
+            if (marca.getAttribute('stroke') === 'white') detalles.push("Indicado para Extracción");
+            else if (marca.getAttribute('stroke') === '#000000') detalles.push("Ausente");
         }
 
-        html += `</div>`;
-        resumenEl.innerHTML = html;
-    },
+        if (detalles.length > 0) {
+            hallazgosPorDiente[numDiente] = detalles.join(', ');
+        }
+    });
+
+    // Fusionar Furcas
+    if (this.mapaHallazgos) {
+        Object.entries(this.mapaHallazgos).forEach(([diente, txt]) => {
+            if (hallazgosPorDiente[diente]) {
+                hallazgosPorDiente[diente] += ` | ${txt}`;
+            } else {
+                hallazgosPorDiente[diente] = txt;
+            }
+        });
+    }
+
+    // 3. CONSTRUCCIÓN DEL RENDER
+    let html = `
+        <div style="background: rgba(30, 41, 59, 0.5); padding: 8px; border-radius: 8px; border-left: 4px solid ${colorRiesgo}; margin-bottom: 8px;">
+            <h6 style="color: ${colorRiesgo}; margin: 0; font-size: 0.75rem; font-weight: 800;">📉 HIGIENE: ${nivelHigiene} (${porcentajePlaca}%)</h6>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+            <div style="background: #0f172a; padding: 5px; border-radius: 4px; border: 1px solid #334155;">
+                <span style="color: #94a3b8; font-size: 0.55rem; display: block;">CARIES</span>
+                <span style="color: #ef4444; font-weight: bold; font-size:0.7rem;">${cariesCount} pieza(s)</span>
+            </div>
+            <div style="background: #0f172a; padding: 5px; border-radius: 4px; border: 1px solid #334155;">
+                <span style="color: #94a3b8; font-size: 0.55rem; display: block;">EXTRACCIONES</span>
+                <span style="color: #f8fafc; font-weight: bold; font-size:0.7rem;">${cirugias} pieza(s)</span>
+            </div>
+        </div>
+
+        <div style="border-top: 1px solid #334155; padding-top: 6px; max-height: 180px; overflow-y: auto;">
+    `;
+
+    const piezasConHallazgo = Object.keys(hallazgosPorDiente);
+    if (piezasConHallazgo.length > 0) {
+        html += `<div style="margin-bottom: 4px; font-weight: 800; font-size: 0.6rem; color: #d4af37;">🦷 DETALLE PIEZA POR PIEZA:</div>`;
+        piezasConHallazgo.sort((a, b) => a - b).forEach(num => {
+            html += `
+                <div style="margin-bottom: 4px; padding: 3px 6px; border-radius: 4px; background: rgba(15, 23, 42, 0.8); border-left: 2px solid #38bdf8; font-size: 0.65rem;">
+                    <b style="color: #38bdf8;">Pieza ${num}:</b> <span style="color: #f8fafc;">${hallazgosPorDiente[num]}</span>
+                </div>
+            `;
+        });
+    }
+
+    const escalas = this.hallazgosEscalas || {};
+    const nombresEscalas = Object.keys(escalas);
+
+    if (nombresEscalas.length > 0) {
+        html += `<div style="margin-top: 6px; margin-bottom: 4px; font-weight: 800; font-size: 0.6rem; color: #d4af37;">📋 CUESTIONARIOS / ESCALAS:</div>`;
+        nombresEscalas.forEach(llave => {
+            const nombreLimpio = llave.replace('_', ' ').toUpperCase();
+            html += `
+                <div style="margin-bottom: 4px; padding: 4px 6px; border-radius: 4px; border-left: 2px solid #d4af37; background: rgba(212, 175, 55, 0.05);">
+                    <span style="display:block; font-size: 0.55rem; color: #94a3b8; font-weight: 800;">${nombreLimpio}</span>
+                    <span style="font-size: 0.65rem; color: #f8fafc; line-height: 1.1;">${escalas[llave]}</span>
+                </div>
+            `;
+        });
+    }
+
+    if (piezasConHallazgo.length === 0 && nombresEscalas.length === 0) {
+        html += `<p style="color: #475569; font-size: 0.65rem; font-style: italic; text-align: center; margin: 10px 0;">Seleccione hallazgos en el odontograma...</p>`;
+    }
+
+    html += `</div>`;
+
+    // 🚀 ACTUALIZA TODOS LOS CONTENEDORES VISIBLES
+    listaContenedores.forEach(contenedor => {
+        contenedor.innerHTML = html;
+    });
+},
 // Función para saber el cuadrante según el primer dígito
 obtenerCuadrante: function(numeroDiente) {
     const primerDigito = Math.floor(numeroDiente / 10);
@@ -254,6 +343,7 @@ seleccionarHallazgoFurca: function(dienteId, opcionElegida) {
     // Refrescamos la vista para que aparezca el texto en el resumen lateral
     this.actualizarResumenVisual();
 },
+
 abrirExamenFurca: function(dienteId) {
         console.log("🦷 FisioCid: Iniciando evaluación de Furca para diente " + dienteId);
         
