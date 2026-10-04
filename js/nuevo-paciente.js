@@ -524,16 +524,15 @@ function ocultarListaSiEsExterno(targetNode) {
 }
 
 
-
-
+// =====================================================================
+// 🚀 EVENTO PRINCIPAL DE REGISTRO / FORMULARIO SUBMIT
+// =====================================================================
 document.getElementById('formRegistroPaciente')?.addEventListener('submit', async (e) => {
-    e.preventDefault(); // Frenamos el envío para validar primero
+    e.preventDefault();
 
-    // Capturamos el botón al inicio
     const btnSubmit = e.target.querySelector('button[type="submit"]');
 
     try {
-        // --- 1. VALIDACIÓN DEL CHECKBOX PRIVACIDAD ---
         const aceptaPrivacidad = document.getElementById('checkConsentimiento')?.checked;
         if (!aceptaPrivacidad) {
             alert("❌ ¡Espera! Debes aceptar el Aviso de Privacidad y la interoperabilidad para continuar.");
@@ -549,12 +548,9 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         const inputTutor = document.getElementById('tutor-tel');
         const esMenorEdad = (inputTutor && inputTutor.offsetWidth > 0) || window.pacienteCargado?.es_menor_edad === true;
 
-        console.log("🛡️ Validando políticas de contacto FisioCid. Menor de edad:", esMenorEdad);
-
         let faltaContacto = false;
         let mensajeError = "";
 
-        // --- 2. REGLAS ESTRICTAS DE CALIDAD DE DATOS ---
         if (esMenorEdad) {
             if (!telefonoTutor || telefonoTutor.length < 10 || !correoTutor || !correoTutor.includes('@')) {
                 faltaContacto = true;
@@ -569,8 +565,6 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
 
         if (faltaContacto) {
             alert(mensajeError);
-            console.error("🛑 Registro bloqueado internamente por falta de datos maestros de comunicación.");
-            
             if (esMenorEdad) {
                 if (!telefonoTutor || telefonoTutor.length < 10) document.getElementById('tutor-tel')?.focus();
                 else document.getElementById('correo-tutor')?.focus();
@@ -581,56 +575,53 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             return; 
         }
 
-        console.log("🎬 [LOG 1] ¡Submit detectado! Iniciando proceso de guardado...");
-        
         if (btnSubmit) {
             btnSubmit.disabled = true; 
             btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESANDO...';
         }
 
-        console.log("🔑 [LOG 2] Solicitando usuario activo de Auth...");
         const { data: { user } } = await fisioNet.auth.getUser();
-        console.log("👤 [LOG 3] Usuario obtenido con éxito ID:", user?.id);
-
         if (!user) {
             alert("⚠️ Sesión no encontrada. Por favor inicie sesión nuevamente.");
             if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.innerHTML = "GUARDAR EXPEDIENTE"; }
             return;
         }
 
-// =====================================================================
-        // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID (MATRIZ DINÁMICA DE SUSCRIPCIÓN)
         // =====================================================================
-        const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
+        // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID
+        // =====================================================================
+        const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id !== undefined && window.pacienteCargado.id !== null);
 
-       if (!esPacienteExistente) {
-        const { data: perfProf } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('nivel_suscripcion')
-            .eq('id', user.id)
-            .maybeSingle();
+        console.log("🔍 ¿Es edición de paciente existente?:", esPacienteExistente);
 
-        const nivelActual = perfProf?.nivel_suscripcion || 'GRATUITO';
+        if (!esPacienteExistente) {
+            const { data: perfProf, error: errProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('nivel_suscripcion')
+                .eq('id', user.id)
+                .maybeSingle();
 
-        // 👈 AQUÍ SE LLAMA A LA FUNCIÓN
-        const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
+            if (errProf) console.error("⚠ Error consultando perfil profesional:", errProf);
 
-        if (!chequeoCuota.permitido) {
-            alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
-            if (btnSubmit) {
-                btnSubmit.disabled = false;
-                btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
+            const nivelActual = perfProf?.nivel_suscripcion ? perfProf.nivel_suscripcion.toUpperCase() : 'GRATUITO';
+            console.log("💳 Nivel de suscripción detectado:", nivelActual);
+
+            const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
+            console.log("📊 Resultado evaluación de cuota:", chequeoCuota);
+
+            if (!chequeoCuota.permitido) {
+                alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
+                if (btnSubmit) {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
+                }
+                return; // Bloqueo efectivo del registro
             }
-            return;
         }
-    }
-        // =====================================================================
         // =====================================================================
 
         const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-        console.log("🏢 [LOG 4] ID de clínica activa desde LocalStorage:", clinicaId);
 
-        console.log("🔍 [LOG 5] Consultando rol del colaborador en DB...");
         const { data: colaborador } = await fisioNet
             .from('colaboradores_clinica')
             .select('rol_sistema')
@@ -639,9 +630,7 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             .maybeSingle();
 
         const rolReal = colaborador?.rol_sistema || 'OPERATIVO';
-        console.log("💼 [LOG 6] Rol del sistema asignado:", rolReal);
 
-        // Captura de datos de interfaz
         const curpFinal = (document.getElementById('curpAuto').value + document.getElementById('curpHomo').value).toUpperCase();
         const formData = new FormData(e.target);
         const datos = Object.fromEntries(formData.entries());
@@ -666,11 +655,9 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         const folioSede = document.getElementById('inputFolioExpediente')?.value || null;
         const emailTutor = document.getElementById('correo-tutor')?.value?.toLowerCase().trim() || null;
         const accesoRed = aceptaPrivacidad; 
-        const fechaConsentimiento = new Date().toISOString(); // Timestamp legal exacto
+        const fechaConsentimiento = new Date().toISOString();
 
         emailAdulto = emailAdulto.toLowerCase();
-
-        console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
         const payload = {
@@ -689,7 +676,6 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             correo_tutor: esMenor ? emailTutor : null,
             correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
             numero_expediente_sede: folioSede,     
-            // 🛡️ CAMPOS OFICIALES DE CONSENTIMIENTO Y DESLINDE LEGAL
             acceso_red_activo: accesoRed,
             consentimiento_firmado: accesoRed,
             fecha_firma_consentimiento: fechaConsentimiento,
@@ -697,11 +683,9 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         };
 
         let resultado;
-        console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
 
         if (esPacienteExistente) {
             const idRealPaciente = pacienteExistenteId || window.pacienteCargado.id;
-            
             const camposCriticos = ['alergias', 'antecedentes_patologicos', 'antecedentes_heredofamiliares', 'farmacologia_activa'];
             const huboCambiosCriticos = camposCriticos.some(campo => {
                 return (window.pacienteCargado[campo] || "").trim() !== (datos[campo] || "").trim();
@@ -745,8 +729,6 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
                         estado_expediente: 'ACTIVO'
                     }]);
                 }
-                console.log("✅ Paciente y Expediente sincronizados.");
-
             } else {
                 if (btnSubmit) {
                     btnSubmit.disabled = false; 
@@ -756,11 +738,9 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             }
         } else {
             // PACIENTE NUEVO ABSOLUTO
-            console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO...");
             payload.fecha_registro = new Date().toISOString();
             
             resultado = await fisioNet.from('pacientes_maestros').insert([payload]).select();
-            
             if (resultado.error) throw resultado.error;
 
             if (resultado.data && resultado.data.length > 0) {
@@ -788,7 +768,6 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         }
 
         let idFinalRedireccion = resultado?.data?.[0]?.id || pacienteExistenteId;
-
         alert("🎉 ¡Proceso completado con éxito y expediente asegurado en FisioCid!");
         
         if (idFinalRedireccion) {
@@ -800,7 +779,6 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
     } catch (err) {
         console.error("💥 [CATCH ERROR] Falla en el proceso:", err);
         alert("⚠️ ATENCIÓN: " + (err.message || err.details || "Error inesperado de sincronización"));
-        
         if (btnSubmit) {
             btnSubmit.disabled = false; 
             btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
@@ -1139,9 +1117,8 @@ async function buscarTutorEnBase(texto) {
 // 📊 MOTOR DE EVALUACIÓN DE CUOTA DE PACIENTES POR PLAN
 // =====================================================================
 async function validarCuotaPaciente(userId, nivelSuscripcion) {
-    // 1. Matriz de límites máximos por nivel de plan
     const LIMITES = {
-        'GRATUITO': 9,
+        'GRATUITO': 15,
         'BASICO': 60,
         'ESENCIAL': 200,
         'CLINICO': 999999,
@@ -1150,31 +1127,30 @@ async function validarCuotaPaciente(userId, nivelSuscripcion) {
     };
 
     const limitePermitido = LIMITES[nivelSuscripcion] || 15;
+    console.log(`🔒 Límite asignado para plan ${nivelSuscripcion}: ${limitePermitido}`);
 
-    // 2. Si el plan es ilimitado (ej. Clínica Pro, Beta Tester), permitimos el paso inmediato
     if (limitePermitido >= 999999) {
         return { permitido: true };
     }
 
     try {
-        // 3. Contamos los pacientes maestros creados por este profesional en la DB
         const { count, error } = await fisioNet
             .from('pacientes_maestros')
-            .select('id', { count: 'exact', head: true })
+            .select('*', { count: 'exact', head: true })
             .eq('creado_por', userId);
 
         if (error) {
-            console.error("⚠️️ Error consultando cuota de pacientes:", error);
-            return { permitido: true }; // En caso de fallo de red, no congelamos la app
+            console.error("⚠ Error consultando cuota de pacientes en DB:", error);
+            return { permitido: true };
         }
 
         const totalRegistrados = count || 0;
+        console.log(`📈 Pacientes registrados en la cuenta (ID ${userId}): ${totalRegistrados} de ${limitePermitido}`);
 
-        // 4. Si alcanzó o superó el cupo del plan, retornamos el bloqueo con el mensaje explicativo
         if (totalRegistrados >= limitePermitido) {
             return {
                 permitido: false,
-                motivo: `Has alcanzado el límite de ${limitePermitido} pacientes activos permitido en tu Plan ${nivelSuscripcion}.\n\nPara continuar registrando expedientes, por favor actualiza tu plan en el Módulo de Pagos.`
+                motivo: `Has alcanzado el límite de ${limitePermitido} pacientes activos permitido en tu Plan ${nivelSuscripcion}.\n\nActualmente tienes ${totalRegistrados} pacientes registrados.\nPara continuar registrando nuevos expedientes, por favor actualiza tu plan en el Módulo de Pagos.`
             };
         }
 
@@ -1186,6 +1162,5 @@ async function validarCuotaPaciente(userId, nivelSuscripcion) {
     }
 }
 
-// Estos dos se quedan hasta abajo controlando todo
 document.addEventListener('click', (e) => ocultarListaSiEsExterno(e.target));
 document.addEventListener('focusin', (e) => ocultarListaSiEsExterno(e.target));
