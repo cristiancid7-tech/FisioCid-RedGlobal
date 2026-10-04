@@ -1,7 +1,10 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Verificar sesión
+    // 1. Verificar sesión activa
     const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) { window.location.href = 'login.html'; return; }
+    if (!user) { 
+        window.location.href = 'login.html'; 
+        return; 
+    }
 
     // 2. Cargar Nombre del Perfil
     const { data: perfil } = await fisioNet
@@ -14,17 +17,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('nombreUsuario').innerText = perfil.nombre_completo;
     }
 
-    // 3. Buscar Clínicas (Colaboraciones + Propias)
+    // 3. Buscar Clínicas (Propias + Colaboraciones)
+    const { data: propias } = await fisioNet
+        .from('clinicas')
+        .select('*')
+        .eq('id_dueno', user.id);
+
     const { data: colab } = await fisioNet
         .from('colaboradores_clinica')
         .select('id_clinica, cargo_clinico, clinicas(id, nombre_clinica, logo_url, color_institucional)')
         .eq('id_profesional', user.id)
         .eq('estado', 'ACTIVO');
-
-    const { data: propias } = await fisioNet
-        .from('clinicas')
-        .select('*')
-        .eq('id_dueno', user.id);
 
     let listaFinal = [];
 
@@ -42,18 +45,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 🚀 4. DECIDIR RUTA AUTOMÁTICA
+    // 4. DECIDIR RUTA AUTOMÁTICA
     if (listaFinal.length === 0) {
         alert("No tienes clínicas asociadas. Crea una o contacta a tu administrador.");
-        window.location.href = 'configuracion.html'; // Ajusta según tu página de creación
+        window.location.href = 'configuracion.html';
         return;
     }
 
-    // 🔥 SI SOLO TIENE UNA: ENTRAR DIRECTO
+    // SI SOLO TIENE UNA SEDE: ENTRAR DIRECTO
     if (listaFinal.length === 1) {
         console.log("Detectada sede única, preparando entrada...");
-        // IMPORTANTE: Le pasamos el objeto completo de la clínica para no tener que volver a consultar la BD
-        guardarYEntrar(listaFinal[0].clinicas);
+        await guardarYEntrar(listaFinal[0].clinicas, user.id);
         return;
     }
 
@@ -78,23 +80,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-function guardarYEntrar(clinica) {
+async function guardarYEntrar(clinica, userId) {
     if (!clinica) return;
     
-    // Estandarización total de llaves en la memoria local
-    localStorage.setItem('usuarioId', fisioNet.auth.user()?.id || ''); // Asegura el ID
+    // Si no se pasa el userId, se consulta de la sesión
+    if (!userId) {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        userId = user?.id || '';
+    }
+    
+    localStorage.setItem('usuarioId', userId);
     localStorage.setItem('id_clinica_activa', clinica.id);
     localStorage.setItem('clinica_activa_id', clinica.id);
     localStorage.setItem('nombre_clinica', clinica.nombre_clinica);
-    localStorage.setItem('clinica_color', clinica.color_institucional || '#10b981'); // 👈 Antes 'fisiocid_color'
-    localStorage.setItem('clinica_logo', clinica.logo_url || 'img/default-clinic.png');  // 👈 Antes 'fisiocid_logo'
+    localStorage.setItem('clinica_color', clinica.color_institucional || '#10b981');
+    localStorage.setItem('clinica_logo', clinica.logo_url || 'img/default-clinic.png');
     
     console.log("✅ Contexto establecido para:", clinica.nombre_clinica);
     window.location.replace('dashboard.html'); 
 }
 
-// 🚀 FUNCIÓN PARA CLIC MANUAL
 async function seleccionarSedeManual(idClinica) {
     const { data: clinica } = await fisioNet.from('clinicas').select('*').eq('id', idClinica).maybeSingle();
-    guardarYEntrar(clinica);
+    await guardarYEntrar(clinica);
 }
