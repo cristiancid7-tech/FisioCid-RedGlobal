@@ -523,9 +523,7 @@ function ocultarListaSiEsExterno(targetNode) {
     }
 }
 
-// Estos dos se quedan hasta abajo controlando todo
-document.addEventListener('click', (e) => ocultarListaSiEsExterno(e.target));
-document.addEventListener('focusin', (e) => ocultarListaSiEsExterno(e.target));
+
 
 
 document.getElementById('formRegistroPaciente')?.addEventListener('submit', async (e) => {
@@ -605,29 +603,27 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         // =====================================================================
         const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
 
-        if (!esPacienteExistente) {
-            // 1. Obtener el nivel de suscripción real del perfil profesional
-            const { data: perfProf } = await fisioNet
-                .from('perfiles_profesionales')
-                .select('nivel_suscripcion')
-                .eq('id', user.id)
-                .maybeSingle();
+       if (!esPacienteExistente) {
+        const { data: perfProf } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('nivel_suscripcion')
+            .eq('id', user.id)
+            .maybeSingle();
 
-            const nivelActual = perfProf?.nivel_suscripcion || 'GRATUITO';
+        const nivelActual = perfProf?.nivel_suscripcion || 'GRATUITO';
 
-            // 2. Evaluar cuota contra la tabla planes_suscripcion
-            const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
+        // 👈 AQUÍ SE LLAMA A LA FUNCIÓN
+        const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
 
-            if (!chequeoCuota.permitido) {
-                alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
-                
-                if (btnSubmit) {
-                    btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
-                }
-                return; // Detiene el guardado de forma limpia sin crear el registro
+        if (!chequeoCuota.permitido) {
+            alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
             }
+            return;
         }
+    }
         // =====================================================================
         // =====================================================================
 
@@ -1138,3 +1134,58 @@ async function buscarTutorEnBase(texto) {
         console.error("💥 Error en búsqueda de tutor:", err.message);
     }
 }
+
+// =====================================================================
+// 📊 MOTOR DE EVALUACIÓN DE CUOTA DE PACIENTES POR PLAN
+// =====================================================================
+async function validarCuotaPaciente(userId, nivelSuscripcion) {
+    // 1. Matriz de límites máximos por nivel de plan
+    const LIMITES = {
+        'GRATUITO': 9,
+        'BASICO': 60,
+        'ESENCIAL': 200,
+        'CLINICO': 999999,
+        'ENTERPRISE': 999999,
+        'BETA_TESTER': 999999
+    };
+
+    const limitePermitido = LIMITES[nivelSuscripcion] || 15;
+
+    // 2. Si el plan es ilimitado (ej. Clínica Pro, Beta Tester), permitimos el paso inmediato
+    if (limitePermitido >= 999999) {
+        return { permitido: true };
+    }
+
+    try {
+        // 3. Contamos los pacientes maestros creados por este profesional en la DB
+        const { count, error } = await fisioNet
+            .from('pacientes_maestros')
+            .select('id', { count: 'exact', head: true })
+            .eq('creado_por', userId);
+
+        if (error) {
+            console.error("⚠️️ Error consultando cuota de pacientes:", error);
+            return { permitido: true }; // En caso de fallo de red, no congelamos la app
+        }
+
+        const totalRegistrados = count || 0;
+
+        // 4. Si alcanzó o superó el cupo del plan, retornamos el bloqueo con el mensaje explicativo
+        if (totalRegistrados >= limitePermitido) {
+            return {
+                permitido: false,
+                motivo: `Has alcanzado el límite de ${limitePermitido} pacientes activos permitido en tu Plan ${nivelSuscripcion}.\n\nPara continuar registrando expedientes, por favor actualiza tu plan en el Módulo de Pagos.`
+            };
+        }
+
+        return { permitido: true };
+
+    } catch (err) {
+        console.error("💥 Excepción al evaluar cuota:", err);
+        return { permitido: true };
+    }
+}
+
+// Estos dos se quedan hasta abajo controlando todo
+document.addEventListener('click', (e) => ocultarListaSiEsExterno(e.target));
+document.addEventListener('focusin', (e) => ocultarListaSiEsExterno(e.target));

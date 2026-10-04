@@ -88,6 +88,9 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         if (authError) throw authError;
         const userId = data.user.id;
 
+        // 🎯 DEFINICIÓN DE VIGENCIA DE DEMO (5 años para controlar por límite de pacientes)
+        const fechaExpiracionDemo = new Date();
+        fechaExpiracionDemo.setFullYear(fechaExpiracionDemo.getFullYear() + 5);
         // 3. CREAR PERFIL PROFESIONAL (🎯 Ahora asigna cargo_clinico como ADMINISTRADOR)
         const { error: profileError } = await fisioNet.from('perfiles_profesionales').insert([{
             id: userId,
@@ -97,8 +100,10 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
             rol: 'ADMIN_SISTEMA', 
             cargo_clinico: 'ADMINISTRADOR', // 👈 Cargo jerárquico supremo
             especialidad: especialidadCapturada,
-            nivel_suscripcion: 'BASICO',
+            nivel_suscripcion: 'GRATUITO',
             suscripcion_activa: true,
+            demo_usado: true, // 👈 Se marca consumido para que no pueda pedir otra demo
+            fecha_expiracion: fechaExpiracionDemo.toISOString(), // 👈 Evita que el sistema lo marque vencido hoy mismo
             // 🛡️ REGISTRO LEGAL DE PLATAFORMA (SEPARADO)
              terminos_aceptados: true,
             fecha_terminos: new Date().toISOString(),

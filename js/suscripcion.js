@@ -6,7 +6,7 @@ const mp = new MercadoPago('APP_USR-c45a6e3b-7d14-4edf-a8ae-e552042f155e', {
 // Enlaces de cobro generados en tu cuenta de Mercado Pago
 const LINKS_MERCADO_PAGO = {
     BASICO: 'https://mpago.la/2iyG3Ha',
-    ESENCIAL: 'https://mpago.la/1v8AtKu', // Reemplaza con tus enlaces conforme crees los demás planes
+    ESENCIAL: 'https://mpago.la/1v8AtKu', 
     CLINICO: 'https://mpago.la/2ad4cen',
     ENTERPRISE: 'https://mpago.la/2x246iG'
 };
