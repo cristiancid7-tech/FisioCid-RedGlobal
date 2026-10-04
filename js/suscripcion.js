@@ -18,11 +18,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     await cargarEstadoSuscripcion();
 });
 
-// 2. CARGAR Y MOSTRAR ESTADO DEL USUARIO LOGUEADO
+// 2. CARGAR Y MOSTRAR ESTADO DEL USUARIO
 async function cargarEstadoSuscripcion() {
     const badge = document.getElementById('badgeEstadoActual');
     const alertaVencimiento = document.getElementById('alertaVencimiento');
     const btnGratuito = document.getElementById('btnPlanGratuito');
+    const btnVolver = document.getElementById('btnVolverDashboard');
 
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
@@ -36,7 +37,7 @@ async function cargarEstadoSuscripcion() {
 
         if (!perfil) return;
 
-        // A. Si ya utilizó la prueba gratuita previamente, deshabilitar el botón
+        // Deshabilitar botón si ya usó la demo
         if (perfil.demo_usado && btnGratuito) {
             btnGratuito.disabled = true;
             btnGratuito.onclick = null;
@@ -55,11 +56,20 @@ async function cargarEstadoSuscripcion() {
         if (perfil.nivel_suscripcion === 'BETA_TESTER') {
             colorBadge = "border-amber-500 text-amber-400 bg-amber-500/10";
             textoEstado = `🚀 VIP BETA TESTER | ${diasRestantes} días restantes`;
-        } else if (estaVencido) {
+        }
+
+        // CONTROL DE ACCESO SEGÚN ESTADO DE PAGO
+        if (estaVencido) {
             colorBadge = "border-red-500 text-red-400 bg-red-500/10";
             textoEstado = `⚠️ VENCIDO (${perfil.nivel_suscripcion})`;
             
+            // Si está vencido: mostrar alerta fija y ocultar acceso al dashboard
             if (alertaVencimiento) alertaVencimiento.classList.remove('hidden');
+            if (btnVolver) btnVolver.classList.add('hidden');
+        } else {
+            // Si está pagado o es Beta Tester: ocultar alerta y mostrar botón verde para ir al Dashboard
+            if (alertaVencimiento) alertaVencimiento.classList.add('hidden');
+            if (btnVolver) btnVolver.classList.remove('hidden');
         }
 
         badge.className = `flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold ${colorBadge}`;

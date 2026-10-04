@@ -6,7 +6,8 @@
     <title>Suscripción y Planes | FisioCid</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<!-- 💳 SDK OFICIAL DE MERCADO PAGO -->
+    
+    <!-- SDK OFICIAL DE MERCADO PAGO -->
     <script src="https://sdk.mercadopago.com/js/v2"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
@@ -16,20 +17,26 @@
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-black text-sky-400 tracking-wide">FisioCid <span class="text-xs text-amber-400 font-bold px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/30">MÓDULO DE PAGOS</span></h1>
         </div>
-        <div id="badgeEstadoActual" class="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
-            <i class="fas fa-spinner fa-spin text-sky-400"></i>
-            <span class="text-sm text-slate-400">Cargando estado de suscripción...</span>
+        
+        <div class="flex items-center gap-3">
+            <div id="badgeEstadoActual" class="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
+                <i class="fas fa-spinner fa-spin text-sky-400"></i>
+                <span class="text-sm text-slate-400">Cargando estado...</span>
+            </div>
+
+            <!-- BOTÓN PARA VOLVER AL DASHBOARD (APARECE SOLO SI TIENE SUSCRIPCIÓN ACTIVA O BETA) -->
+            <a id="btnVolverDashboard" href="dashboard.html" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20">
+                <i class="fas fa-arrow-left"></i> Volver al Dashboard
+            </a>
         </div>
     </header>
 
     <main class="max-w-7xl mx-auto px-6 py-10">
 
-        <!-- MENSAJE DE REDIRECCIÓN O ALERTA (SI VENCIÓ) -->
-        <div id="alertaVencimiento" class="hidden mb-8 p-4 bg-amber-500/10 border-l-4 border-amber-500 rounded-r-xl text-amber-200 text-sm flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <i class="fas fa-exclamation-triangle text-amber-400 text-xl"></i>
-                <span id="txtAlertaVencimiento">Tu periodo de suscripción ha expirado. Por favor elige un plan para reactivar tu acceso.</span>
-            </div>
+        <!-- ALERTA DE VENCIMIENTO ESTRICTA (SIN OPCIÓN DE CERRAR) -->
+        <div id="alertaVencimiento" class="hidden mb-8 p-4 bg-amber-500/10 border-l-4 border-amber-500 rounded-r-xl text-amber-200 text-sm flex items-center gap-3">
+            <i class="fas fa-exclamation-triangle text-amber-400 text-xl"></i>
+            <span id="txtAlertaVencimiento">Tu periodo de suscripción ha expirado. Por favor elige un plan para reactivar tu acceso al sistema.</span>
         </div>
 
         <div class="text-center mb-12">
@@ -40,24 +47,23 @@
         <!-- REJILLA DE TARJETAS DE PLANES -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6" id="contenedorPlanes">
             
-        <!-- PLAN GRATUITO -->
-<div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
-    <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Inicial</span>
-        <h3 class="text-xl font-bold text-white mt-1">Gratuito Demo</h3>
-        <div class="my-4">
-            <span class="text-3xl font-black text-white">$0</span>
-            <span class="text-xs text-slate-400">/ mes</span>
-        </div>
-        <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
-            <li><i class="fas fa-check text-sky-400 mr-2"></i>Hasta <b>15 Pacientes</b></li>
-            <li><i class="fas fa-check text-sky-400 mr-2"></i>1 Usuario Profesional</li>
-            <li><i class="fas fa-check text-sky-400 mr-2"></i>Expediente Básico</li>
-        </ul>
-    </div>
-    <!-- ID AGREGADO AQUÍ -->
-    <button id="btnPlanGratuito" onclick="solicitarCambioPlan('GRATUITO')" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl transition">Elegir Gratuito</button>
-</div>
+            <!-- PLAN GRATUITO -->
+            <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Inicial</span>
+                    <h3 class="text-xl font-bold text-white mt-1">Gratuito Demo</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black text-white">$0</span>
+                        <span class="text-xs text-slate-400">/ mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Hasta <b>15 Pacientes</b></li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>1 Usuario Profesional</li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Expediente Básico</li>
+                    </ul>
+                </div>
+                <button id="btnPlanGratuito" onclick="solicitarCambioPlan('GRATUITO')" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl transition">Elegir Gratuito</button>
+            </div>
 
             <!-- PLAN BÁSICO -->
             <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
@@ -138,7 +144,7 @@
         </div>
     </main>
 
-    <!-- MODAL DE FICHA DE PAGO (SPEI) -->
+    <!-- MODAL DE FICHA DE PAGO (SPEI RESPALDO) -->
     <div id="modalPago" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
         <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 text-slate-100 relative">
             <button onclick="cerrarModalPago()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
@@ -167,15 +173,10 @@
         </div>
     </div>
 
-    <!-- Carga de Scripts de FisioCid -->
-   <!-- 1. SDK de Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<!-- 2. Inicializador de conexión (Crea window.fisioNet) -->
-<script src="js/supabase-config.js"></script>
-
-<!-- 3. Funciones del sistema (auth, utils, gateway, etc.) -->
-<script src="js/auth.js"></script>
+    <!-- Scripts de FisioCid -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/auth.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/suscripcion.js"></script>
 </body>
