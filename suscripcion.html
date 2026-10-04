@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suscripción y Planes | FisioCid</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <!-- HEADER / BANNER DE ESTADO -->
+    <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-10 px-6 py-4 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <h1 class="text-xl font-black text-sky-400 tracking-wide">FisioCid <span class="text-xs text-amber-400 font-bold px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/30">MÓDULO DE PAGOS</span></h1>
+        </div>
+        <div id="badgeEstadoActual" class="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
+            <i class="fas fa-spinner fa-spin text-sky-400"></i>
+            <span class="text-sm text-slate-400">Cargando estado de suscripción...</span>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-10">
+
+        <!-- MENSAJE DE REDIRECCIÓN O ALERTA (SI VENCIÓ) -->
+        <div id="alertaVencimiento" class="hidden mb-8 p-4 bg-amber-500/10 border-l-4 border-amber-500 rounded-r-xl text-amber-200 text-sm flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-exclamation-triangle text-amber-400 text-xl"></i>
+                <span id="txtAlertaVencimiento">Tu periodo de suscripción ha expirado. Por favor elige un plan para reactivar tu acceso.</span>
+            </div>
+        </div>
+
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-black text-white mb-2">Planes Diseñados para tu Crecimiento</h2>
+            <p class="text-slate-400 text-sm">Escoge el nivel que mejor se adapte al volumen de pacientes de tu clínica.</p>
+        </div>
+
+        <!-- REJILLA DE TARJETAS DE PLANES -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6" id="contenedorPlanes">
+            
+            <!-- PLAN GRATUITO -->
+            <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Inicial</span>
+                    <h3 class="text-xl font-bold text-white mt-1">Gratuito Demo</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black text-white">$0</span>
+                        <span class="text-xs text-slate-400">/ mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Hasta <b>15 Pacientes</b></li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>1 Usuario Profesional</li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Expediente Básico</li>
+                    </ul>
+                </div>
+                <button onclick="solicitarCambioPlan('GRATUITO')" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl transition">Elegir Gratuito</button>
+            </div>
+
+            <!-- PLAN BÁSICO -->
+            <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
+                <div>
+                    <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">El Puente</span>
+                    <h3 class="text-xl font-bold text-white mt-1">Básico Inicial</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black text-sky-400">$180</span>
+                        <span class="text-xs text-slate-400">MXN / mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Hasta <b>60 Pacientes</b></li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>1 Usuario Profesional</li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Odontograma / Periodontograma</li>
+                        <li><i class="fas fa-check text-sky-400 mr-2"></i>Escalas y Cuestionarios</li>
+                    </ul>
+                </div>
+                <button onclick="abrirModalPago('BASICO', 180)" class="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition">Seleccionar Plan</button>
+            </div>
+
+            <!-- PLAN ESENCIAL (DESTACADO) -->
+            <div class="bg-slate-800 border-2 border-amber-500/80 rounded-2xl p-6 flex flex-col justify-between relative shadow-lg shadow-amber-500/10">
+                <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-black uppercase px-3 py-1 rounded-full">Más Popular</span>
+                <div>
+                    <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">Consolidación</span>
+                    <h3 class="text-xl font-bold text-white mt-1">Esencial Pro</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black text-amber-400">$350</span>
+                        <span class="text-xs text-slate-400">MXN / mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check text-amber-400 mr-2"></i>Hasta <b>200 Pacientes</b></li>
+                        <li><i class="fas fa-check text-amber-400 mr-2"></i>1 Usuario Profesional</li>
+                        <li><i class="fas fa-check text-amber-400 mr-2"></i>Archivos pesados / Adjuntos</li>
+                        <li><i class="fas fa-check text-amber-400 mr-2"></i>Informes Clínicos PDF</li>
+                    </ul>
+                </div>
+                <button onclick="abrirModalPago('ESENCIAL', 350)" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition">Contratar Esencial</button>
+            </div>
+
+            <!-- PLAN CLÍNICO -->
+            <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
+                <div>
+                    <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">Multi-Usuario</span>
+                    <h3 class="text-xl font-bold text-white mt-1">Clínica Pro</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black text-purple-400">$1,200</span>
+                        <span class="text-xs text-slate-400">MXN / mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check text-purple-400 mr-2"></i><b>Pacientes Ilimitados</b></li>
+                        <li><i class="fas fa-check text-purple-400 mr-2"></i>Hasta <b>5 Especialistas</b></li>
+                        <li><i class="fas fa-check text-purple-400 mr-2"></i>Gestión de Sucursal</li>
+                        <li><i class="fas fa-check text-purple-400 mr-2"></i>Soporte Prioritario</li>
+                    </ul>
+                </div>
+                <button onclick="abrirModalPago('CLINICO', 1200)" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition">Seleccionar Plan</button>
+            </div>
+
+            <!-- PLAN ENTERPRISE -->
+            <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition">
+                <div>
+                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Institucional</span>
+                    <h3 class="text-xl font-bold text-white mt-1">Enterprise Global</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black text-emerald-400">$3,000</span>
+                        <span class="text-xs text-slate-400">MXN / mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check text-emerald-400 mr-2"></i><b>Pacientes Ilimitados</b></li>
+                        <li><i class="fas fa-check text-emerald-400 mr-2"></i><b>Usuarios Ilimitados</b></li>
+                        <li><i class="fas fa-check text-emerald-400 mr-2"></i>Impresión 100% Personalizada</li>
+                    </ul>
+                </div>
+                <button onclick="abrirModalPago('ENTERPRISE', 3000)" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition">Contactar Ventas</button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MODAL DE FICHA DE PAGO (SPEI) -->
+    <div id="modalPago" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 text-slate-100 relative">
+            <button onclick="cerrarModalPago()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+            
+            <h3 class="text-lg font-bold text-sky-400 mb-1">Ficha de Pago / Transferencia SPEI</h3>
+            <p class="text-xs text-slate-400 mb-4">Realiza tu depósito para activar inmediatamente tu plan en FisioCid.</p>
+
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700 space-y-2 text-xs mb-4">
+                <div class="flex justify-between"><span class="text-slate-400">Plan Seleccionado:</span> <b id="lblPlanModal" class="text-amber-400">-</b></div>
+                <div class="flex justify-between"><span class="text-slate-400">Monto a pagar:</span> <b id="lblMontoModal" class="text-emerald-400">$0.00 MXN</b></div>
+                <hr class="border-slate-800 my-2">
+                <div class="flex justify-between"><span class="text-slate-400">Banco:</span> <b>STP / BBVA</b></div>
+                <div class="flex justify-between"><span class="text-slate-400">CLABE Interbancaria:</span> <b class="text-sky-300 select-all">012 180 01501234567 8</b></div>
+                <div class="flex justify-between"><span class="text-slate-400">Beneficiario:</span> <b>FisioCid Software</b></div>
+            </div>
+
+            <form id="formNotificarPago" class="space-y-3">
+                <div>
+                    <label class="text-[11px] font-bold text-slate-300 block mb-1">Número de Referencia o Autorización SPEI:</label>
+                    <input type="text" id="inputReferenciaPago" required placeholder="ej. 12345678" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-sky-500 outline-none">
+                </div>
+                <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs rounded-xl text-white transition flex items-center justify-center gap-2">
+                    <i class="fas fa-check-circle"></i> Notificar y Registrar Pago
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Carga de Scripts de FisioCid -->
+    <script src="seguridad.js"></script>
+    <script src="suscripcion.js"></script>
+</body>
+</html>

@@ -78,10 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
-// 👨‍⚕️ FLUJO 1: INICIO DE SESIÓN EXCLUSIVO PARA PROFESIONALES
+// 👨‍⚕️ FLUJO 1: INICIO DE SESIÓN EXCLUSIVO PARA PROFESIONALES E INVERSIONISTAS
 // ============================================================================
 async function procesarLoginDoctor(event) {
-   
+    
     event.preventDefault();
     
     // 🧹 LIMPIEZA ABSOLUTA DE RESIDUOS PREVIOS
@@ -101,6 +101,26 @@ async function procesarLoginDoctor(event) {
 
         // Sobrescribimos el ID autenticado real
         localStorage.setItem('usuarioId', user.id);
+
+        // ====================================================================
+        // 🚀 BÚNKER EJECUTIVO: VERIFICACIÓN DE ROL INVERSIONISTA / SUPER ADMIN
+        // ====================================================================
+        const { data: perfilProf } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('rol, nombre_completo')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (perfilProf?.rol === 'INVERSIONISTA' || perfilProf?.rol === 'SUPER_ADMIN') {
+            console.log("👑 [BOARD] Acceso concedido a Panel de Control de Inversionista.");
+            localStorage.setItem('rol_actual', perfilProf.rol);
+            localStorage.setItem('nombre_completo', perfilProf.nombre_completo || 'Inversionista FisioCid');
+            
+            // Redirección directa al panel de métricas financieras
+            window.location.href = 'panel-inversionista.html';
+            return; // 👈 Detiene el flujo para no buscar sedes médicas
+        }
+        // ====================================================================
 
         console.log("🏢 [CLÍNICO] Buscando sedes para profesional:", user.id);
         const [resDueno, resColab] = await Promise.all([
@@ -138,7 +158,6 @@ async function procesarLoginDoctor(event) {
         btn.disabled = false; btn.innerText = "ENTRAR AL SISTEMA";
     }
 }
-
 // ============================================================================
 // 🤒 FLUJO 2: INICIO DE SESIÓN EXCLUSIVO PARA PACIENTES MAESTROS
 // ============================================================================

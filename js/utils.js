@@ -1,52 +1,96 @@
+// ==========================================
+// 1. CERRAR SESIÓN Y LIMPIEZA
+// ==========================================
 async function salir() {
     try {
         console.log("🧹 Iniciando limpieza profunda de FisioCid...");
         
-        // 1. LIMPIEZA TOTAL INMEDIATA
-        // No esperamos a Supabase, borramos primero por seguridad visual
         localStorage.clear();
         sessionStorage.clear();
 
-        // 2. Cerramos sesión en el servidor
         await fisioNet.auth.signOut();
 
-        // 3. Redirección destructiva (no permite "atrás")
         window.location.replace('login.html');
 
     } catch (error) {
         console.error("Error al salir:", error);
-        // Si falla el internet, igual limpiamos local y sacamos al usuario
         localStorage.clear();
         window.location.replace('login.html');
     }
 }
-// DETECTOR GLOBAL DE CLIC EN EL BOTÓN
+
+// Detector global para el botón de salir
 document.addEventListener('click', (e) => {
-    // Si el clic fue en el botón de cerrar sesión (o en cualquier parte dentro de él)
     if (e.target.closest('#btnCerrarSesion')) {
         e.preventDefault();
         salir();
     }
 });
 
-// utils.js o seguridad.js
+// ==========================================
+// 2. VALIDADOR DE CUOTA DE PACIENTES (Para crear nuevos)
+// ==========================================
+async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
+    try {
+        // 1. Obtener límite del plan en la tabla planes_suscripcion
+        const { data: plan, error: errPlan } = await fisioNet
+            .from('planes_suscripcion')
+            .select('limite_pacientes')
+            .eq('codigo_plan', codigoPlan)
+            .single();
 
+        if (errPlan || !plan) {
+            return { permitido: false, motivo: "No se pudo verificar tu plan de suscripción." };
+        }
+
+        // 2. Si el plan es ilimitado (-1)
+        if (plan.limite_pacientes === -1) {
+            return { permitido: true };
+        }
+
+        // 3. Contar pacientes actuales registrados por este profesional
+        const { count, error: errCount } = await fisioNet
+            .from('pacientes_maestros')
+            .select('id', { count: 'exact', head: true })
+            .eq('id_usuario_auth', idUsuarioAuth);
+
+        if (errCount) {
+            return { permitido: false, motivo: "Error al consultar la cuota de pacientes." };
+        }
+
+        // 4. Evaluar cuota disponible
+        if (count >= plan.limite_pacientes) {
+            return { 
+                permitido: false, 
+                motivo: `Has alcanzado el límite de ${plan.limite_pacientes} pacientes de tu plan (${codigoPlan}). Actualiza tu plan para registrar más pacientes.` 
+            };
+        }
+
+        return { permitido: true, restantes: plan.limite_pacientes - count };
+
+    } catch (error) {
+        console.error("Error validando cuota:", error);
+        return { permitido: false, motivo: "Error interno al validar suscripción." };
+    }
+}
+
+// ==========================================
+// 3. PORTERO DE SEGURIDAD (Perfil completo + Suscripción activa)
+// ==========================================
 async function verificarPerfilCompleto() {
-    // 👑 EL PASE VIP PARA EL EQUIPO STAFF: Si es colaborador, este candado no es para él
     const rolActual = localStorage.getItem('rol_actual');
     const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
 
     if (esStaff) {
         console.log("👥 Seguridad FisioCid: Colaborador detectado. Omitiendo portero de dueños.");
-        return; // 👈 Rompe la función aquí y lo deja trabajar en su dashboard-staff
+        return; 
     }
 
     const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) return; // El login ya maneja esto
+    if (!user) return; 
 
-    // Evitar bucle infinito: si ya estoy en configuracion.html, no redireccionar
     const paginaActual = window.location.pathname;
-    if (paginaActual.includes('configuracion.html')) return;
+    if (paginaActual.includes('configuracion.html') || paginaActual.includes('suscripcion.html')) return;
 
     try {
         const [perfilRes, clinicaRes] = await Promise.all([
@@ -57,7 +101,7 @@ async function verificarPerfilCompleto() {
         const perfil = perfilRes.data;
         const clinica = clinicaRes.data;
 
-        // 🚨 LA GRAN REVISIÓN (Solo aplica para Doctores Dueños)
+        // A. REVISIÓN DE PERFIL INCOMPLETO
         const incompleto = 
             !perfil?.nombre_completo || 
             !perfil?.cedula_profesional || 
@@ -70,13 +114,26 @@ async function verificarPerfilCompleto() {
             console.warn("Perfil incompleto. Redirigiendo a configuración...");
             sessionStorage.setItem('mensaje_bloqueo', '⚠️ DEBES COMPLETAR TU CONFIGURACIÓN PROFESIONAL Y ACEPTAR EL DESLINDE LEGAL ANTES DE USAR EL SISTEMA.');
             window.location.href = 'configuracion.html';
+            return;
         }
+
+        // B. REVISIÓN DE SUSCRIPCIÓN EXPIRADA O INACTIVA
+        if (perfil) {
+            const hoy = new Date();
+            const fechaExp = perfil.fecha_expiracion ? new Date(perfil.fecha_expiracion) : null;
+            const estaVencida = fechaExp && fechaExp < hoy;
+
+            if (!perfil.suscripcion_activa || estaVencida) {
+                console.warn("Suscripción inactiva o vencida.");
+                sessionStorage.setItem('mensaje_bloqueo', '💳 TU SUSCRIPCIÓN HA VENCIDO O SE ENCUENTRA INACTIVA. POR FAVOR SELECCIONA UN PLAN PARA CONTINUAR.');
+                window.location.href = 'suscripcion.html'; // Redirige a la pantalla de planes/pago
+            }
+        }
+
     } catch (error) {
         console.error("Error en el portero de seguridad:", error);
     }
 }
-
-
 
 // Ejecutar automáticamente al cargar cualquier página
 document.addEventListener('DOMContentLoaded', verificarPerfilCompleto);

@@ -600,37 +600,35 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             return;
         }
 
-        // =====================================================================
-        // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID (LÍMITE 10 EXPEDIENTES FREE)
+// =====================================================================
+        // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID (MATRIZ DINÁMICA DE SUSCRIPCIÓN)
         // =====================================================================
         const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
 
         if (!esPacienteExistente) {
+            // 1. Obtener el nivel de suscripción real del perfil profesional
             const { data: perfProf } = await fisioNet
                 .from('perfiles_profesionales')
                 .select('nivel_suscripcion')
                 .eq('id', user.id)
                 .maybeSingle();
 
-            const nivelActual = perfProf?.nivel_suscripcion || 'free';
+            const nivelActual = perfProf?.nivel_suscripcion || 'GRATUITO';
 
-            if (nivelActual === 'free') {
-                const { count: conteoPacientes } = await fisioNet
-                    .from('pacientes_maestros')
-                    .select('id', { count: 'exact', head: true })
-                    .or(`creado_por.eq.${user.id},id_usuario_auth.eq.${user.id}`);
+            // 2. Evaluar cuota contra la tabla planes_suscripcion
+            const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
 
-                if (conteoPacientes !== null && conteoPacientes >= 10) {
-                    alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\nHas alcanzado el límite de 10 expedientes del Plan Semillero (Gratuito).\n\nPara continuar registrando nuevos pacientes de forma ilimitada, actualiza a tu Plan Básico ($150 MXN) o Plan Pro ($250 MXN).");
-                    
-                    if (btnSubmit) {
-                        btnSubmit.disabled = false;
-                        btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
-                    }
-                    return; // Detiene el guardado limpiamente
+            if (!chequeoCuota.permitido) {
+                alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
+                
+                if (btnSubmit) {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
                 }
+                return; // Detiene el guardado de forma limpia sin crear el registro
             }
         }
+        // =====================================================================
         // =====================================================================
 
         const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');

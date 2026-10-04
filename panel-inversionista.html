@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control Financiero | FisioCid Exec</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+
+    <!-- HEADER EJECUTIVO -->
+    <header class="bg-slate-900 border-b border-slate-800 px-8 py-5 flex justify-between items-center sticky top-0 z-20">
+        <div class="flex items-center gap-3">
+            <div class="bg-amber-500/10 border border-amber-500/30 p-2 rounded-xl text-amber-400">
+                <i class="fas fa-chart-line text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-black text-white tracking-wide">FisioCid <span class="text-amber-400 font-light">| Executive Board</span></h1>
+                <p class="text-[11px] text-slate-400">Cortes de Caja, Suscripciones y Métrica SaaS</p>
+            </div>
+        </div>
+
+        <!-- FILTROS DE CORTE -->
+        <div class="flex items-center gap-3">
+            <select id="selectMesCorte" onchange="cargarMetricasFinancieras()" class="bg-slate-800 border border-slate-700 text-xs text-white rounded-xl px-3 py-2 outline-none focus:border-amber-400">
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+            </select>
+            <select id="selectAnioCorte" onchange="cargarMetricasFinancieras()" class="bg-slate-800 border border-slate-700 text-xs text-white rounded-xl px-3 py-2 outline-none focus:border-amber-400">
+                <option value="2026" selected>2026</option>
+                <option value="2027">2027</option>
+            </select>
+            <button id="btnCerrarSesion" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-2 rounded-xl text-xs font-bold transition">
+                <i class="fas fa-sign-out-alt"></i> Salir
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-8 py-8 space-y-8">
+
+        <!-- TARJETAS METRICAS PRINCIPALES (KPIs) -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            
+            <!-- INGRESOS BRUTOS -->
+            <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl relative overflow-hidden">
+                <div class="absolute -right-2 -bottom-2 text-emerald-500/10 text-7xl"><i class="fas fa-dollar-sign"></i></div>
+                <span class="text-xs font-extrabold text-emerald-400 uppercase tracking-wider block mb-1">Ingresos del Mes</span>
+                <h3 id="lblIngresosMes" class="text-3xl font-black text-white">$0.00 <span class="text-xs text-slate-400 font-normal">MXN</span></h3>
+                <p class="text-[11px] text-slate-400 mt-2"><i class="fas fa-circle-check text-emerald-400"></i> Pagos liquidados en el periodo</p>
+            </div>
+
+            <!-- USUARIOS TOTALES -->
+            <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl relative overflow-hidden">
+                <div class="absolute -right-2 -bottom-2 text-sky-500/10 text-7xl"><i class="fas fa-user-doctor"></i></div>
+                <span class="text-xs font-extrabold text-sky-400 uppercase tracking-wider block mb-1">Total Profesionales</span>
+                <h3 id="lblTotalUsuarios" class="text-3xl font-black text-white">0</h3>
+                <p class="text-[11px] text-slate-400 mt-2"><i class="fas fa-users text-sky-400"></i> Cuentas registradas en la app</p>
+            </div>
+
+            <!-- PLANES DE PAGO ACTIVOS -->
+            <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl relative overflow-hidden">
+                <div class="absolute -right-2 -bottom-2 text-purple-500/10 text-7xl"><i class="fas fa-credit-card"></i></div>
+                <span class="text-xs font-extrabold text-purple-400 uppercase tracking-wider block mb-1">Suscriptores de Pago</span>
+                <h3 id="lblSuscriptoresPago" class="text-3xl font-black text-white">0</h3>
+                <p class="text-[11px] text-slate-400 mt-2"><i class="fas fa-arrow-up-right-dots text-purple-400"></i> Excluye cuentas Gratuitas y Beta</p>
+            </div>
+
+            <!-- VALOR PROMEDIO POR USUARIO (ARPU) -->
+            <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-2xl relative overflow-hidden">
+                <div class="absolute -right-2 -bottom-2 text-amber-500/10 text-7xl"><i class="fas fa-calculator"></i></div>
+                <span class="text-xs font-extrabold text-amber-400 uppercase tracking-wider block mb-1">Ticket Promedio (ARPU)</span>
+                <h3 id="lblTicketPromedio" class="text-3xl font-black text-white">$0.00</h3>
+                <p class="text-[11px] text-slate-400 mt-2"><i class="fas fa-chart-pie text-amber-400"></i> Ingreso promedio por cliente de pago</p>
+            </div>
+
+        </div>
+
+        <!-- REPARTICIÓN DE USUARIOS POR PLAN -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6">
+            <h3 class="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
+                <i class="fas fa-layer-group text-sky-400"></i> Distribución de Usuarios por Plan de Suscripción
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-4" id="contenedorDistribucionPlanes">
+                <!-- Se llena dinámicamente -->
+            </div>
+        </div>
+
+        <!-- TABLA DE MOVIMIENTOS Y TRANSACCIONES -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                    <i class="fas fa-receipt text-emerald-400"></i> Libro Contable: Historial de Pagos Recibidos
+                </h3>
+                <span id="lblConteoTransacciones" class="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-400">0 registros</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-800/80 uppercase text-[10px] text-slate-400 border-b border-slate-700">
+                        <tr>
+                            <th class="p-3">Fecha</th>
+                            <th class="p-3">Profesional / Cliente</th>
+                            <th class="p-3">Plan Adquirido</th>
+                            <th class="p-3">Método</th>
+                            <th class="p-3">Referencia</th>
+                            <th class="p-3 text-right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaPagosInversionista" class="divide-y divide-slate-800/60">
+                        <!-- Filas dinámicas -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Carga de JS -->
+    <script src="utils.js"></script>
+    <script src="panel-inversionista.js"></script>
+</body>
+</html>
