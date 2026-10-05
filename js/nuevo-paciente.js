@@ -622,14 +622,12 @@ if (esMenorEdad) {
 
             const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
 
-            if (!chequeoCuota.permitido) {
-                alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
-                if (btnSubmit) {
-                    btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = "GUARDAR EXPEDIENTE";
-                }
-                return;
-            }
+            // ✅ CÓDIGO ACTUALIZADO CON REDIRECCIÓN DIRECTA:
+if (!chequeoCuota.permitido) {
+    alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
+    window.location.href = "suscripcion.html"; // 👈 Te redirige directamente aquí
+    return;
+}
         }
         // =====================================================================
 

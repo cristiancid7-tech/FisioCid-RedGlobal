@@ -3,14 +3,6 @@ const mp = new MercadoPago('APP_USR-c45a6e3b-7d14-4edf-a8ae-e552042f155e', {
     locale: 'es-MX'
 });
 
-// Enlaces de cobro generados en tu cuenta de Mercado Pago
-const LINKS_MERCADO_PAGO = {
-    BASICO: 'https://mpago.la/2iyG3Ha',
-    ESENCIAL: 'https://mpago.la/1v8AtKu', 
-    CLINICO: 'https://mpago.la/2ad4cen',
-    ENTERPRISE: 'https://mpago.la/2x246iG'
-};
-
 let planSeleccionadoModal = null;
 let montoSeleccionadoModal = 0;
 
@@ -72,34 +64,71 @@ async function cargarEstadoSuscripcion() {
             if (btnVolver) btnVolver.classList.remove('hidden');
         }
 
-        badge.className = `flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold ${colorBadge}`;
-        badge.innerHTML = `<i class="fas fa-shield-alt"></i> ${textoEstado}`;
+        if (badge) {
+            badge.className = `flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold ${colorBadge}`;
+            badge.innerHTML = `<i class="fas fa-shield-alt"></i> ${textoEstado}`;
+        }
 
     } catch (err) {
         console.error("Error al cargar estado de suscripción:", err);
     }
 }
 
-// 3. ABRIR PASARELA DE PAGO O MODAL
-function abrirModalPago(codigoPlan, monto) {
+// 3. ABRIR PASARELA DE PAGO AUTOMÁTICA Y ANTIFRAUDE
+async function abrirModalPago(codigoPlan, monto) {
     planSeleccionadoModal = codigoPlan;
     montoSeleccionadoModal = monto;
 
-    const urlPago = LINKS_MERCADO_PAGO[codigoPlan];
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return alert("Sesión no válida. Por favor, inicia sesión nuevamente.");
 
-    if (urlPago) {
-        // Redirige directamente al checkout seguro de Mercado Pago
-        window.open(urlPago, '_blank');
-    } else {
-        // Respaldo: Abre la ficha SPEI manual si no hay link configurado
+        // Generar la preferencia de pago vinculando el ID del usuario
+        const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer APP_USR-5830452230405605-100421-279442b033d45ef8d08595cb608be047-190181977" // Access Token Productivo
+            },
+            body: JSON.stringify({
+                items: [
+                    {
+                        title: `Plan ${codigoPlan}`,
+                        unit_price: Number(monto),
+                        quantity: 1,
+                        currency_id: "MXN"
+                    }
+                ],
+                external_reference: user.id, // 👈 Identificador del usuario para activación automática en Edge Function
+                back_urls: {
+                    success: window.location.href,
+                    failure: window.location.href,
+                    pending: window.location.href
+                },
+                auto_return: "approved"
+            })
+        });
+
+        const preference = await response.json();
+
+        if (preference.init_point) {
+            // Redirige al checkout dinámico de Mercado Pago
+            window.location.href = preference.init_point;
+        } else {
+            throw new Error("No se pudo generar la preferencia de cobro.");
+        }
+
+    } catch (err) {
+        console.error("Error procesando preferencia de pago:", err);
+        // Respaldo: Abre el modal SPEI si falla la conexión con la API
         document.getElementById('lblPlanModal').innerText = codigoPlan;
         document.getElementById('lblMontoModal').innerText = `$${monto}.00 MXN`;
-        document.getElementById('modalPago').classList.remove('hidden');
+        document.getElementById('modalPago')?.classList.remove('hidden');
     }
 }
 
 function cerrarModalPago() {
-    document.getElementById('modalPago').classList.add('hidden');
+    document.getElementById('modalPago')?.classList.add('hidden');
 }
 
 // 4. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
@@ -150,7 +179,7 @@ document.getElementById('formNotificarPago')?.addEventListener('submit', async (
         if (errPerfil) throw errPerfil;
 
         alert("🎉 ¡Pago registrado con éxito! Tu plan ha sido renovado por 30 días.");
-        cerrarModalPago();
+        cerrModalPago();
         window.location.reload();
 
     } catch (err) {
