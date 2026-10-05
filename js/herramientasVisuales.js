@@ -12,7 +12,7 @@ inicializar: function(idSuperior = 'arcada-superior', idInferior = 'arcada-infer
     if(sup && inf) {
         this.renderizarArcada(idSuperior, this.superior);
         this.renderizarArcada(idInferior, this.inferior);
-        console.log("🦷 PeriodontoFisioCid: Arcadas renderizadas con éxito.");
+        //console.log("🦷 PeriodontoFisioCid: Arcadas renderizadas con éxito.");
     } else {
         console.warn("⚠️ PeriodontoFisioCid: No se encontraron los contenedores en el DOM todavía.");
     }

@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (!idPaciente) {
-            console.log("🔍 Intentando auto-recuperar ID desde la sesión activa de Supabase Auth...");
+            //console.log("🔍 Intentando auto-recuperar ID desde la sesión activa de Supabase Auth...");
             const { data: { user } } = await fisioNet.auth.getUser();
             
             if (user) {
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (idPaciente) {
-            console.log("✅ Paciente identificado con éxito ID:", idPaciente);
+            //console.log("✅ Paciente identificado con éxito ID:", idPaciente);
             localStorage.setItem('paciente_maestro_id', idPaciente);
             
             await cargarExpedienteCompleto(idPaciente);
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==========================================
 async function cargarExpedienteCompleto(pacienteId) {
     try {
-        console.log("⏳ Cargando expediente familiar para ID:", pacienteId);
+        //console.log("⏳ Cargando expediente familiar para ID:", pacienteId);
 
         const { data: familia, error } = await fisioNet
             .from('pacientes_maestros')
@@ -164,7 +164,7 @@ function seleccionarPerfil(idPaciente) {
 // 📡 2. MOTOR DE AUTORIZACIÓN EN TIEMPO REAL (OTP)
 // ==========================================
 async function escucharSolicitudesEnVivo(pacienteId) {
-    console.log("👂 Escuchando solicitudes médicas en tiempo real para:", pacienteId);
+    //console.log("👂 Escuchando solicitudes médicas en tiempo real para:", pacienteId);
     verificarSolicitudesPendientes(pacienteId);
 
     fisioNet
@@ -175,7 +175,7 @@ async function escucharSolicitudesEnVivo(pacienteId) {
             table: 'solicitudes_acceso_otp',
             filter: `id_paciente=eq.${pacienteId}`
         }, payload => {
-            console.log("🔔 ¡NUEVA SOLICITUD DETECTADA EN VIVO! Payload:", payload.new);
+            //console.log("🔔 ¡NUEVA SOLICITUD DETECTADA EN VIVO! Payload:", payload.new);
             mostrarBannerSolicitud(payload.new);
         })
         .subscribe();
@@ -709,7 +709,7 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
 // ==========================================
 async function cargarRegistrosClinicos(pacienteId) {
     try {
-        console.log("📥 Consultando base de datos para el paciente ID:", pacienteId);
+        //console.log("📥 Consultando base de datos para el paciente ID:", pacienteId);
 
         const { data: notas, error: errNotas } = await fisioNet
             .from('historial_clinico')

@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 🎯 EL GATILLO MAESTRO DE CRISTIAN: La Homoclave dispara la gestión del Folio
  document.getElementById('curpHomo')?.addEventListener('input', () => {
         if (!pacienteExistenteId) {
-            console.log("📝 Paciente nuevo absoluto. Generando folio consecutivo...");
+            //console.log("📝 Paciente nuevo absoluto. Generando folio consecutivo...");
             gestionarFolioAutomatico(null);
         }
     });
@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==========================================
 async function cargarPacienteParaEdicion(id) {
     try {
-        console.log("⏳ Cargando paciente ID:", id);
+        //console.log("⏳ Cargando paciente ID:", id);
         const { data, error } = await fisioNet.from('pacientes_maestros').select('*').eq('id', id).single();
         
         if (error) throw error;
@@ -131,7 +131,7 @@ async function llenarFormularioCompleto(p) {
     if (estaCargandoFormulario) return;
     estaCargandoFormulario = true;
 
-    console.log("💉 Rellenando formulario para:", p.nombre);
+    //console.log("💉 Rellenando formulario para:", p.nombre);
 
     // 1. Mapeo de campos por ID
     const mapIds = {
@@ -225,7 +225,7 @@ async function llenarFormularioCompleto(p) {
         // 2. Detectar si el consentimiento está dado (para bloquear el checkbox específicamente)
         const consentimientoDado = (p.acceso_red_activo === true || p.acceso_red_activo === 'true');
 
-        console.log("🔍 Info clínica existente?:", tieneInfoClinica, "¿Consentimiento?:", consentimientoDado);
+        //console.log("🔍 Info clínica existente?:", tieneInfoClinica, "¿Consentimiento?:", consentimientoDado);
 
         // 🔒 EJECUTAMOS EL BLOQUEO
         // Bloqueamos todo lo que tenga datos
@@ -246,7 +246,7 @@ async function llenarFormularioCompleto(p) {
 // 🔒 GESTOR VISUAL DE BLOQUEO TOTAL (Identidad por ID y Antecedentes por Name)
 // ============================================================================
 function congelarCamposIdentidad(bloquear) {
-    console.log(`🛡️ Sincronizando candados. Bloqueo masivo solicitado: ${bloquear}`);
+    //console.log(`🛡️ Sincronizando candados. Bloqueo masivo solicitado: ${bloquear}`);
 
     // Unificamos todos los campos que queremos proteger
     const todosLosCampos = [
@@ -331,7 +331,7 @@ function crearBotonDesbloqueoDinamico() {
                 ? pacienteData.id_tutor 
                 : pacienteData.id;
 
-            console.log("📲 Destinatario OTP -> ID:", idDestinatarioOTP, esMenor ? "(TUTOR)" : "(PACIENTE)");
+            //console.log("📲 Destinatario OTP -> ID:", idDestinatarioOTP, esMenor ? "(TUTOR)" : "(PACIENTE)");
 
             btnKey.disabled = true;
             btnKey.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Solicitando OTP...';
@@ -342,7 +342,7 @@ function crearBotonDesbloqueoDinamico() {
                 const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
                 const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-                console.log("🔑 [FISIOCID OTP]: Generando clave interna para edición ->", codigoOTP);
+                //console.log("🔑 [FISIOCID OTP]: Generando clave interna para edición ->", codigoOTP);
 
                 // Insert directo mapeando exactamente a tus 11 columnas
                 const { data: solInsert, error: errOTP } = await fisioNet
@@ -556,7 +556,7 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         const inputTutor = document.getElementById('tutor-tel');
         const esMenorEdad = (inputTutor && inputTutor.offsetWidth > 0) || window.pacienteCargado?.es_menor_edad === true;
 
-        console.log("🛡️ Validando políticas de contacto FisioCid. Menor de edad:", esMenorEdad);
+        //console.log("🛡️ Validando políticas de contacto FisioCid. Menor de edad:", esMenorEdad);
 
         let faltaContacto = false;
         let mensajeError = "";
@@ -588,16 +588,16 @@ if (esMenorEdad) {
             return; 
         }
 
-        console.log("🎬 [LOG 1] ¡Submit detectado! Iniciando proceso de guardado...");
+        //console.log("🎬 [LOG 1] ¡Submit detectado! Iniciando proceso de guardado...");
         
         if (btnSubmit) {
             btnSubmit.disabled = true; 
             btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESANDO...';
         }
 
-        console.log("🔑 [LOG 2] Solicitando usuario activo de Auth...");
+        //console.log("🔑 [LOG 2] Solicitando usuario activo de Auth...");
         const { data: { user } } = await fisioNet.auth.getUser();
-        console.log("👤 [LOG 3] Usuario obtenido con éxito ID:", user?.id);
+        //console.log("👤 [LOG 3] Usuario obtenido con éxito ID:", user?.id);
 
         if (!user) {
             alert("⚠️ Sesión no encontrada. Por favor inicie sesión nuevamente.");
@@ -632,9 +632,9 @@ if (!chequeoCuota.permitido) {
         // =====================================================================
 
         const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-        console.log("🏢 [LOG 4] ID de clínica activa desde LocalStorage:", clinicaId);
+        //console.log("🏢 [LOG 4] ID de clínica activa desde LocalStorage:", clinicaId);
 
-        console.log("🔍 [LOG 5] Consultando rol del colaborador en DB...");
+        //console.log("🔍 [LOG 5] Consultando rol del colaborador en DB...");
         const { data: colaborador } = await fisioNet
             .from('colaboradores_clinica')
             .select('rol_sistema')
@@ -643,7 +643,7 @@ if (!chequeoCuota.permitido) {
             .maybeSingle();
 
         const rolReal = colaborador?.rol_sistema || 'OPERATIVO';
-        console.log("💼 [LOG 6] Rol del sistema asignado:", rolReal);
+        //console.log("💼 [LOG 6] Rol del sistema asignado:", rolReal);
 
         // Captura de datos de interfaz
         const curpFinal = (document.getElementById('curpAuto').value + document.getElementById('curpHomo').value).toUpperCase();
@@ -674,7 +674,7 @@ if (!chequeoCuota.permitido) {
 
         emailAdulto = emailAdulto.toLowerCase();
 
-        console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
+        //console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
         const payload = {
@@ -701,7 +701,7 @@ if (!chequeoCuota.permitido) {
         };
 
         let resultado;
-        console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
+        //console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
 
         if (esPacienteExistente) {
             const idRealPaciente = pacienteExistenteId || window.pacienteCargado.id;
@@ -749,7 +749,7 @@ if (!chequeoCuota.permitido) {
                         estado_expediente: 'ACTIVO'
                     }]);
                 }
-                console.log("✅ Paciente y Expediente sincronizados.");
+                //console.log("✅ Paciente y Expediente sincronizados.");
 
             } else {
                 if (btnSubmit) {
@@ -760,7 +760,7 @@ if (!chequeoCuota.permitido) {
             }
         } else {
             // PACIENTE NUEVO ABSOLUTO
-            console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO...");
+            //console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO...");
             payload.fecha_registro = new Date().toISOString();
             
             resultado = await fisioNet.from('pacientes_maestros').insert([payload]).select();
@@ -854,7 +854,7 @@ document.getElementById('btnVerConvenios')?.addEventListener('click', async () =
     
     if (modal) {
         modal.style.display = 'flex'; // Abrimos el modal
-        console.log("🚀 Cargando convenios (Doctores y Empresas)...");
+        //console.log("🚀 Cargando convenios (Doctores y Empresas)...");
         
         // Llamamos a la función de carga que usa el filtro .or()
         await cargarListaConveniosModal(); 
@@ -932,21 +932,45 @@ function siguientePaso(idTab) {
     if (triggerEl) { new bootstrap.Tab(triggerEl).show(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 }
 
-function procesarNombreMexicano(texto) {
-    const conectores = ["DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"];
-    let palabras = texto.toUpperCase().trim().split(/\s+/);
-    let piezas = [];
-    for (let i = 0; i < palabras.length; i++) {
-        if (conectores.includes(palabras[i]) && i + 1 < palabras.length) {
-            piezas.push(palabras[i] + " " + palabras[i + 1]); i++; 
-        } else { piezas.push(palabras[i]); }
+// 1. Función para limpiar conectores y caracteres especiales
+function limpiarPalabras(texto) {
+    if (!texto) return [];
+    // Convertimos a mayúsculas y quitamos acentos
+    let textoLimpio = texto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    // Conectores oficiales de RENAPO que no se toman en cuenta
+    const conectores = [
+        "DA", "DAS", "DE", "DEL", "DER", "DI", "DIE", "DD", "EL", "LA", 
+        "LOS", "LAS", "LE", "LES", "MAC", "MC", "VAN", "VON", "Y"
+    ];
+    
+    // Separamos por espacios y filtramos los conectores
+    let palabras = textoLimpio.trim().split(/\s+/);
+    return palabras.filter(palabra => !conectores.includes(palabra));
+}
+
+// 2. Función actualizada para procesar el nombre (Aplica regla de Jose/Maria)
+function procesarNombreMexicano(nombreRaw) {
+    let palabras = limpiarPalabras(nombreRaw);
+    
+    // Regla: Si hay más de un nombre y el primero es MARIA o JOSE (o abreviaturas), se ignora.
+    if (palabras.length > 1 && ["MARIA", "MA.", "MA", "JOSE", "J.", "J"].includes(palabras[0])) {
+        palabras.shift(); // Quita MARIA/JOSE de la lista
     }
-    return { nombre: piezas[0] || "", paterno: piezas[1] || "", materno: piezas[2] || "X" };
+    
+    // Retorna la primera palabra válida que haya quedado (en este caso ROSARIO)
+    return { nombre: palabras[0] || "X" };
+}
+
+// 3. Función actualizada para apellidos (Limpia conectores como "DE LA")
+function limpiarApellidoMexicano(apellidoRaw) {
+    let palabras = limpiarPalabras(apellidoRaw);
+    return palabras[0] || "X"; // Toma la primera palabra válida del apellido
 }
 
 
 async function gestionarFolioAutomatico(idPacienteExistente = null) {
-    console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
+    //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
     const idClinica = localStorage.getItem('id_clinica_activa');
     const inputFolio = document.getElementById('inputFolioExpediente');
     const statusFolio = document.getElementById('statusFolio');
@@ -959,7 +983,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
     try {
         // 1. SI EL PACIENTE YA EXISTE
         if (idPacienteExistente) {
-            console.log("🔍 Buscando folio existente en DB...");
+            //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
                 .from('expedientes_clinicos')
                 .select('folio_personalizado')
@@ -968,16 +992,16 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
                 .maybeSingle();
 
             if (exp) {
-                console.log("✅ Folio encontrado:", exp.folio_personalizado);
+                //console.log("✅ Folio encontrado:", exp.folio_personalizado);
                 if (inputFolio) inputFolio.value = exp.folio_personalizado;
                 if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
-            console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
+            //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
         // 2. GENERAR NUEVO
-        console.log("🏗️ Generando nuevo folio...");
+        //console.log("🏗️ Generando nuevo folio...");
         
         // A) Obtenemos la configuración de folios de la clínica
         const { data: conf, error: errConf } = await fisioNet
@@ -1007,7 +1031,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        console.log(`✨ Conteo actual: ${totalRegistrados} | Siguiente asignado: ${siguiente} | Folio: ${nuevoFolio}`);
+        //console.log(`✨ Conteo actual: ${totalRegistrados} | Siguiente asignado: ${siguiente} | Folio: ${nuevoFolio}`);
         
         if (inputFolio) inputFolio.value = nuevoFolio;
         if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
@@ -1020,29 +1044,6 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
     }
 }
 
-function limpiarApellidoMexicano(apellidoRaw) {
-    if (!apellidoRaw) return "X";
-    
-    // Convertimos a mayúsculas y limpiamos espacios extraños
-    let ap = apellidoRaw.trim().toUpperCase();
-    
-    // Lista oficial de partículas a ignorar al INICIO del apellido
-    // El orden importa (de más largas a más cortas) para no cortar a medias "DE LOS"
-    const particulas = [
-        /^DE LOS\s+/, /^DE LA\s+/, /^DE LAS\s+/, 
-        /^LOS\s+/, /^LAS\s+/, /^DEL\s+/, /^DE\s+/, /^LA\s+/
-    ];
-    
-    // Recorremos y removemos si el apellido empieza con alguna de ellas
-    for (let regex of particulas) {
-        if (regex.test(ap)) {
-            ap = ap.replace(regex, "");
-            break; // Ya quitamos la partícula principal, salimos
-        }
-    }
-    
-    return ap || "X";
-}
 
 
 
@@ -1129,7 +1130,7 @@ async function buscarTutorEnBase(texto) {
                     document.getElementById('correo-tutor').value = t.correo_electronico || "";
                     
                     lista.style.display = 'none';
-                    console.log("🔗 Tutor enlazado correctamente. UUID:", t.id);
+                    //console.log("🔗 Tutor enlazado correctamente. UUID:", t.id);
                 };
                 lista.appendChild(item);
             });
@@ -1154,7 +1155,7 @@ async function validarCuotaPaciente(userId, nivelSuscripcion) {
     };
 
     const limitePermitido = LIMITES[nivelSuscripcion] || 15;
-    console.log(`🔒 Límite asignado para plan ${nivelSuscripcion}: ${limitePermitido}`);
+    //console.log(`🔒 Límite asignado para plan ${nivelSuscripcion}: ${limitePermitido}`);
 
     if (limitePermitido >= 999999) {
         return { permitido: true };
@@ -1173,7 +1174,7 @@ async function validarCuotaPaciente(userId, nivelSuscripcion) {
         }
 
         const totalRegistrados = count || 0;
-        console.log(`📈 Pacientes vinculados en la cuenta (ID ${userId}): ${totalRegistrados} de ${limitePermitido}`);
+        //console.log(`📈 Pacientes vinculados en la cuenta (ID ${userId}): ${totalRegistrados} de ${limitePermitido}`);
 
         if (totalRegistrados >= limitePermitido) {
             return {

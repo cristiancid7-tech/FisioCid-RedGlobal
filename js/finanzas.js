@@ -3,7 +3,7 @@
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🏦 FisioCid Finanzas: Inicializando módulo de contabilidad...");
+    //console.log("🏦 FisioCid Finanzas: Inicializando módulo de contabilidad...");
 
     // 1. Verificar Sesión del Profesional
     const { data: { user } } = await fisioNet.auth.getUser();
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const fechaLocal = new Date(ahora.getTime() - offset).toISOString().split('T')[0];
         
         inputFecha.value = fechaLocal;
-        console.log("📅 Fecha de corte establecida en de forma local:", fechaLocal);
+        //console.log("📅 Fecha de corte establecida en de forma local:", fechaLocal);
 
         // Escuchador de cambios en caliente
         inputFecha.addEventListener('change', () => cargarReporteFinanciero(clinicaId));
@@ -59,7 +59,7 @@ async function cargarReporteFinanciero(clinicaId) {
     if (!tbody || !fechaSeleccionada) return;
 
     try {
-        console.log(`🏦 FisioCid Finanzas: Consultando caja para la sede [${clinicaId}] en fecha [${fechaSeleccionada}]`);
+        //console.log(`🏦 FisioCid Finanzas: Consultando caja para la sede [${clinicaId}] en fecha [${fechaSeleccionada}]`);
         
         // Consultamos finanzas_gestion cruzando los datos del paciente y amarrando el ID de la clínica 🛡️
         const { data: movimientos, error } = await fisioNet

@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // SI SOLO TIENE UNA SEDE: ENTRAR DIRECTO
     if (listaFinal.length === 1) {
-        console.log("Detectada sede única, preparando entrada...");
+        //console.log("Detectada sede única, preparando entrada...");
         await guardarYEntrar(listaFinal[0].clinicas, user.id);
         return;
     }
@@ -96,7 +96,7 @@ async function guardarYEntrar(clinica, userId) {
     localStorage.setItem('clinica_color', clinica.color_institucional || '#10b981');
     localStorage.setItem('clinica_logo', clinica.logo_url || 'img/default-clinic.png');
     
-    console.log("✅ Contexto establecido para:", clinica.nombre_clinica);
+    //console.log("✅ Contexto establecido para:", clinica.nombre_clinica);
     window.location.replace('dashboard.html'); 
 }
 

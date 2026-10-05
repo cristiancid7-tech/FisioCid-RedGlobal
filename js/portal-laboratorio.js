@@ -10,7 +10,7 @@ const especialidadActiva = localStorage.getItem('especialidad_usuario') || 'Labo
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-   console.log("🚀 Portal Laboratorio Iniciando Motores...");
+   //console.log("🚀 Portal Laboratorio Iniciando Motores...");
     
    const elSpanEspecialidad = document.getElementById('especialidad_usuario');
 if (elSpanEspecialidad) {
@@ -102,7 +102,7 @@ function manejarSeleccionArchivos(e) {
     
     // Aquí es donde ocurre el reemplazo sin errores
     input.parentNode.replaceChild(nuevoInput, input);
-    console.log("✅ Input reseteado quirúrgicamente sin tocar valores bloqueados.");
+    //console.log("✅ Input reseteado quirúrgicamente sin tocar valores bloqueados.");
 }
 
 
@@ -139,7 +139,7 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
         const extensionForzada = tiposPermitidos[tipoReal];
         const rutaSegura = `${clinicaId}/${pacienteId}/${estudioId}/${Date.now()}_${nombreLimpio}.${extensionForzada}`;
         
-        console.log("📤 Subiendo archivo blindado:", rutaSegura);
+        //console.log("📤 Subiendo archivo blindado:", rutaSegura);
 
         // 3. Subida con tipo de contenido forzado
         const { error } = await fisioNet.storage
@@ -198,20 +198,41 @@ async function mostrarNombreEspecialista() {
     }
 }
 
-// --- LÓGICA DE LIMPIEZA DE APELLIDOS Y CURP ---
-function limpiarApellidoMexicano(apellidoRaw) {
-    if (!apellidoRaw) return "X";
-    let ap = apellidoRaw.trim().toUpperCase();
-    const particulas = [
-        /^DE LOS\s+/, /^DE LA\s+/, /^DE LAS\s+/, /^LOS\s+/, /^LAS\s+/, /^DEL\s+/, /^DE\s+/, /^LA\s+/
+
+// 1. Función para limpiar conectores y caracteres especiales
+function limpiarPalabras(texto) {
+    if (!texto) return [];
+    // Convertimos a mayúsculas y quitamos acentos
+    let textoLimpio = texto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    // Conectores oficiales de RENAPO que no se toman en cuenta
+    const conectores = [
+        "DA", "DAS", "DE", "DEL", "DER", "DI", "DIE", "DD", "EL", "LA", 
+        "LOS", "LAS", "LE", "LES", "MAC", "MC", "VAN", "VON", "Y"
     ];
-    for (let regex of particulas) {
-        if (regex.test(ap)) {
-            ap = ap.replace(regex, "");
-            break; 
-        }
+    
+    // Separamos por espacios y filtramos los conectores
+    let palabras = textoLimpio.trim().split(/\s+/);
+    return palabras.filter(palabra => !conectores.includes(palabra));
+}
+
+// 2. Función actualizada para procesar el nombre (Aplica regla de Jose/Maria)
+function procesarNombreMexicano(nombreRaw) {
+    let palabras = limpiarPalabras(nombreRaw);
+    
+    // Regla: Si hay más de un nombre y el primero es MARIA o JOSE (o abreviaturas), se ignora.
+    if (palabras.length > 1 && ["MARIA", "MA.", "MA", "JOSE", "J.", "J"].includes(palabras[0])) {
+        palabras.shift(); // Quita MARIA/JOSE de la lista
     }
-    return ap || "X";
+    
+    // Retorna la primera palabra válida que haya quedado (en este caso ROSARIO)
+    return { nombre: palabras[0] || "X" };
+}
+
+// 3. Función actualizada para apellidos (Limpia conectores como "DE LA")
+function limpiarApellidoMexicano(apellidoRaw) {
+    let palabras = limpiarPalabras(apellidoRaw);
+    return palabras[0] || "X"; // Toma la primera palabra válida del apellido
 }
 
 function procesarCurp() {
@@ -270,7 +291,7 @@ function saltarAHomoclave(input) {
 
  document.getElementById('curp-homo')?.addEventListener('input', () => {
         if (!pacienteExistenteId) {
-            console.log("📝 Paciente nuevo absoluto. Generando folio consecutivo...");
+            //console.log("📝 Paciente nuevo absoluto. Generando folio consecutivo...");
             gestionarFolioAutomatico(null);
         }
     });
@@ -308,7 +329,7 @@ function actualizarInterfazEdad() {
 // 🔒 GESTOR VISUAL DE CANDADOS PREMIUM (CONGELACIÓN DE INPUTS EN GRIS)
 // ============================================================================
 function congelarCamposIdentidad(bloquear) {
-    console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
+    //console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
     
     const idsCriticos = [
         'valNombre', 'valPaterno', 'valMaterno', 'valFecha', 
@@ -533,7 +554,7 @@ async function guardarEstudioLaboratorio(event) {
         // 2. Registrar o recuperar Paciente
         let idPacienteActual = pacienteExistenteId; 
         if (!idPacienteActual) {
-            console.log("🆕 Registrando paciente nuevo en la Ficha Maestra...");
+            //console.log("🆕 Registrando paciente nuevo en la Ficha Maestra...");
             idPacienteActual = await registrarPacienteNuevo(); 
         }
 
@@ -743,7 +764,7 @@ window.filtrarHistorial = () => {
 // 🔢 MOTOR DE EXPEDIENTES LOCALES (REPLICADO DE NUEVO-PACIENTE)
 // ============================================================================
 async function gestionarFolioAutomatico(idPacienteExistente = null) {
-    console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
+    //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
     const idClinica = localStorage.getItem('id_clinica_activa');
     const inputFolio = document.getElementById('inputFolioExpediente');
     const statusFolio = document.getElementById('statusFolio');
@@ -757,7 +778,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
     try {
         // 1. SI EL PACIENTE YA EXISTE EN ESTA SEDE
         if (idPacienteExistente) {
-            console.log("🔍 Buscando folio existente en DB...");
+            //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
                 .from('expedientes_clinicos')
                 .select('folio_personalizado')
@@ -766,16 +787,16 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
                 .maybeSingle();
 
             if (exp) {
-                console.log("✅ Folio encontrado:", exp.folio_personalizado);
+                //console.log("✅ Folio encontrado:", exp.folio_personalizado);
                 inputFolio.value = exp.folio_personalizado;
                 if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
-            console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
+            //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
         // 2. GENERAR NUEVO CONSECUTIVO LOCAL
-        console.log("🏗️ Generando nuevo folio...");
+        //console.log("🏗️ Generando nuevo folio...");
         
         // Ejecutamos ambas consultas al mismo tiempo para ganar velocidad
         const [confRes, countRes] = await Promise.all([
@@ -796,7 +817,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        console.log("✨ Folio generado con éxito:", nuevoFolio);
+        //console.log("✨ Folio generado con éxito:", nuevoFolio);
         inputFolio.value = nuevoFolio;
         if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic text-primary"></i> NUEVO EXPEDIENTE POR ASIGNAR';
         
@@ -811,7 +832,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
 
 async function renderizarCamposDinamicos(idsArray) {
     const contenedor = document.getElementById('contenedor-campos-dinamicos');
-    console.log("Consultando estudios con IDs:", idsArray);
+    //console.log("Consultando estudios con IDs:", idsArray);
 
     const { data: estudios, error } = await fisioNet
         .from('catalogo_estudios')
@@ -872,7 +893,7 @@ async function renderizarCamposDinamicos(idsArray) {
         document.getElementById('btn-finalizar-todo').classList.add('d-none');
         
         document.getElementById('visor-pdf-dictamen').style.border = "3px solid #28a745";
-        console.log("🔒 Modo Solo Lectura activado.");
+        //console.log("🔒 Modo Solo Lectura activado.");
     }
 }
 
@@ -1117,7 +1138,7 @@ function configurarBotonesModal() {
 
     // Listener para el botón PRE-GUARDAR
     nuevoBtnPre.onclick = () => {
-        console.log("🟡 Pre-guardando...");
+        //console.log("🟡 Pre-guardando...");
         nuevoBtnFinal.classList.remove('d-none'); // ¡Aquí aparece el verde!
         nuevoBtnPre.disabled = true;
     };
@@ -1138,7 +1159,7 @@ async function procesarGuardado(idEstudio) {
         return;
     }
 
-    console.log("🚀 Iniciando guardado consolidado...");
+    //console.log("🚀 Iniciando guardado consolidado...");
 
     try {
         // 1. OBTENER ESTADO ACTUAL
@@ -1272,7 +1293,7 @@ async function inicializarRolUsuario() {
         if (perfil) {
             especialidadUsuario = perfil.especialidad || 'GENERAL';
             localStorage.setItem('especialidad_usuario', especialidadUsuario);
-            console.log("✅ Especialidad sincronizada:", especialidadUsuario);
+            //console.log("✅ Especialidad sincronizada:", especialidadUsuario);
         }
     } catch (err) {
         console.error("Error sincronizando rol:", err);
@@ -1445,7 +1466,7 @@ async function renderizarModoConsulta(estudio) {
 async function abrirVisorPDFFirmado(rutaArchivo) {
     const contenedor = document.getElementById('contenedor-visor-pdf');
     
-    console.log("📂 RUTA ORIGINAL QUE LLEGA DE LA DB:", rutaArchivo);
+    //console.log("📂 RUTA ORIGINAL QUE LLEGA DE LA DB:", rutaArchivo);
 
     const { data, error } = await fisioNet.storage
         .from('expedientes-clinicos')
@@ -1456,7 +1477,7 @@ async function abrirVisorPDFFirmado(rutaArchivo) {
         return;
     }
 
-    console.log("🔗 URL FIRMADA GENERADA POR SUPABASE:", data.signedUrl);
+    //console.log("🔗 URL FIRMADA GENERADA POR SUPABASE:", data.signedUrl);
 
     contenedor.innerHTML = `
         <embed src="${data.signedUrl}" 

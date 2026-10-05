@@ -63,7 +63,7 @@ document.getElementById('btnNuevoInsumo').onclick = () => {
 
 
 document.getElementById('btnGuardarInsumo').onclick = async () => {
-    console.log("Iniciando guardado profesional...");
+    //console.log("Iniciando guardado profesional...");
 
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) return alert("Sesión expirada");

@@ -26,9 +26,9 @@ async function verificarAcceso() {
 async function obtenerPacientes(terminoBusqueda = "") {
     const idClinicaActiva = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
 
-    console.log("🔍 [DEBUG] Iniciando obtenerPacientes...");
-    console.log("🏢 Clínica Activa ID:", idClinicaActiva);
-    console.log("⌨️ Texto ingresado por el usuario:", `"${terminoBusqueda}"`);
+    //console.log("🔍 [DEBUG] Iniciando obtenerPacientes...");
+    //console.log("🏢 Clínica Activa ID:", idClinicaActiva);
+    //console.log("⌨️ Texto ingresado por el usuario:", `"${terminoBusqueda}"`);
 
     if (!idClinicaActiva) {
         console.warn("⚠️ No se encontró ID de clínica activa");
@@ -42,7 +42,7 @@ async function obtenerPacientes(terminoBusqueda = "") {
 
     if (terminoBusqueda && terminoBusqueda.trim() !== "") {
         const t = terminoBusqueda.trim();
-        console.log("🎯 Filtrando por:", t);
+        //console.log("🎯 Filtrando por:", t);
   
         // Prueba esta versión de la consulta que es más "agresiva" buscando:
 consulta = consulta.or(`nombre.ilike.%${t}%,apellido_paterno.ilike.%${t}%,numero_expediente_sede.ilike.%${t}%`);
@@ -57,10 +57,10 @@ consulta = consulta.or(`nombre.ilike.%${t}%,apellido_paterno.ilike.%${t}%,numero
     }
 
     // LOG CLAVE: ¿Qué nos devolvió la base de datos?
-    console.log("📊 Datos recibidos de Supabase:", pacientes);
+    //console.log("📊 Datos recibidos de Supabase:", pacientes);
     
     if (pacientes.length === 0) {
-        console.log("❓ La consulta no devolvió nada. Verifica si el folio existe EXACTAMENTE así en Supabase.");
+        //console.log("❓ La consulta no devolvió nada. Verifica si el folio existe EXACTAMENTE así en Supabase.");
     }
 
     return pacientes;

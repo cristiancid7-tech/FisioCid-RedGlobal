@@ -107,7 +107,7 @@ async function procesarLoginStaff(event) {
         const sesionUser = loginData.user;
         if (!sesionUser) throw new Error("No se pudo extraer la sesión activa.");
 
-        console.log("🔍 [STAFF] Buscando contrato legítimo para ID:", sesionUser.id);
+        //console.log("🔍 [STAFF] Buscando contrato legítimo para ID:", sesionUser.id);
         
         // 2. Consulta plana a colaboradores
         const { data: contratos, error: errColab } = await fisioNet
@@ -143,7 +143,7 @@ async function procesarLoginStaff(event) {
         localStorage.setItem('rol_actual', rolOperativo);
         localStorage.setItem('rol_usuario', 'PROFESIONAL_FISIO');
 
-        console.log("🚀 Acceso Staff correcto. Saltando a panel operativo.");
+        //console.log("🚀 Acceso Staff correcto. Saltando a panel operativo.");
         window.location.href = 'dashboard.html';
         return;
 
@@ -205,7 +205,7 @@ async function asegurarClinicaActiva() {
     let idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
     if (!idClinica) {
-        console.log("🔍 id_clinica no detectado en memoria. Consultando a Supabase...");
+        //console.log("🔍 id_clinica no detectado en memoria. Consultando a Supabase...");
         const { data: { user } } = await fisioNet.auth.getUser();
         
         if (user) {
@@ -235,7 +235,7 @@ async function asegurarClinicaActiva() {
             if (idClinica) {
                 localStorage.setItem('id_clinica_activa', idClinica);
                 localStorage.setItem('clinica_activa_id', idClinica);
-                console.log("✅ ID de Clínica auto-recuperado y fijado:", idClinica);
+                //console.log("✅ ID de Clínica auto-recuperado y fijado:", idClinica);
             }
         }
     }

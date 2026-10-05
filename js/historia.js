@@ -181,17 +181,17 @@ const cargarExpedienteFijo = async () => {
         if (errorNotas) throw errorNotas;
 
         if (notasAnteriores && notasAnteriores.length > 0) {
-            console.log(`📜 [FisiodCid Red]: Historial detectado (${notasAnteriores.length} notas). Almacenando última evolución.`);
+            //console.log(`📜 [FisiodCid Red]: Historial detectado (${notasAnteriores.length} notas). Almacenando última evolución.`);
             FisioCidEngine.ultimaNotaCargada = notasAnteriores[0];
 
             // 🎯 CASO PACIENTE EXISTENTE: Sí tiene historial, abrimos el selector interactivo
             if (typeof modalEngine !== 'undefined' && modalEngine.mostrarSelectorTipoConsulta) {
-                console.log("🎛️ Desplegando modal de tipo de consulta subsecuente...");
+                //console.log("🎛️ Desplegando modal de tipo de consulta subsecuente...");
                 modalEngine.mostrarSelectorTipoConsulta();
             }
         } else {
             // 🆕 CASO PACIENTE NUEVO ABSOLUTO (Cero "Show")
-            console.log("🆕 [BÚNKER CLÍNICO]: Cero notas previas en DB. Saltando directo a Valoración Inicial.");
+            //console.log("🆕 [BÚNKER CLÍNICO]: Cero notas previas en DB. Saltando directo a Valoración Inicial.");
             
             // Ocultamos el modal o contenedor del flujo si es que se pinta por defecto en el HTML
             const modalFlujo = document.getElementById('modalFlujoConsulta') || document.getElementById('contenedorFlujoConsulta');
@@ -212,7 +212,7 @@ const cargarExpedienteFijo = async () => {
 
     // 6. GALERÍA DE GABINETE
     if (idLimpio && typeof modalEngine !== 'undefined' && modalEngine.cargarEstudiosAnteriores) {
-        console.log("📸 Sincronizando galería de gabinete para:", idLimpio);
+        //console.log("📸 Sincronizando galería de gabinete para:", idLimpio);
         modalEngine.cargarEstudiosAnteriores(idLimpio);
     }
     detectarEstudiosPendientesEnNota(idLimpio);
@@ -224,7 +224,7 @@ const cargarExpedienteFijo = async () => {
 // ============================================================================
 function adaptarInterfazPorEspecialidad() {
     const especialidad = (localStorage.getItem('especialidadUsuario') || 'GENERAL').toUpperCase().trim();
-    console.log("🎨 Aplicando modo visual para especialidad:", especialidad);
+    //console.log("🎨 Aplicando modo visual para especialidad:", especialidad);
 
     const esFisio = especialidad.includes('FISIO') || especialidad.includes('REHABILITA');
     const esDental = especialidad.includes('DENT') || especialidad.includes('ODONTO');
@@ -652,7 +652,7 @@ function inicializarEscuchaMotivo() {
             });
 
             if (protocoloMatch) {
-                console.log("💡 Sugiriendo protocolo:", protocoloMatch.titulo);
+                //console.log("💡 Sugiriendo protocolo:", protocoloMatch.titulo);
             }
         }
 
@@ -700,7 +700,7 @@ document.getElementById('btnSolicitarHistoria')?.addEventListener('click', async
 
     // 🔓 SI YA FUE AUTORIZADO EN ESTA SESIÓN, ABRIR VISOR DIRECTAMENTE
     if (sesionEstaAutorizada(idPacienteLimpio)) {
-        console.log("🔓 [SESIÓN REUTILIZADA]: Paciente ya autorizado previamente. Abriendo visor sin OTP...");
+        //console.log("🔓 [SESIÓN REUTILIZADA]: Paciente ya autorizado previamente. Abriendo visor sin OTP...");
         await cargarYMostrarVisorExpediente(idPacienteLimpio);
         return;
     }
@@ -717,7 +717,7 @@ document.getElementById('btnSolicitarHistoria')?.addEventListener('click', async
         const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
         const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-        console.log("🔑 Generando nuevo OTP ->", codigoOTP);
+        //console.log("🔑 Generando nuevo OTP ->", codigoOTP);
 
         const { data, error } = await fisioNet
             .from('solicitudes_acceso_otp')
@@ -1031,7 +1031,7 @@ async function verificarEstudiosVinculadosEnCarga(pacienteId) {
             const ultimo = estudios[0];
             const fecha = new Date(ultimo.fecha_registro).toLocaleDateString('es-MX');
 
-            console.log(`📸 El paciente cuenta con ${estudios.length} estudios cargados en gabinete.`);
+            //console.log(`📸 El paciente cuenta con ${estudios.length} estudios cargados en gabinete.`);
 
             // Notificación visual rápida en la interfaz para el doctor
             const divNotif = document.createElement('div');

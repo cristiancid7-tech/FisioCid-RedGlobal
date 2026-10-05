@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modalEcoEl) {
             // Inicialización manual para asegurar que se oculte
             new bootstrap.Modal(modalEcoEl);
-            console.log("✅ Sistema Radiológico FisioCid listo.");
+            //console.log("✅ Sistema Radiológico FisioCid listo.");
         }
     }, 500);
 });

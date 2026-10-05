@@ -10,7 +10,7 @@ let perfilEspecialistaCache = null; // Guardamos el rol del usuario logueado
 let edicionFichaAutorizada = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🔬 Portal de Especialista Listo para Captura Manual - Validando Roles");
+    //console.log("🔬 Portal de Especialista Listo para Captura Manual - Validando Roles");
     
     // 1. Obtener y mostrar la identidad del profesional activo
     await mostrarNombreEspecialista();
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const forzarEstudioId = localStorage.getItem('forzar_apertura_estudio_id'); // 🗲 ID Único del registro
 
     if (forzarArchivo && forzarPaciente && forzarEstudioId) {
-        console.log(`📡 Modo Enrutado Directo Activo: Cargando estudio ${forzarEstudioId} de ${forzarPaciente}`);
+        //console.log(`📡 Modo Enrutado Directo Activo: Cargando estudio ${forzarEstudioId} de ${forzarPaciente}`);
         
         // Limpiamos los candados temporales de navegación
         localStorage.removeItem('forzar_apertura_archivo');
@@ -88,7 +88,7 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
         document.getElementById('visorComparativa').dataset.pacienteActivoId = idDelPaciente;
 
         // 4. 🔍 JALAMOS SU HISTORIAL ANTERIOR COMPLETO PARA COMPARACIÓN RÁPIDA
-        console.log(`📡 Escaneando comparativa histórica para el paciente ID: ${idDelPaciente}`);
+        //console.log(`📡 Escaneando comparativa histórica para el paciente ID: ${idDelPaciente}`);
         const { data: historiales, errorHist } = await fisioNet
             .from('estudios_gabinete')
             .select('id, fecha_registro, tipo_estudio, zona_anatomica, archivo_url, estado_dictamen')
@@ -150,11 +150,11 @@ function actualizarInterfazEdad() {
     if (anosVal < 18) {
         seccionTutor?.classList.remove('d-none');
         bloqueAdulto?.classList.add('d-none');
-        console.log("👶 Modo Pediatría Activado");
+        //console.log("👶 Modo Pediatría Activado");
     } else {
         seccionTutor?.classList.add('d-none');
         bloqueAdulto?.classList.remove('d-none');
-        console.log("👨‍💼 Modo Adulto Activado");
+        //console.log("👨‍💼 Modo Adulto Activado");
     }
 }
 
@@ -348,7 +348,7 @@ function autorrellenarPaciente(p) {
 // 🔒 GESTOR VISUAL DE CANDADOS PREMIUM (CONGELACIÓN DE INPUTS EN GRIS)
 // ============================================================================
 function congelarCamposIdentidad(bloquear) {
-    console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
+    //console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
     
     const idsCriticos = [
             'valNombre', 'valPaterno', 'valMaterno', 'valFecha', 
@@ -549,7 +549,7 @@ async function guardarEstudioGabinete(event) {
         const telContacto = esMenor ? document.getElementById('tutor-tel').value : (document.getElementById('tel-manual')?.value || "");
 
         // 🎯 1. SINCRONIZACIÓN DE TABLA MAESTRA (UPSERT DIRECTO)
-        console.log("💾 Sincronizando datos en pacientes_maestros...");
+        //console.log("💾 Sincronizando datos en pacientes_maestros...");
         const resultadoUpsert = await fisioNet
             .from('pacientes_maestros')
             .upsert({ 
@@ -588,7 +588,7 @@ async function guardarEstudioGabinete(event) {
             .maybeSingle();
 
         if (!expedienteExiste) {
-            console.log("🆕 No existe expediente en esta sede de gabinete. Forzando accesos locales...");
+            //console.log("🆕 No existe expediente en esta sede de gabinete. Forzando accesos locales...");
 
             await fisioNet.from('vinculos_clinicos').insert([{
                 paciente_id: idRealPaciente,
@@ -608,7 +608,7 @@ async function guardarEstudioGabinete(event) {
                 numero_consecutivo: consecutivoFinal,
                 estado_expediente: 'ACTIVO'
             }]);
-            console.log("📌 Vínculo de Red y Expediente de Sede de Gabinete asegurados.");
+            //console.log("📌 Vínculo de Red y Expediente de Sede de Gabinete asegurados.");
         }
         // ============================================================================
 
@@ -824,7 +824,7 @@ function filtrarHistorialGabineteRealTime() {
     clearTimeout(timeoutBusqueda);
     if (texto.length >= 3) {
         timeoutBusqueda = setTimeout(async () => {
-            console.log(`📡 Buscando de forma profunda en la DB el patron: ${texto}`);
+            //console.log(`📡 Buscando de forma profunda en la DB el patron: ${texto}`);
             try {
                 const { data: { user } } = await fisioNet.auth.getUser();
                 if (!user) return;
@@ -1062,7 +1062,7 @@ async function cambiarTomaEnVisorAvanzado(direccion) {
     if (indiceTomaActiva >= tomasVisorActuales.length) indiceTomaActiva = 0;
     if (indiceTomaActiva < 0) indiceTomaActiva = tomasVisorActuales.length - 1;
 
-    console.log(`🎠 Cambiando a la toma índice: ${indiceTomaActiva}`);
+    //console.log(`🎠 Cambiando a la toma índice: ${indiceTomaActiva}`);
     await renderizarTomaActivaEnLienzo();
 }
 
@@ -1093,7 +1093,7 @@ async function iniciarComparativa() {
 
     // Aseguramos que la librería Panzoom esté cargada en el ecosistema
     if (typeof Panzoom === 'undefined') {
-        console.log("📡 Cargando motor dinámico de Micro-Zoom Híbrido...");
+        //console.log("📡 Cargando motor dinámico de Micro-Zoom Híbrido...");
         await cargarLibreriaPanzoom();
     }
 
@@ -1114,7 +1114,7 @@ async function iniciarComparativa() {
 
         if (checks.length === 1) {
             // 🎯 CASO 1: VISTA ÚNICA COMPLETA (col-12)
-            console.log("🎚️ Configurando Visor en Modo Pantalla Completa (Toma Única)");
+            //console.log("🎚️ Configurando Visor en Modo Pantalla Completa (Toma Única)");
             
             panelIzq.className = "col-12 h-100 p-0 position-relative d-flex align-items-center justify-content-center";
             panelDer.classList.add('d-none');
@@ -1158,7 +1158,7 @@ async function iniciarComparativa() {
 
         } else if (checks.length === 2) {
             // 🎯 CASO 2: VISTA PARALELA DIVIDIDA (col-6 / col-6)
-            console.log("🔀 Configurando Visor en Modo Pantalla Dividida (Comparativa)");
+            //console.log("🔀 Configurando Visor en Modo Pantalla Dividida (Comparativa)");
             
             panelIzq.className = "col-6 h-100 p-0 position-relative d-flex align-items-center justify-content-center";
             panelDer.className = "col-6 h-100 p-0 position-relative d-flex align-items-center justify-content-center";
@@ -1226,7 +1226,7 @@ async function iniciarComparativa() {
 function reiniciarZoomTomas() {
     if (instancePanzoomIzq) instancePanzoomIzq.reset();
     if (instancePanzoomDer) instancePanzoomDer.reset();
-    console.log("🔄 Coordenadas y escalas reajustadas a valores de fábrica.");
+    //console.log("🔄 Coordenadas y escalas reajustadas a valores de fábrica.");
 }
 
 function limpiarInstanciasZoom() {
@@ -1242,14 +1242,14 @@ function cerrarComparativa() {
 function cargarLibreriaPanzoom() {
     return new Promise((resolve) => {
         if (typeof Panzoom !== 'undefined') {
-            console.log("✅ Motor Panzoom verificado en memoria desde el HTML.");
+            //console.log("✅ Motor Panzoom verificado en memoria desde el HTML.");
             resolve();
         } else {
             // Respaldo de seguridad en caso de fallo de red
             const script = document.createElement('script');
             script.src = "https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js";
             script.onload = () => {
-                console.log("✅ Motor Panzoom recuperado por respaldo.");
+                //console.log("✅ Motor Panzoom recuperado por respaldo.");
                 resolve();
             };
             document.head.appendChild(script);
@@ -1295,7 +1295,7 @@ function calcularEdad(fecha) {
 // 🔢 MOTOR DE EXPEDIENTES LOCALES EXACTO (REPLICADO DE NUEVO-PACIENTE)
 // ============================================================================
 async function gestionarFolioAutomatico(idPacienteExistente = null) {
-    console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
+    //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
     const idClinica = localStorage.getItem('id_clinica_activa');
     const inputFolio = document.getElementById('inputFolioExpediente');
     const statusFolio = document.getElementById('statusFolio');
@@ -1309,7 +1309,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
     try {
         // 1. SI EL PACIENTE YA EXISTE EN ESTA SEDE
         if (idPacienteExistente) {
-            console.log("🔍 Buscando folio existente en DB...");
+            //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
                 .from('expedientes_clinicos')
                 .select('folio_personalizado')
@@ -1318,16 +1318,16 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
                 .maybeSingle();
 
             if (exp) {
-                console.log("✅ Folio encontrado:", exp.folio_personalizado);
+                //console.log("✅ Folio encontrado:", exp.folio_personalizado);
                 inputFolio.value = exp.folio_personalizado;
                 if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
-            console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
+            //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
         // 2. GENERAR NUEVO CONSECUTIVO LOCAL
-        console.log("🏗️ Generando nuevo folio...");
+        //console.log("🏗️ Generando nuevo folio...");
         
         const [confRes, countRes] = await Promise.all([
             fisioNet.from('clinicas').select('folio_prefijo, folio_sede, folio_separador').eq('id', idClinica).single(),
@@ -1347,7 +1347,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        console.log("✨ Folio generado con éxito:", nuevoFolio);
+        //console.log("✨ Folio generado con éxito:", nuevoFolio);
         inputFolio.value = nuevoFolio;
         if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic text-primary"></i> NUEVO EXPEDIENTE POR ASIGNAR';
         
@@ -1459,7 +1459,7 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
         document.getElementById('es-urgente-pacs').checked = estudioActual.es_hallazgo_urgente || false;
 
         // 5. 🔍 FILTRO COMPARATIVO: Buscamos estudios anteriores del mismo paciente para la barra lateral
-        console.log(`📡 Escaneando comparativa historica para el paciente ID: ${idDelPaciente}`);
+        //console.log(`📡 Escaneando comparativa historica para el paciente ID: ${idDelPaciente}`);
         const { data: historiales, errorHist } = await fisioNet
             .from('estudios_gabinete')
             .select('id, fecha_registro, tipo_estudio, zona_anatomica, archivo_url, estado_dictamen')

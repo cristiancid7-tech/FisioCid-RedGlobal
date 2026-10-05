@@ -3,7 +3,7 @@
 // ==========================================
 
 async function obtenerIdClinicaReal(userId) {
-    console.log("🔍 Consultando tabla clinicas en Supabase para el usuario:", userId);
+    //console.log("🔍 Consultando tabla clinicas en Supabase para el usuario:", userId);
     
     // 1. Busqueda: ¿Es el dueño directo?
     let { data: clinica, error: errC } = await fisioNet
@@ -14,7 +14,7 @@ async function obtenerIdClinicaReal(userId) {
 
     // 2. Busqueda: Si no es el dueño, ¿es un colaborador activo?
     if (!clinica) {
-        console.log("🔍 Buscando en colaboradores_clinica...");
+        //console.log("🔍 Buscando en colaboradores_clinica...");
         const { data: colab } = await fisioNet
             .from('colaboradores_clinica')
             .select('id_clinica')
@@ -199,8 +199,8 @@ async function cargarRedActual(idClinica) {
                     ${colab.rol_sistema}
                 </span>
                 <div style="display: flex; gap: 8px;">
-                    <button onclick="console.log('Cambiar Clave de: ${colab.id_profesional}')" title="Cambiar Contraseña" style="border:none; background:#f1f5f9; padding:5px 8px; border-radius:6px; cursor:pointer;">🔑</button>
-                    <button onclick="console.log('Toggle Estado de: ${colab.id_profesional}')" title="${esInactivo ? 'Reactivar' : 'Pausar'}" style="border:none; background:#f1f5f9; padding:5px 8px; border-radius:6px; cursor:pointer;">
+                    <button onclick="//console.log('Cambiar Clave de: ${colab.id_profesional}')" title="Cambiar Contraseña" style="border:none; background:#f1f5f9; padding:5px 8px; border-radius:6px; cursor:pointer;">🔑</button>
+                    <button onclick="//console.log('Toggle Estado de: ${colab.id_profesional}')" title="${esInactivo ? 'Reactivar' : 'Pausar'}" style="border:none; background:#f1f5f9; padding:5px 8px; border-radius:6px; cursor:pointer;">
                         ${esInactivo ? '▶️' : '⏸️'}
                     </button>
                 </div>
@@ -374,7 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) { window.location.href = 'login.html'; return; }
 
-    console.log("👤 Usuario detectado ID:", user.id);
+    //console.log("👤 Usuario detectado ID:", user.id);
 
     // Forzamos limpieza si había un valor basura guardado
     const domGuardado = localStorage.getItem('clinica_dominio');
@@ -383,7 +383,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const clinica = await obtenerIdClinicaReal(user.id);
-    console.log("🏢 Datos de clínica recuperados:", clinica);
+    //console.log("🏢 Datos de clínica recuperados:", clinica);
 
     const spanDominio = document.getElementById('labelDominio');
     

@@ -112,7 +112,7 @@ async function procesarLoginDoctor(event) {
             .maybeSingle();
 
         if (perfilProf?.rol === 'INVERSIONISTA' || perfilProf?.rol === 'SUPER_ADMIN') {
-            console.log("👑 [BOARD] Acceso concedido a Panel de Control de Inversionista.");
+            //console.log("👑 [BOARD] Acceso concedido a Panel de Control de Inversionista.");
             localStorage.setItem('rol_actual', perfilProf.rol);
             localStorage.setItem('nombre_completo', perfilProf.nombre_completo || 'Inversionista FisioCid');
             
@@ -122,7 +122,7 @@ async function procesarLoginDoctor(event) {
         }
         // ====================================================================
 
-        console.log("🏢 [CLÍNICO] Buscando sedes para profesional:", user.id);
+        //console.log("🏢 [CLÍNICO] Buscando sedes para profesional:", user.id);
         const [resDueno, resColab] = await Promise.all([
             fisioNet.from('clinicas').select('id, nombre_clinica, color_institucional, logo_url').eq('id_dueno', user.id),
             fisioNet.from('colaboradores_clinica').select('id_clinica, clinicas(nombre_clinica, color_institucional, logo_url)').eq('id_profesional', user.id)
@@ -177,7 +177,7 @@ async function procesarLoginPaciente(event) {
         const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email: emailInput, password: pass });
         if (authError) throw authError;
 
-        console.log("🔎 [PORTAL] Usuario Auth verificado. ID:", user.id, "Correo:", user.email);
+        //console.log("🔎 [PORTAL] Usuario Auth verificado. ID:", user.id, "Correo:", user.email);
 
         // 🚨 2. DIAGNÓSTICO PROFUNDO CON CONSOLE LOGS
         // Intento A: Por ID de Usuario Auth
@@ -186,7 +186,7 @@ async function procesarLoginPaciente(event) {
             .select('id, nombre, apellido_paterno, id_usuario_auth')
             .eq('id_usuario_auth', user.id)
             .maybeSingle();
-        console.log("🔍 [LOG 1] Búsqueda por id_usuario_auth ->", resAuth);
+        //console.log("🔍 [LOG 1] Búsqueda por id_usuario_auth ->", resAuth);
 
         // Intento B: Por correo_electronico (Adulto)
         const resCorreo = await fisioNet
@@ -194,7 +194,7 @@ async function procesarLoginPaciente(event) {
             .select('id, nombre, apellido_paterno, id_usuario_auth')
             .ilike('correo_electronico', user.email.trim())
             .maybeSingle();
-        console.log("🔍 [LOG 2] Búsqueda por correo_electronico ->", resCorreo);
+        //console.log("🔍 [LOG 2] Búsqueda por correo_electronico ->", resCorreo);
 
         // Intento C: Por correo_tutor (Menor de edad)
         const resTutor = await fisioNet
@@ -202,7 +202,7 @@ async function procesarLoginPaciente(event) {
             .select('id, nombre, apellido_paterno, id_usuario_auth')
             .ilike('correo_tutor', user.email.trim())
             .maybeSingle();
-        console.log("🔍 [LOG 3] Búsqueda por correo_tutor ->", resTutor);
+        //console.log("🔍 [LOG 3] Búsqueda por correo_tutor ->", resTutor);
 
         // Evaluamos cuál devolvió datos exitosos
         let pacienteData = resAuth.data || resCorreo.data || resTutor.data;
@@ -217,7 +217,7 @@ async function procesarLoginPaciente(event) {
 
         // 3. AUTO-VÍNCULO: Asignamos el id_usuario_auth si aún estaba vacío
         if (!pacienteData.id_usuario_auth) {
-            console.log("🔗 Enlazando expediente clínico maestro ID:", pacienteData.id, "con user.id de Auth...");
+            //console.log("🔗 Enlazando expediente clínico maestro ID:", pacienteData.id, "con user.id de Auth...");
             const { error: errUpdate } = await fisioNet
                 .from('pacientes_maestros')
                 .update({ id_usuario_auth: user.id })
@@ -232,7 +232,7 @@ async function procesarLoginPaciente(event) {
         localStorage.setItem('usuarioId', user.id);
         localStorage.setItem('paciente_maestro_id', pacienteData.id);
         
-        console.log("🚀 Acceso concedido. Redirigiendo a portal-paciente.html");
+        //console.log("🚀 Acceso concedido. Redirigiendo a portal-paciente.html");
         window.location.href = 'portal-paciente.html';
 
     } catch (err) {
@@ -345,7 +345,7 @@ function mostrarSelectorSedes(sedes, datosPaciente) {
         };
 
         btnPac.onclick = () => {
-            console.log("Entrando como paciente...");
+            //console.log("Entrando como paciente...");
             localStorage.setItem('rol_actual', 'PACIENTE');
            localStorage.setItem('nombre_completo', datosPaciente.nombre_mostrar);
             // 🎯 Cambia esto a la ruta real de tu portal de pacientes
@@ -357,7 +357,7 @@ function mostrarSelectorSedes(sedes, datosPaciente) {
 
 
 async function finalizarLoginSede(id, nombre, color, logo) {
-    console.log("📦 Configurando sesión para:", nombre);
+    //console.log("📦 Configurando sesión para:", nombre);
     
     try {
         // 1. Obtenemos el usuario actual de forma segura
@@ -388,7 +388,7 @@ async function finalizarLoginSede(id, nombre, color, logo) {
         localStorage.setItem('rol_actual', rolFinal);
         localStorage.setItem('rol_usuario', 'PROFESIONAL_FISIO');
 
-        console.log("✅ Sesión lista. Especialista ID:", user.id);
+        //console.log("✅ Sesión lista. Especialista ID:", user.id);
 
         // Redirección al Dashboard
         window.location.href = 'dashboard.html';

@@ -87,7 +87,7 @@ const FisioCidEngine = {
 
 
 lanzarCuestionario: function(id, dienteId = null) {
-    console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
+    //console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
 
     // ==========================================
     // 🦷 CASO 1: PERIODONTOGRAMA (DIBUJAR DIENTES EN EL PANEL)
@@ -112,7 +112,7 @@ lanzarCuestionario: function(id, dienteId = null) {
             const inf = document.getElementById('arcada-inferior');
 
             if (sup && inf && window.PeriodontoFisioCid) {
-                console.log("🦷 [FisioCidEngine]: Contenedor activo detectado en DOM. Renderizando arcadas...");
+                //console.log("🦷 [FisioCidEngine]: Contenedor activo detectado en DOM. Renderizando arcadas...");
 
                 sup.innerHTML = '';
                 inf.innerHTML = '';
@@ -288,7 +288,7 @@ calcularEscalaDinamica: function() {
 },
 
 finalizarEscala: async function() {
-    console.log("🏁 FisioCid: Iniciando cierre de escala...");
+    //console.log("🏁 FisioCid: Iniciando cierre de escala...");
 
     // 1. CAPTURA DE DATOS (Leemos lo que el doctor ve en pantalla)
     const resVivo = document.getElementById('resultadoVivo');
@@ -341,7 +341,7 @@ finalizarEscala: async function() {
     // 4. RESET DE ESTADO
     this.escalaActiva = null;
     this.ultimoResultadoEscala = null;
-    console.log("✅ FisioCid: Integración finalizada con éxito.");
+    //console.log("✅ FisioCid: Integración finalizada con éxito.");
 },
 
     // 🦷 GESTIÓN ODONTOLÓGICA (Añadir a FisioCidEngine)
@@ -390,7 +390,7 @@ cargarConfiguracionDental: async function() {
         if (error) throw error;
 
         if (data && data.estado_dental_base) {
-            console.log("🦷 FisioCidEngine: ADN dental previo detectado. Restaurando piezas...");
+            //console.log("🦷 FisioCidEngine: ADN dental previo detectado. Restaurando piezas...");
             this.aplicarADNAlOdontograma(data.estado_dental_base);
         } else if (data && data.fecha_nacimiento) {
             // Configuración automática por Edad (Adulto vs Pediatría)

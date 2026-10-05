@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 🔥 SI SOLO TIENE UNA: ENTRAR DIRECTO
     if (listaFinal.length === 1) {
-        console.log("Detectada sede única, preparando entrada...");
+        //console.log("Detectada sede única, preparando entrada...");
         // IMPORTANTE: Le pasamos el objeto completo de la clínica para no tener que volver a consultar la BD
         guardarYEntrar(listaFinal[0].clinicas);
         return;
@@ -88,7 +88,7 @@ function guardarYEntrar(clinica) {
     localStorage.setItem('fisiocid_color', clinica.color_institucional || '#10b981');
     localStorage.setItem('fisiocid_logo', clinica.logo_url || 'img/default-clinic.png');
     
-    console.log("✅ Contexto establecido para:", clinica.nombre_clinica);
+    //console.log("✅ Contexto establecido para:", clinica.nombre_clinica);
     window.location.replace('dashboard.html'); // Usamos replace para no dejar rastro en el historial
 }
 

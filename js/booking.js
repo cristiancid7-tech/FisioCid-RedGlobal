@@ -15,7 +15,7 @@ window.horaSeleccionada = "";
 
 // --- 1. INICIALIZACIÓN AL CARGAR EL DOM ---
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🔥 Inicializando Buscador Híbrido de Citas FisioCid...");
+    //console.log("🔥 Inicializando Buscador Híbrido de Citas FisioCid...");
     
     ['nombre', 'apellidoP', 'apellidoM'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', (e) => {

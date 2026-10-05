@@ -1114,7 +1114,7 @@ if (btnCerrar) {
         const deseaSalir = confirm("¿Deseas salir de FisioCid?");
 
         if (deseaSalir) {
-            console.log("👋 Cerrando sesión de FisioCid...");
+            //console.log("👋 Cerrando sesión de FisioCid...");
             try {
                 await fisioNet.auth.signOut();
             } catch (err) {
@@ -1124,7 +1124,7 @@ if (btnCerrar) {
             sessionStorage.clear();
             window.location.replace("login.html"); // Reemplaza por 'login.html' si así se llama tu archivo
         } else {
-            console.log("🛑 Cierre de sesión cancelado. Permanece en el sistema.");
+            //console.log("🛑 Cierre de sesión cancelado. Permanece en el sistema.");
         }
     });
 }

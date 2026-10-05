@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnCerrar) btnCerrar.addEventListener('click', (e) => { e.stopPropagation(); cerrarComparativa(); });
 
     // 3. INICIALIZACIÓN DEL SISTEMA
-    console.log("🔬 Portal de Especialista Listo...");
+    //console.log("🔬 Portal de Especialista Listo...");
     await mostrarNombreEspecialista();
     await aplicarIdentidadGabinete();
     await cargarRadiologosDisponibles();
@@ -65,11 +65,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inputArchivos) {
         inputArchivos.addEventListener('change', (e) => {
     const nuevosArchivos = Array.from(e.target.files);
-    console.log("📂 Archivos antes de asignar:", nuevosArchivos);
+    //console.log("📂 Archivos antes de asignar:", nuevosArchivos);
     
     // 🔥 AQUÍ ESTÁ EL CANDADO: ¿Estás actualizando la variable global?
     archivosParaSubir = nuevosArchivos; 
-    console.log("✅ Variable global actualizada:", archivosParaSubir);
+    //console.log("✅ Variable global actualizada:", archivosParaSubir);
 
     renderizarMiniaturas();
 
@@ -198,7 +198,7 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
         await abrirTomaInmediata(archivoUrl, indiceInicial, pacienteNombreFull, 'EXAMEN EN CURSO', 'A');
 
         // Antes de hacer el select, añade este log para ver qué está pasando
-        console.log("DEBUG: Intentando buscar ID:", estudioId); 
+        //console.log("DEBUG: Intentando buscar ID:", estudioId); 
 
         // Si estudioId es un objeto o tiene algo raro, lo forzamos a string
         const idBuscado = String(estudioId).trim();
@@ -226,11 +226,11 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
             if (lblNombre) lblNombre.innerText = pacienteNombreFull;
             
             // Carga de línea de tiempo
-            console.log("🚀 Disparando carga de historial para:", estudioActual.paciente_id);
+            //console.log("🚀 Disparando carga de historial para:", estudioActual.paciente_id);
             await cargarLineaTiempoPACS(estudioActual.paciente_id, estudioId);
           
             await verificarYRenderizarBotonIntegrar();
-            console.log("✅ Blindaje y carga completados con éxito.");
+            //console.log("✅ Blindaje y carga completados con éxito.");
         }
 
     } catch (err) {
@@ -351,28 +351,48 @@ function actualizarInterfazEdad() {
     if (anosVal < 18) {
         seccionTutor?.classList.remove('d-none');
         bloqueAdulto?.classList.add('d-none');
-        console.log("👶 Modo Pediatría Activado");
+        //console.log("👶 Modo Pediatría Activado");
     } else {
         seccionTutor?.classList.add('d-none');
         bloqueAdulto?.classList.remove('d-none');
-        console.log("👨‍💼 Modo Adulto Activado");
+        //console.log("👨‍💼 Modo Adulto Activado");
     }
 }
 
-// --- LIMPIEZA DE APELLIDOS CON CONECTORES ---
-function limpiarApellidoMexicano(apellidoRaw) {
-    if (!apellidoRaw) return "X";
-    let ap = apellidoRaw.trim().toUpperCase();
-    const particulas = [
-        /^DE LOS\s+/, /^DE LA\s+/, /^DE LAS\s+/, /^LOS\s+/, /^LAS\s+/, /^DEL\s+/, /^DE\s+/, /^LA\s+/
+// 1. Función para limpiar conectores y caracteres especiales
+function limpiarPalabras(texto) {
+    if (!texto) return [];
+    // Convertimos a mayúsculas y quitamos acentos
+    let textoLimpio = texto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    // Conectores oficiales de RENAPO que no se toman en cuenta
+    const conectores = [
+        "DA", "DAS", "DE", "DEL", "DER", "DI", "DIE", "DD", "EL", "LA", 
+        "LOS", "LAS", "LE", "LES", "MAC", "MC", "VAN", "VON", "Y"
     ];
-    for (let regex of particulas) {
-        if (regex.test(ap)) {
-            ap = ap.replace(regex, "");
-            break; 
-        }
+    
+    // Separamos por espacios y filtramos los conectores
+    let palabras = textoLimpio.trim().split(/\s+/);
+    return palabras.filter(palabra => !conectores.includes(palabra));
+}
+
+// 2. Función actualizada para procesar el nombre (Aplica regla de Jose/Maria)
+function procesarNombreMexicano(nombreRaw) {
+    let palabras = limpiarPalabras(nombreRaw);
+    
+    // Regla: Si hay más de un nombre y el primero es MARIA o JOSE (o abreviaturas), se ignora.
+    if (palabras.length > 1 && ["MARIA", "MA.", "MA", "JOSE", "J.", "J"].includes(palabras[0])) {
+        palabras.shift(); // Quita MARIA/JOSE de la lista
     }
-    return ap || "X";
+    
+    // Retorna la primera palabra válida que haya quedado (en este caso ROSARIO)
+    return { nombre: palabras[0] || "X" };
+}
+
+// 3. Función actualizada para apellidos (Limpia conectores como "DE LA")
+function limpiarApellidoMexicano(apellidoRaw) {
+    let palabras = limpiarPalabras(apellidoRaw);
+    return palabras[0] || "X"; // Toma la primera palabra válida del apellido
 }
 
 // ============================================================================
@@ -556,7 +576,7 @@ function autorrellenarPaciente(p) {
 // 🔒 GESTOR VISUAL DE CANDADOS PREMIUM (CONGELACIÓN DE INPUTS EN GRIS)
 // ============================================================================
 function congelarCamposIdentidad(bloquear) {
-    console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
+    //console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
     
     const idsCriticos = [
             'valNombre', 'valPaterno', 'valMaterno', 'valFecha', 
@@ -655,7 +675,7 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
         const extension = archivo.type.split('/')[1].replace('jpeg', 'jpg');
         const rutaSegura = `${clinicaId}/${pacienteId}/${estudioId}/${Date.now()}_${nombreLimpio}.${extension}`;
         
-        console.log("📤 Subiendo archivo blindado:", rutaSegura);
+        //console.log("📤 Subiendo archivo blindado:", rutaSegura);
 
         // 4. Subida con restricción de tipo
         const { error } = await fisioNet.storage
@@ -682,11 +702,11 @@ function alternarModoDictado() {
     if (modoDictadoActivo) {
         // MODO DICTADO: Congelamos el visor por completo
         visor.style.pointerEvents = 'none'; 
-        console.log("🔒 [FisioCid] Sistema en modo DICTADO: Visor congelado.");
+        //console.log("🔒 [FisioCid] Sistema en modo DICTADO: Visor congelado.");
     } else {
         // MODO VISOR: Liberamos el visor
         visor.style.pointerEvents = 'auto';
-        console.log("🔓 [FisioCid] Sistema en modo VISOR: Navegación activa.");
+        //console.log("🔓 [FisioCid] Sistema en modo VISOR: Navegación activa.");
     }
 }
 
@@ -814,7 +834,7 @@ async function guardarEstudioGabinete(event) {
     try {
         // 4. PACIENTE NUEVO VS EXISTENTE
         if (!pacienteExistenteId) {
-            console.log("🆕 Detectado paciente nuevo. Registrando en pacientes_maestros...");
+            //console.log("🆕 Detectado paciente nuevo. Registrando en pacientes_maestros...");
             pacienteExistenteId = await registrarPacienteNuevo(); 
         }
 
@@ -1019,9 +1039,9 @@ async function cargarHistorialPersonal() {
         const esRadiologo = especialidad.includes('RADIOLOG');
 
         console.group("📡 CONSULTA DE HISTORIAL GABINETE");
-        console.log("👤 Usuario ID:", user.id);
-        console.log("🎓 Especialidad:", especialidad || 'STAFF');
-        console.log("🏥 Clínica Activa:", idClinicaActiva);
+        //console.log("👤 Usuario ID:", user.id);
+        //console.log("🎓 Especialidad:", especialidad || 'STAFF');
+        //console.log("🏥 Clínica Activa:", idClinicaActiva);
 
         let query = fisioNet.from('estudios_gabinete').select(`
             *,
@@ -1037,11 +1057,11 @@ async function cargarHistorialPersonal() {
         if (esRadiologo) {
             // BANDEJA GLOBAL DEL RADIÓLOGO: Trae TODO estudio donde esté asignada como firmante,
             // emisor o creador, independientemente de qué sede o clínica externa lo haya subido.
-            console.log("🟢 Modo: Bandeja de Dictamen Radiológico Activa (Universal)");
+            //console.log("🟢 Modo: Bandeja de Dictamen Radiológico Activa (Universal)");
             query = query.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
         } else {
             // BANDEJA DE STAFF CLINICO: Trae los estudios de la sede activa
-            console.log("🔵 Modo: Staff de Clínica Local");
+            //console.log("🔵 Modo: Staff de Clínica Local");
             if (idClinicaActiva && idClinicaActiva !== "null") {
                 query = query.or(`id_socio_emisor.eq.${idClinicaActiva},creado_por.eq.${user.id}`);
             } else {
@@ -1056,7 +1076,7 @@ async function cargarHistorialPersonal() {
 
         if (error) throw error;
 
-        console.log(`✅ Estudios recuperados (${estudios?.length || 0}):`, estudios);
+        //console.log(`✅ Estudios recuperados (${estudios?.length || 0}):`, estudios);
         console.groupEnd();
 
         historialGabineteCache = estudios ? estudios.map(est => ({
@@ -1261,7 +1281,7 @@ async function abrirTomaInmediata(stringArchivos, indiceInicial, pacienteNombre,
                 if (img) img.style.display = 'none';
 
                 // 3. Inyectamos el PDF
-                console.log("🔗 URL del PDF:", data.signedUrl); 
+                //console.log("🔗 URL del PDF:", data.signedUrl); 
                 panelDestino.innerHTML = `<embed src="${data.signedUrl}" type="application/pdf" width="100%" height="100%" style="min-height: 500px; display: block; border: none;">`;
             }
         } catch (err) { alert("No se pudo cargar el PDF en el visor."); }
@@ -1297,7 +1317,7 @@ async function iniciarComparativa() {
                 txtHallazgos.removeAttribute('disabled');
                 txtHallazgos.focus({preventScroll: true});
                 txtHallazgos.select();
-                console.log("✅ Panel cerrado nativamente. Foco en el dictamen.");
+                //console.log("✅ Panel cerrado nativamente. Foco en el dictamen.");
             }
             // Limpiamos el evento para que no se duplique la próxima vez
             panelHistorial.removeEventListener('hidden.bs.offcanvas', focoSeguro);
@@ -1376,13 +1396,13 @@ function limpiarInstanciasZoom() {
 }
 
 window.reiniciarZoomTomas = function() {
-    console.log("🔄 Reset ejecutado");
+    //console.log("🔄 Reset ejecutado");
     if (instancePanzoomIzq) instancePanzoomIzq.reset();
     if (instancePanzoomDer) instancePanzoomDer.reset();
 };
 
 window.cerrarComparativa = function() {
-    console.log("❌ Cerrando comparativa...");
+    //console.log("❌ Cerrando comparativa...");
     const visor = document.getElementById('visorComparativa');
     const panelDictamen = document.getElementById('panel-dictamen-radiologo');
     
@@ -1400,14 +1420,14 @@ window.cerrarComparativa = function() {
 function cargarLibreriaPanzoom() {
     return new Promise((resolve) => {
         if (typeof Panzoom !== 'undefined') {
-            console.log("✅ Motor Panzoom verificado en memoria desde el HTML.");
+            //console.log("✅ Motor Panzoom verificado en memoria desde el HTML.");
             resolve();
         } else {
             // Respaldo de seguridad en caso de fallo de red
             const script = document.createElement('script');
             script.src = "https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js";
             script.onload = () => {
-                console.log("✅ Motor Panzoom recuperado por respaldo.");
+                //console.log("✅ Motor Panzoom recuperado por respaldo.");
                 resolve();
             };
             document.head.appendChild(script);
@@ -1456,14 +1476,14 @@ async function cambiarTomaEnVisorAvanzado(direccion) {
     if (indiceTomaActiva >= tomasVisorActuales.length) indiceTomaActiva = 0;
     if (indiceTomaActiva < 0) indiceTomaActiva = tomasVisorActuales.length - 1;
 
-    console.log(`🎠 Cambiando a la toma índice: ${indiceTomaActiva}`);
+    //console.log(`🎠 Cambiando a la toma índice: ${indiceTomaActiva}`);
     await renderizarTomaActivaEnLienzo();
 }
 // ============================================================================
 // 🔢 MOTOR DE EXPEDIENTES LOCALES EXACTO (REPLICADO DE NUEVO-PACIENTE)
 // ============================================================================
 async function gestionarFolioAutomatico(idPacienteExistente = null) {
-    console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
+    //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
     const idClinica = localStorage.getItem('id_clinica_activa');
     const inputFolio = document.getElementById('inputFolioExpediente');
     const statusFolio = document.getElementById('statusFolio');
@@ -1477,7 +1497,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
     try {
         // 1. SI EL PACIENTE YA EXISTE EN ESTA SEDE
         if (idPacienteExistente) {
-            console.log("🔍 Buscando folio existente en DB...");
+            //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
                 .from('expedientes_clinicos')
                 .select('folio_personalizado')
@@ -1486,16 +1506,16 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
                 .maybeSingle();
 
             if (exp) {
-                console.log("✅ Folio encontrado:", exp.folio_personalizado);
+                //console.log("✅ Folio encontrado:", exp.folio_personalizado);
                 inputFolio.value = exp.folio_personalizado;
                 if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
-            console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
+            //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
         // 2. GENERAR NUEVO CONSECUTIVO LOCAL
-        console.log("🏗️ Generando nuevo folio...");
+        //console.log("🏗️ Generando nuevo folio...");
         
         const [confRes, countRes] = await Promise.all([
             fisioNet.from('clinicas').select('folio_prefijo, folio_sede, folio_separador').eq('id', idClinica).single(),
@@ -1515,7 +1535,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        console.log("✨ Folio generado con éxito:", nuevoFolio);
+        //console.log("✨ Folio generado con éxito:", nuevoFolio);
         inputFolio.value = nuevoFolio;
         if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic text-primary"></i> NUEVO EXPEDIENTE POR ASIGNAR';
         
@@ -1627,7 +1647,7 @@ async function buscarMedicoSolicitanteEnRed(texto) {
                     document.getElementById('input-doctor-solicitante').value = m.nombre_completo.toUpperCase();
                     document.getElementById('idDoctorSolicitanteVinculado').value = m.id; // 👈 UUID guardado
                     lista.classList.add('d-none');
-                    console.log("🔗 Doctor en red FisioCid vinculado. ID:", m.id);
+                    //console.log("🔗 Doctor en red FisioCid vinculado. ID:", m.id);
                 };
 
                 lista.appendChild(item);
@@ -1741,7 +1761,7 @@ function calcularEdad(fecha) {
 
 
 async function cargarLineaTiempoPACS(pacienteId, estudioActualId) {
-    console.log("🔍 Buscando historial para el paciente ID:", pacienteId);
+    //console.log("🔍 Buscando historial para el paciente ID:", pacienteId);
     const contenedor = document.getElementById('pacs-linea-tiempo');
     if (!contenedor) return;
 
@@ -1758,7 +1778,7 @@ async function cargarLineaTiempoPACS(pacienteId, estudioActualId) {
             return;
         }
         
-        console.log("✅ Estudios encontrados:", estudios);
+        //console.log("✅ Estudios encontrados:", estudios);
 
         if (!estudios || estudios.length === 0) {
             contenedor.innerHTML = '<div class="text-muted small text-center mt-3">Sin estudios previos.</div>';
@@ -1830,7 +1850,7 @@ async function activarModoComparativa(urlEstudioPrevio) {
 window.activarModoComparativa = activarModoComparativa;
 
 function cerrarModoComparativa() {
-    console.log("🔄 [FisioCid PACS] Cerrando modo comparativa...");
+    //console.log("🔄 [FisioCid PACS] Cerrando modo comparativa...");
     
     const panelIzq = document.getElementById('panelIzquierdoVisor');
     const panelDer = document.getElementById('panelDerechoVisor');
@@ -1891,7 +1911,7 @@ async function verificarYRenderizarBotonIntegrar() {
 function iniciarNuevoRegistro() {
     // Solo limpiamos si realmente tenemos algo que limpiar
     if (pacienteExistenteId !== null || window.pacienteSeleccionado !== null) {
-        console.log("🧹 Reseteando entorno para nuevo registro...");
+        //console.log("🧹 Reseteando entorno para nuevo registro...");
         
         pacienteExistenteId = null;
         window.pacienteSeleccionado = null;

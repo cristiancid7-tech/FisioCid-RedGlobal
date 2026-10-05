@@ -74,7 +74,7 @@ window.modalEngine = {
                 
                 if (rol.includes("ODONTOLOGO") || rol.includes("DENT")) {
                     if (window.FisioCidEngine) {
-                        console.log("🚀 Disparando motor odontológico FisioCidEngine...");
+                        //console.log("🚀 Disparando motor odontológico FisioCidEngine...");
                         window.FisioCidEngine.lanzarCuestionario('PERIODONTOGRAMA');
                         if (typeof window.FisioCidEngine.cargarConfiguracionDental === 'function') {
                             window.FisioCidEngine.cargarConfiguracionDental();
@@ -161,7 +161,7 @@ generarInterfaz: function(paso, p) {
 if (rol === "ODONTOLOGO" || p.id.startsWith("DENT")) {
     requestAnimationFrame(() => {
         setTimeout(() => { 
-            console.log("🦷 FisioCid: Poblando arcadas en el asistente...");
+            //console.log("🦷 FisioCid: Poblando arcadas en el asistente...");
             if (window.FisioCidEngine) {
                 // Lanzamos la escala especial que ya configuramos en el banco
                 window.FisioCidEngine.lanzarCuestionario('PERIODONTOGRAMA');
@@ -501,7 +501,7 @@ else if (rol === "PSICOLOGO" || p.id.startsWith("PSI")) {
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px;">
    ${escalas.map(e => `
     <button type="button" 
-            onclick="console.log('🖱️ Clic en: ${e.id.toUpperCase()}'); window.FisioCidEngine.lanzarCuestionario('${e.id.toUpperCase()}')" 
+            onclick="//console.log('🖱️ Clic en: ${e.id.toUpperCase()}'); window.FisioCidEngine.lanzarCuestionario('${e.id.toUpperCase()}')" 
             style="padding:6px; border-radius:6px; font-weight:700; font-size:0.52rem; background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe; text-align:left; cursor:pointer;">
         📋 ${e.nombre.toUpperCase()}
     </button>
@@ -721,7 +721,7 @@ actualizarPanelDiagnostico: function() {
     if (sliderPrincipal) {
         const valorActual = parseInt(sliderPrincipal.value) || 0;
         window.FisioCidEngine.valorDolorEVA = valorActual; // Se lo guardamos al cerebro
-        console.log("📡 [Radar EVA]: Valor leído correctamente ->", valorActual);
+        //console.log("📡 [Radar EVA]: Valor leído correctamente ->", valorActual);
     } else {
         console.warn("⚠️ [Radar EVA]: No encuentro el ID 'eva_slider' en tu HTML.");
     }
@@ -852,7 +852,7 @@ renderizarTagsResumen: function() {
  
 
     lanzarCuestionario: function(id, dienteId = null) {
-    console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
+    //console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
 
     // ==========================================
     // 🦷 CASO 1: PERIODONTOGRAMA (DIBUJAR DIENTES EN EL PANEL)
@@ -866,7 +866,7 @@ renderizarTagsResumen: function() {
             const inf = document.getElementById('arcada-inferior');
 
             if (sup && inf && window.PeriodontoFisioCid) {
-                console.log("🦷 [FisioCidEngine]: Contenedores detectados en DOM. Renderizando arcadas...");
+                //console.log("🦷 [FisioCidEngine]: Contenedores detectados en DOM. Renderizando arcadas...");
 
                 sup.innerHTML = '';
                 inf.innerHTML = '';
@@ -1061,7 +1061,7 @@ integrarFinal: function(paso) {
 
             // ⛔ AUTOMATIZACIONES DE TRATAMIENTO APAGADAS:
             // Dejamos los textareas libres para el llenado manual del profesional.
-            console.log("💾 Rama Fisio: Hallazgos descriptivos inyectados. Campos libres para prevención legal.");
+            //console.log("💾 Rama Fisio: Hallazgos descriptivos inyectados. Campos libres para prevención legal.");
         }
 
         // 🦷 RAMA ODONTOLOGÍA (¡Conectada y lista!)
@@ -1078,7 +1078,7 @@ integrarFinal: function(paso) {
                 target.value = (target.value ? target.value + "\n\n" : "") + notaDental;
                 target.style.border = "2px solid #0284c7"; // Azul Odonto
             }
-            console.log("💾 Rama Odontología conectada con éxito.");
+            //console.log("💾 Rama Odontología conectada con éxito.");
         }
 
         // 🥗 RAMA NUTRICIÓN
@@ -1126,16 +1126,16 @@ integrarFinal: function(paso) {
     if (paso === 'ejercicios' || paso === 'plan') {
         window.FisioCidEngine.datosTemporales = [];
         window.FisioCidEngine.diagnosticosActivos = []; 
-        console.log("🧹 Consulta finalizada: Bolsa de datos vaciada.");
+        //console.log("🧹 Consulta finalizada: Bolsa de datos vaciada.");
     } else {
-        console.log("💾 Paso intermedio: Datos preservados para el motor secuencial.");
+        //console.log("💾 Paso intermedio: Datos preservados para el motor secuencial.");
     }
 
     // 🧼 Cerrar el asistente visual de forma limpia
     const modal = document.getElementById('modal-cid-universal');
     if (modal) modal.remove();
     
-    console.log(`✅ Integración del paso [${paso}] ejecutada bajo normativa legal.`);
+    //console.log(`✅ Integración del paso [${paso}] ejecutada bajo normativa legal.`);
 },
 
 buscarProtocolo: function() {
@@ -1191,13 +1191,13 @@ rutaSubsecuente: function() {
         if(document.getElementById('plan')) document.getElementById('plan').value = nota.plan || '';
         if(document.getElementById('plan_tratamiento')) document.getElementById('plan_tratamiento').value = nota.plan_tratamiento || '';
         
-        console.log("✅ Nota clonada con éxito.");
+        //console.log("✅ Nota clonada con éxito.");
     }
     document.getElementById('selector-consulta-overlay').remove();
 },
 
 analizarPatrones: function(datos) {
-    console.log("🧠 Motor FisioCid: Iniciando análisis omnisciente...", datos);
+    //console.log("🧠 Motor FisioCid: Iniciando análisis omnisciente...", datos);
     
     // 🚩 1. CONEXIÓN GLOBAL: Leemos el objeto organizado por ramas
     const biblioteca = window.BIBLIOTECA_PROTOCOLOS;
@@ -1306,7 +1306,7 @@ rutaSubsecuente: function() {
         if(document.getElementById('plan')) document.getElementById('plan').value = nota.nota_evolucion || '';
         if(document.getElementById('plan_tratamiento')) document.getElementById('plan_tratamiento').value = nota.plan_tratamiento || '';
         
-        console.log("✅ Nota clonada desde historial_clinico.");
+        //console.log("✅ Nota clonada desde historial_clinico.");
     }
     this.cerrarSelector();
 },
@@ -1317,13 +1317,13 @@ rutaRevaloracion: function() {
     if (nota && document.getElementById('sintomas')) {
         document.getElementById('sintomas').value = nota.sintomas || '';
     }
-    console.log("🟡 Modo Revaloración: Iniciando nueva evaluación física.");
+    //console.log("🟡 Modo Revaloración: Iniciando nueva evaluación física.");
     this.cerrarSelector();
 },
 
 rutaNueva: function() {
     // No hacemos nada, dejamos los campos limpios
-    console.log("🔴 Nota en blanco para nuevo diagnóstico.");
+    //console.log("🔴 Nota en blanco para nuevo diagnóstico.");
     this.cerrarSelector();
 },
 
@@ -1491,7 +1491,7 @@ validarAccesoHistorial: async function() {
     visor.innerHTML = `<div class="spinner-border spinner-border-sm text-primary"></div> Verificando...`;
 
 
-    console.log("Validando código y jalando historial de la CURP...");
+    //console.log("Validando código y jalando historial de la CURP...");
 },
 guardarGabineteSincronizado: async function(pacienteId) {
     const fotos = document.querySelectorAll('#carril-imagen .thumb-estudio');
@@ -1514,7 +1514,7 @@ guardarGabineteSincronizado: async function(pacienteId) {
     btnSinc.style.cursor = 'wait';
 
     try {
-        console.log(`🚀 Iniciando subida de ${todosLosArchivos.length} archivos...`);
+        //console.log(`🚀 Iniciando subida de ${todosLosArchivos.length} archivos...`);
 
         for (const thumb of todosLosArchivos) {
             const archivo = thumb.archivoReal; 
@@ -1559,7 +1559,7 @@ guardarGabineteSincronizado: async function(pacienteId) {
             if (dbError) {
                 console.error("Error en DB:", dbError.message);
             } else {
-                console.log(`✅ ${archivo.name} guardado correctamente.`);
+                //console.log(`✅ ${archivo.name} guardado correctamente.`);
             }
         }
 

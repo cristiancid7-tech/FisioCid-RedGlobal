@@ -165,7 +165,7 @@ function cambiarTabEvolucion(tipo) {
 
     } catch (silenceError) {
         // 🛡️ EL ESCUDO DE ACERO: Captura el error de invocación ilegal nativo y lo destruye en silencio
-        console.log("🤫 Ajustando hilos del DOM en silencio...");
+        //console.log("🤫 Ajustando hilos del DOM en silencio...");
     }
 }
 
@@ -296,7 +296,7 @@ function inicializarGestionPortalPaciente(paciente) {
             e.stopPropagation();
         }
 
-        console.log("🔓 [PORTAL] Abriendo panel de seguridad para ID:", paciente.id);
+        //console.log("🔓 [PORTAL] Abriendo panel de seguridad para ID:", paciente.id);
         const wrapper = document.getElementById('wrapperAccionesPortal');
         
         // 🔄 Detector inteligente de rol y comunicación maestro
@@ -415,8 +415,8 @@ function inicializarGestionPortalPaciente(paciente) {
                     // 🎯 CONSTRUIMOS EL DISPLAY NAME SEGURO DESDE EL OBJETO DE MEMORIA ACÁ ARRIBA
                     const nombreCompletoPaciente = `${paciente.nombre} ${paciente.apellido_paterno} ${paciente.apellido_materno || ''}`.trim().toUpperCase();
 
-                    console.log("🚀 [SUPABASE] Registrando cuenta para:", correoBase);
-                    console.log("🎯 Display Name inyectado:", nombreCompletoPaciente);
+                    //console.log("🚀 [SUPABASE] Registrando cuenta para:", correoBase);
+                    //console.log("🎯 Display Name inyectado:", nombreCompletoPaciente);
 
                     try {
                         const { data: authData, error: authErr } = await fisioAdmin.auth.signUp({
@@ -479,8 +479,8 @@ async function procesarAltaPortalPaciente(boton) {
     boton.disabled = true; 
     boton.innerText = "PROCESANDO ACCESO MAESTRO...";
 
-    console.log("🚀 [SUPABASE] Registrando cuenta para:", correoInmune);
-    console.log("🎯 Display Name que se enviará:", nombreCompletoPaciente);
+    //console.log("🚀 [SUPABASE] Registrando cuenta para:", correoInmune);
+    //console.log("🎯 Display Name que se enviará:", nombreCompletoPaciente);
 
     try {
         // Usamos 'fisioAdmin' para crear la cuenta de Auth sin romper la sesión del terapeuta activo.

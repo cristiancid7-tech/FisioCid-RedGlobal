@@ -105,7 +105,7 @@ async function procesarLoginStaff(event) {
         const sesionUser = loginData.user;
         if (!sesionUser) throw new Error("No se pudo extraer la sesión activa.");
 
-        console.log("🔍 [STAFF] Buscando contrato legítimo para ID:", sesionUser.id);
+        //console.log("🔍 [STAFF] Buscando contrato legítimo para ID:", sesionUser.id);
         
         // 2. Consulta plana a colaboradores
         const { data: contratos, error: errColab } = await fisioNet
@@ -141,7 +141,7 @@ async function procesarLoginStaff(event) {
         localStorage.setItem('rol_actual', rolOperativo);
         localStorage.setItem('rol_usuario', 'PROFESIONAL_FISIO');
 
-        console.log("🚀 Acceso Staff correcto. Saltando a panel operativo.");
+        //console.log("🚀 Acceso Staff correcto. Saltando a panel operativo.");
         window.location.href = 'dashboard.html';
         return;
 

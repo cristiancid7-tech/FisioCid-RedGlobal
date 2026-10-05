@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const especialidadRaw = localStorage.getItem('especialidadUsuario') || "FISIOTERAPEUTA";
     const especialidad = especialidadRaw.toUpperCase();
     
-    console.log("🏥 Especialidad detectada:", especialidad);
+    //console.log("🏥 Especialidad detectada:", especialidad);
 
     // Buscamos en el catálogo, si no existe la especialidad, usamos MEDICO GENERAL
     const misMotivos = CATALOGO_MOTIVOS[especialidad] || CATALOGO_MOTIVOS["MEDICO GENERAL"] || [];

@@ -3,7 +3,7 @@
 // ==========================================
 async function salir() {
     try {
-        console.log("🧹 Iniciando limpieza profunda de FisioCid...");
+        //console.log("🧹 Iniciando limpieza profunda de FisioCid...");
         
         localStorage.clear();
         sessionStorage.clear();
@@ -82,7 +82,7 @@ async function verificarPerfilCompleto() {
     const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
 
     if (esStaff) {
-        console.log("👥 Seguridad FisioCid: Colaborador detectado. Omitiendo portero de dueños.");
+        //console.log("👥 Seguridad FisioCid: Colaborador detectado. Omitiendo portero de dueños.");
         return; 
     }
 

@@ -23,7 +23,7 @@ let modoDictadoActivo = false;
 // =========================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🔬 Portal de Especialista Listo para Captura Manual - Validando Roles");
+    //console.log("🔬 Portal de Especialista Listo para Captura Manual - Validando Roles");
     
     // 1. Obtener y mostrar la identidad del profesional activo
     await mostrarNombreEspecialista();
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const forzarEstudioId = localStorage.getItem('forzar_apertura_estudio_id'); // 🗲 ID Único del registro
 
     if (forzarArchivo && forzarPaciente && forzarEstudioId) {
-        console.log(`📡 Modo Enrutado Directo Activo: Cargando estudio ${forzarEstudioId} de ${forzarPaciente}`);
+        //console.log(`📡 Modo Enrutado Directo Activo: Cargando estudio ${forzarEstudioId} de ${forzarPaciente}`);
         
         // Limpiamos los candados temporales de navegación
         localStorage.removeItem('forzar_apertura_archivo');
@@ -148,7 +148,7 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
 }
 
 async function renderizarTomaActivaEnLienzo() {
-    console.log("🩻 [FisioCid PACS] Renderizando lienzo con alineación matemática segura...");
+    //console.log("🩻 [FisioCid PACS] Renderizando lienzo con alineación matemática segura...");
     const visor = document.getElementById('visorComparativa');
     const imgIzq = document.getElementById('imgIzquierda');
     const infoIzq = document.getElementById('infoIzquierda');
@@ -186,7 +186,7 @@ async function renderizarTomaActivaEnLienzo() {
             const areaContenedora = document.getElementById('panelIzquierdoVisor');
             
             if (wrapperZoom && typeof Panzoom !== 'undefined') {
-                console.log("⚙️ [FisioCid PACS] Inicializando Panzoom sobre el Wrapper de la Imagen.");
+                //console.log("⚙️ [FisioCid PACS] Inicializando Panzoom sobre el Wrapper de la Imagen.");
                 
                instancePanzoomIzq = Panzoom(wrapperZoom, {
     maxScale: 6,
@@ -232,11 +232,11 @@ function actualizarInterfazEdad() {
     if (anosVal < 18) {
         seccionTutor?.classList.remove('d-none');
         bloqueAdulto?.classList.add('d-none');
-        console.log("👶 Modo Pediatría Activado");
+        //console.log("👶 Modo Pediatría Activado");
     } else {
         seccionTutor?.classList.add('d-none');
         bloqueAdulto?.classList.remove('d-none');
-        console.log("👨‍💼 Modo Adulto Activado");
+        //console.log("👨‍💼 Modo Adulto Activado");
     }
 }
 
@@ -430,7 +430,7 @@ function autorrellenarPaciente(p) {
 // 🔒 GESTOR VISUAL DE CANDADOS PREMIUM (CONGELACIÓN DE INPUTS EN GRIS)
 // ============================================================================
 function congelarCamposIdentidad(bloquear) {
-    console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
+    //console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
     
     const idsCriticos = [
             'valNombre', 'valPaterno', 'valMaterno', 'valFecha', 
@@ -517,7 +517,7 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
         const nombreLimpio = archivo.name.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
         const rutaSegura = `${clinicaId}/${pacienteId}/${estudioId}/${Date.now()}_${nombreLimpio}`;
         
-        console.log("📤 Subiendo a:", rutaSegura); // Para que veas qué está pasando
+        //console.log("📤 Subiendo a:", rutaSegura); // Para que veas qué está pasando
 
         const { data, error } = await fisioNet.storage
             .from('expedientes-clinicos')
@@ -540,11 +540,11 @@ function alternarModoDictado() {
     if (modoDictadoActivo) {
         // MODO DICTADO: Congelamos el visor por completo
         visor.style.pointerEvents = 'none'; 
-        console.log("🔒 [FisioCid] Sistema en modo DICTADO: Visor congelado.");
+        //console.log("🔒 [FisioCid] Sistema en modo DICTADO: Visor congelado.");
     } else {
         // MODO VISOR: Liberamos el visor
         visor.style.pointerEvents = 'auto';
-        console.log("🔓 [FisioCid] Sistema en modo VISOR: Navegación activa.");
+        //console.log("🔓 [FisioCid] Sistema en modo VISOR: Navegación activa.");
     }
 }
 
@@ -650,7 +650,7 @@ async function guardarEstudioGabinete(event) {
 
     try {
         // 3. SUBIR ARCHIVOS PRIMERO
-        console.log("📤 Subiendo archivos físicos...");
+        //console.log("📤 Subiendo archivos físicos...");
         const listaNombresArchivos = await subirArchivosASupabase(pacienteExistenteId, idClinicaActiva, "TMP_ESTUDIO");
 
         // 4. ARMADO DEL PAYLOAD
@@ -676,7 +676,7 @@ async function guardarEstudioGabinete(event) {
         };
 
         // 5. INSERT ÚNICO
-        console.log("💾 Guardando en estudios_gabinete...");
+        //console.log("💾 Guardando en estudios_gabinete...");
         const { error: errEst } = await fisioNet.from('estudios_gabinete').insert([payload]);
 
         if (errEst) throw errEst;
@@ -838,7 +838,7 @@ function filtrarHistorialGabineteRealTime() {
     clearTimeout(timeoutBusqueda);
     if (texto.length >= 3) {
         timeoutBusqueda = setTimeout(async () => {
-            console.log(`📡 Buscando de forma profunda en la DB el patron: ${texto}`);
+            //console.log(`📡 Buscando de forma profunda en la DB el patron: ${texto}`);
             try {
                 const { data: { user } } = await fisioNet.auth.getUser();
                 if (!user) return;
@@ -993,7 +993,7 @@ async function iniciarComparativa() {
                 txtHallazgos.removeAttribute('disabled');
                 txtHallazgos.focus({preventScroll: true});
                 txtHallazgos.select();
-                console.log("✅ Panel cerrado nativamente. Foco en el dictamen.");
+                //console.log("✅ Panel cerrado nativamente. Foco en el dictamen.");
             }
             // Limpiamos el evento para que no se duplique la próxima vez
             panelHistorial.removeEventListener('hidden.bs.offcanvas', focoSeguro);
@@ -1070,7 +1070,7 @@ async function iniciarComparativa() {
 function reiniciarZoomTomas() {
     if (instancePanzoomIzq) instancePanzoomIzq.reset();
     if (instancePanzoomDer) instancePanzoomDer.reset();
-    console.log("🔄 Coordenadas y escalas reajustadas a valores de fábrica.");
+    //console.log("🔄 Coordenadas y escalas reajustadas a valores de fábrica.");
 }
 
 function limpiarInstanciasZoom() {
@@ -1088,14 +1088,14 @@ window.cerrarComparativa = cerrarComparativa;
 function cargarLibreriaPanzoom() {
     return new Promise((resolve) => {
         if (typeof Panzoom !== 'undefined') {
-            console.log("✅ Motor Panzoom verificado en memoria desde el HTML.");
+            //console.log("✅ Motor Panzoom verificado en memoria desde el HTML.");
             resolve();
         } else {
             // Respaldo de seguridad en caso de fallo de red
             const script = document.createElement('script');
             script.src = "https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js";
             script.onload = () => {
-                console.log("✅ Motor Panzoom recuperado por respaldo.");
+                //console.log("✅ Motor Panzoom recuperado por respaldo.");
                 resolve();
             };
             document.head.appendChild(script);
@@ -1144,14 +1144,14 @@ async function cambiarTomaEnVisorAvanzado(direccion) {
     if (indiceTomaActiva >= tomasVisorActuales.length) indiceTomaActiva = 0;
     if (indiceTomaActiva < 0) indiceTomaActiva = tomasVisorActuales.length - 1;
 
-    console.log(`🎠 Cambiando a la toma índice: ${indiceTomaActiva}`);
+    //console.log(`🎠 Cambiando a la toma índice: ${indiceTomaActiva}`);
     await renderizarTomaActivaEnLienzo();
 }
 // ============================================================================
 // 🔢 MOTOR DE EXPEDIENTES LOCALES EXACTO (REPLICADO DE NUEVO-PACIENTE)
 // ============================================================================
 async function gestionarFolioAutomatico(idPacienteExistente = null) {
-    console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
+    //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
     const idClinica = localStorage.getItem('id_clinica_activa');
     const inputFolio = document.getElementById('inputFolioExpediente');
     const statusFolio = document.getElementById('statusFolio');
@@ -1165,7 +1165,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
     try {
         // 1. SI EL PACIENTE YA EXISTE EN ESTA SEDE
         if (idPacienteExistente) {
-            console.log("🔍 Buscando folio existente en DB...");
+            //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
                 .from('expedientes_clinicos')
                 .select('folio_personalizado')
@@ -1174,16 +1174,16 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
                 .maybeSingle();
 
             if (exp) {
-                console.log("✅ Folio encontrado:", exp.folio_personalizado);
+                //console.log("✅ Folio encontrado:", exp.folio_personalizado);
                 inputFolio.value = exp.folio_personalizado;
                 if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
-            console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
+            //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
         // 2. GENERAR NUEVO CONSECUTIVO LOCAL
-        console.log("🏗️ Generando nuevo folio...");
+        //console.log("🏗️ Generando nuevo folio...");
         
         const [confRes, countRes] = await Promise.all([
             fisioNet.from('clinicas').select('folio_prefijo, folio_sede, folio_separador').eq('id', idClinica).single(),
@@ -1203,7 +1203,7 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        console.log("✨ Folio generado con éxito:", nuevoFolio);
+        //console.log("✨ Folio generado con éxito:", nuevoFolio);
         inputFolio.value = nuevoFolio;
         if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic text-primary"></i> NUEVO EXPEDIENTE POR ASIGNAR';
         
@@ -1319,22 +1319,22 @@ inputsDictamenFisioCid.forEach(id => {
 // ============================================================================
 // 🕵️‍♂️ SUITE DE DIAGNÓSTICO FISIOCID (DETECTIVE DE FOCO)
 // ============================================================================
-console.log("🔍 [DEBUG] Detective de Foco activado...");
+//console.log("🔍 [DEBUG] Detective de Foco activado...");
 
 // 1. ESPÍA DE FOCO: Nos dice cada segundo qué elemento tiene el control real
 setInterval(() => {
     if (document.activeElement !== document.body) {
-        console.log("🎯 Elemento con foco actual:", document.activeElement);
+        //console.log("🎯 Elemento con foco actual:", document.activeElement);
     }
 }, 2000);
 
 // 2. ESPÍA DE TECLADO: Nos dice si alguien está "comiendo" las teclas
 window.addEventListener('keydown', (e) => {
     if (e.target.id === 'descripcion-hallazgos-pacs' || e.target.id === 'conclusion-estudio-pacs') {
-        console.log("✅ Tecla detectada en zona segura:", e.key);
+        //console.log("✅ Tecla detectada en zona segura:", e.key);
     } else {
         // Si escribes y no sale el log de arriba, esto nos dirá quién se robó la tecla
-        console.log("🚨 Tecla robada por:", e.target, "Tecla:", e.key);
+        //console.log("🚨 Tecla robada por:", e.target, "Tecla:", e.key);
     }
 }, true); // {capture: true} para ver el evento antes que nadie
 

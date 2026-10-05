@@ -3,7 +3,7 @@ window.PeriodontoFisioCid = {
     brushColor: '#f8fafc', // Color por defecto (Blanco/Sano)
 tipoHallazgo: 'sano',
 inicializar: function() {
-        console.log("🦷 FisioCid: Sistema inicializado correctamente.");
+        //console.log("🦷 FisioCid: Sistema inicializado correctamente.");
         this.mapaFurcas = {}; // Limpia datos de sesión previa
         this.actualizarResumenVisual();
     },
@@ -338,14 +338,14 @@ seleccionarHallazgoFurca: function(dienteId, opcionElegida) {
     this.mapaHallazgos[dienteId] = resultado.notaClinica;
 
     // 4. ESCUPIR AL RESUMEN: Para que el doctor vea que ya se guardó
-    console.log("FisioCid Guardado:", resultado.notaClinica);
+    //console.log("FisioCid Guardado:", resultado.notaClinica);
     
     // Refrescamos la vista para que aparezca el texto en el resumen lateral
     this.actualizarResumenVisual();
 },
 
 abrirExamenFurca: function(dienteId) {
-        console.log("🦷 FisioCid: Iniciando evaluación de Furca para diente " + dienteId);
+        //console.log("🦷 FisioCid: Iniciando evaluación de Furca para diente " + dienteId);
         
         // Llamamos al motor de cuestionarios para que lance la escala de FURCA
         // Usamos el ID que ya tienes en tu banco de escalas
@@ -750,4 +750,4 @@ ENDODONCIA: {
     }
 };
 
-console.log("✅ FisioCid: valoraciones.js cargado correctamente.");
+//console.log("✅ FisioCid: valoraciones.js cargado correctamente.");
