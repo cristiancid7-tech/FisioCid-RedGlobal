@@ -370,9 +370,8 @@ function inicializarGestionPortalPaciente(paciente) {
                         <label style="font-size: 0.75rem; color: #cbd5e1; display: block; margin-bottom: 6px;">Contraseña Temporal para el Portal</label>
                         
                         <div style="display: grid; grid-template-columns: 75% 22%; gap: 3%; width: 100%; align-items: center; box-sizing: border-box;">
-                            <input type="text" id="portalPass" placeholder="Mínimo 6 caracteres" 
-                                   style="width: 100%; background-color: #2d3748; border: 1px solid #4a5568; color: white; font-size: 0.85rem; border-radius: 6px; padding: 8px 12px; outline: none; box-sizing: border-box; height: 38px;">
-                            
+                    <input type="text" id="portalPass" placeholder="Mínimo 6 caracteres" 
+                       style="text-transform: none !important; width: 100%; background-color: #2d3748; border: 1px solid #4a5568; color: white; font-size: 0.85rem; border-radius: 6px; padding: 8px 12px; outline: none; box-sizing: border-box; height: 38px;">
                             <button type="button" id="btnGenPassModal" 
                                     style="width: 100%; background-color: #4a5568; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; height: 38px; padding: 0; margin: 0; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-magic"></i> Auto
@@ -397,6 +396,7 @@ function inicializarGestionPortalPaciente(paciente) {
                 };
 
                 // Guardado usando exclusivamente los strings congelados en variables primitivas
+// Guardado usando exclusivamente los strings congelados en variables primitivas
                 document.getElementById('btnActivarCuentaPortal').onclick = async function(evt) {
                     evt.preventDefault();
                     evt.stopPropagation();
@@ -415,16 +415,13 @@ function inicializarGestionPortalPaciente(paciente) {
                     // 🎯 CONSTRUIMOS EL DISPLAY NAME SEGURO DESDE EL OBJETO DE MEMORIA ACÁ ARRIBA
                     const nombreCompletoPaciente = `${paciente.nombre} ${paciente.apellido_paterno} ${paciente.apellido_materno || ''}`.trim().toUpperCase();
 
-                    //console.log("🚀 [SUPABASE] Registrando cuenta para:", correoBase);
-                    //console.log("🎯 Display Name inyectado:", nombreCompletoPaciente);
-
                     try {
                         const { data: authData, error: authErr } = await fisioAdmin.auth.signUp({
                             email: correoBase,
                             password: pass,
                             options: { 
                                 data: { 
-                                    display_name: nombreCompletoPaciente, // 🚀 ¡Aquítá! Supabase lo mapea directo a la columna
+                                    display_name: nombreCompletoPaciente, 
                                     tipo_usuario: esMenor ? 'TUTOR' : 'PACIENTE', 
                                     id_referencia_maestro: paciente.id 
                                 } 
@@ -432,9 +429,32 @@ function inicializarGestionPortalPaciente(paciente) {
                         });
 
                         if (authErr) {
-                            alert("💥 Fallo de registro: " + authErr.message);
+                            const errorMsg = authErr.message.toLowerCase();
+                            
+                            // 1. Detectamos si el error es porque el correo ya existe
+                            if (errorMsg.includes("already registered") || errorMsg.includes("user already exists") || authErr.status === 422) {
+                                
+                                // 2. Revisamos silenciosamente quién está logueado
+                                const { data: sesionActual } = await fisioNet.auth.getUser();
+                                
+                                // 3. Si eres tú (tu mismo correo)
+                                if (sesionActual?.user?.email === correoBase) {
+                                    await fisioNet.from('pacientes_maestros').update({ id_usuario_auth: sesionActual.user.id }).eq('id', paciente.id);
+                                    
+                                    alert("✅ ¡Cuenta vinculada! Detectamos que este es tu correo de Especialista. Hemos enlazado tu misma sesión maestra a este expediente de paciente.");
+                                    modalEl.style.display = 'none';
+                                    location.reload();
+                                    return;
+                                } else {
+                                    alert("⚠️ Este correo ya está registrado en la infraestructura de FisioCid por otro especialista. No se puede crear una cuenta duplicada.");
+                                }
+                            } else {
+                                alert("💥 Fallo de registro: " + authErr.message);
+                            }
+                            
                             this.disabled = false; 
                             this.innerText = "Habilitar Acceso al Portal";
+
                         } else {
                             const uidGenerado = authData.user.id;
                             await fisioNet.from('pacientes_maestros').update({ id_usuario_auth: uidGenerado }).eq('id', paciente.id);
@@ -462,12 +482,10 @@ async function procesarAltaPortalPaciente(boton) {
     const passInput = document.getElementById('portalPass');
     const pass = passInput ? passInput.value.trim() : "";
     
-    // 🛡️ Rescatamos TODOS los datos del botón (Inmune a fallos del DOM)
+    // 🛡️ Rescatamos TODOS los datos del botón
     const correoInmune = boton.getAttribute('data-email');
     const pacienteId = boton.getAttribute('data-id');
     const rolUsuario = boton.getAttribute('data-rol');
-    
-    // Si por alguna razón no se inyectó el data-nombre, ponemos uno por defecto para que no quede vacío
     const nombreCompletoPaciente = boton.getAttribute('data-nombre') || "PACIENTE FISIOCID";
 
     if (pass.length < 6) { 
@@ -475,12 +493,9 @@ async function procesarAltaPortalPaciente(boton) {
         return; 
     }
 
-    // Bloqueamos el botón temporalmente para evitar doble envío
+    // Bloqueamos el botón temporalmente
     boton.disabled = true; 
     boton.innerText = "PROCESANDO ACCESO MAESTRO...";
-
-    //console.log("🚀 [SUPABASE] Registrando cuenta para:", correoInmune);
-    //console.log("🎯 Display Name que se enviará:", nombreCompletoPaciente);
 
     try {
         // Usamos 'fisioAdmin' para crear la cuenta de Auth sin romper la sesión del terapeuta activo.
@@ -489,26 +504,47 @@ async function procesarAltaPortalPaciente(boton) {
             password: pass,
             options: { 
                 data: { 
-                    display_name: nombreCompletoPaciente, // <- Nombre real directo a la columna principal
-                    tipo_usuario: rolUsuario,             
-                    id_referencia_maestro: pacienteId     
+                    display_name: nombreCompletoPaciente,
+                    tipo_usuario: rolUsuario,            
+                    id_referencia_maestro: pacienteId    
                 } 
             }
         });
 
         if (authErr) {
-            if (authErr.message.toLowerCase().includes("already registered") || authErr.status === 422) {
-                alert("💡 Nota: Este correo ya tiene credenciales globales en la infraestructura de FisioCid. Vinculando ID local...");
-                if (authData && authData.user) {
-                    await fisioNet.from('pacientes_maestros').update({ id_usuario_auth: authData.user.id }).eq('id', pacienteId);
+            const errorMsg = authErr.message.toLowerCase();
+            
+            // 1. Detectamos si el error es porque el correo ya existe
+            if (errorMsg.includes("already registered") || errorMsg.includes("user already exists") || authErr.status === 422) {
+                
+                // 2. Revisamos silenciosamente quién está logueado haciendo la operación
+                const { data: sesionActual } = await fisioNet.auth.getUser();
+                
+                // 3. Verificamos coincidencia con correoInmune
+                if (sesionActual?.user?.email === correoInmune) {
+                    
+                    // Cruzamos el ID de tu sesión actual directamente a la tabla del paciente
+                    await fisioNet.from('pacientes_maestros').update({ id_usuario_auth: sesionActual.user.id }).eq('id', pacienteId);
+                    
+                    alert("✅ ¡Cuenta vinculada! Detectamos que este es tu correo de Especialista. Hemos enlazado tu misma sesión maestra a este expediente de paciente.");
+                    document.getElementById('modalPortalPaciente').style.display = 'none';
+                    location.reload();
+                    return; // Cortamos la ejecución aquí
+                    
+                } else {
+                    alert("⚠️ Este correo ya está registrado en la infraestructura global de FisioCid. No se puede crear una cuenta duplicada. Contacte al área de soporte técnico.");
                 }
-                document.getElementById('modalPortalPaciente').style.display = 'none';
+                
             } else {
-                alert("💥 Fallo de registro aislado: " + authErr.message);
+                alert("💥 Fallo de registro: " + authErr.message);
             }
+            
+            // Si falló por otra cosa, regresamos el botón a la normalidad
             boton.disabled = false; 
             boton.innerText = "Habilitar Acceso al Portal";
+
         } else {
+            
             const uidGenerado = authData.user.id;
             
             // Sincronizamos la tabla pública usando la instancia cliente normal
