@@ -1136,4 +1136,4 @@ function cerrarVisorPaciente() {
     }
     tomasPacienteActuales = [];
     indiceTomaPaciente = 0;
-}
+} 

@@ -38,13 +38,18 @@ if (elSpanEspecialidad) {
         }
     });
 
-    // 4. GESTIÓN MULTI-ARCHIVO (Acumulador de PDFs)
-const inputArchivos = document.getElementById('file-pdf');
-if (inputArchivos) {
-    // Esto garantiza que solo haya UN oyente activo
-    inputArchivos.removeEventListener('change', manejarSeleccionArchivos);
-    inputArchivos.addEventListener('change', manejarSeleccionArchivos);
-}
+   // 4. GESTIÓN MULTI-ARCHIVO (Acumulador de PDFs)
+    const inputArchivos = document.getElementById('file-pdf');
+    const inputArchivosModal = document.getElementById('file-pdf-modal'); // <-- Agregamos el del modal
+
+    if (inputArchivos) {
+        inputArchivos.removeEventListener('change', manejarSeleccionArchivos);
+        inputArchivos.addEventListener('change', manejarSeleccionArchivos);
+    }
+    if (inputArchivosModal) {
+        inputArchivosModal.removeEventListener('change', manejarSeleccionArchivos);
+        inputArchivosModal.addEventListener('change', manejarSeleccionArchivos);
+    }
 
     // 🎯 5. CONFIGURACIÓN INDESTRUCTIBLE DE ESCUCHAS PARA CURP Y FOLIOS
     // Vinculamos de forma nativa los IDs del formulario con la función procesarCurp
@@ -75,34 +80,58 @@ function esDictaminadorAutorizado() {
     return especialidadesDictaminadoras.includes(especialidadUsuario.toUpperCase());
 }
 
-// Sustituye tu función manejarSeleccionArchivos por esta:
 function manejarSeleccionArchivos(e) {
     const input = e.target;
-    // Procesamos archivos
     const nuevosArchivos = Array.from(input.files);
+    
+    // 🛡️ Ahora aceptamos PDFs y Fotos
+    const permitidos = ['application/pdf', 'image/jpeg', 'image/png'];
+
     nuevosArchivos.forEach(archivo => {
-        if (archivo.type === 'application/pdf') {
+        if (permitidos.includes(archivo.type)) {
             if (!archivosLaboratorio.some(a => a.name === archivo.name)) {
                 archivosLaboratorio.push(archivo);
             }
+        } else {
+            alert(`El archivo ${archivo.name} no es válido. Solo PDF, JPG o PNG.`);
         }
     });
     renderizarListaPDFs();
 
-    // BLINDAJE: En lugar de intentar limpiar el valor, simplemente "destruimos" el input del DOM
-    // y creamos uno nuevo completamente virgen.
     const nuevoInput = document.createElement('input');
     nuevoInput.type = 'file';
     nuevoInput.id = input.id;
     nuevoInput.className = input.className;
-    nuevoInput.accept = 'application/pdf';
+    nuevoInput.accept = 'application/pdf, image/jpeg, image/png'; // Actualizado aquí
     nuevoInput.style.display = 'none';
     nuevoInput.multiple = true;
     nuevoInput.addEventListener('change', manejarSeleccionArchivos);
     
-    // Aquí es donde ocurre el reemplazo sin errores
     input.parentNode.replaceChild(nuevoInput, input);
-    //console.log("✅ Input reseteado quirúrgicamente sin tocar valores bloqueados.");
+}
+
+function renderizarListaPDFs() {
+    // Buscamos ambos contenedores (el de la pantalla principal y el del modal)
+    let contenedorPrincipal = document.getElementById('lista-pdfs-cargados'); 
+    let contenedorModal = document.getElementById('lista-pdfs-modal'); 
+
+    const htmlArchivos = archivosLaboratorio.map((archivo, index) => {
+        const esPDF = archivo.type === 'application/pdf';
+        const icono = esPDF ? 'fa-file-pdf text-danger' : 'fa-image text-primary';
+        
+        return `
+        <div class="d-flex align-items-center p-2 border rounded bg-white mb-1 shadow-sm">
+            <i class="fas ${icono} me-2"></i>
+            <span class="small text-truncate flex-grow-1" style="font-size: 0.70rem;">${archivo.name}</span>
+            <button type="button" class="btn btn-sm text-danger p-0" onclick="eliminarPDFLaboratorio(${index})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>`;
+    }).join('');
+
+    // Pintamos los archivos donde sea que el usuario esté trabajando
+    if (contenedorPrincipal) contenedorPrincipal.innerHTML = htmlArchivos;
+    if (contenedorModal) contenedorModal.innerHTML = htmlArchivos;
 }
 
 
@@ -1065,7 +1094,7 @@ async function configurarBuscadorQuimico() {
     });
 }
 
-// 1. IMPORTANTE: Agrega async aquí
+
 // 1. IMPORTANTE: Agrega async aquí
 async function abrirDictaminacion(idEstudio) {
     const estudio = historialLab.find(e => e.id === idEstudio);
@@ -1106,15 +1135,29 @@ async function abrirDictaminacion(idEstudio) {
         configurarBotonesModal();
     }
 
-    // 3. VISUALIZACIÓN DEL PDF (Esto va fuera del if/else para que siempre ocurra)
-    const visor = document.getElementById('contenedor-visor-pdf');
+
+
+  // 3. VISUALIZACIÓN DE ARCHIVOS (Botón inteligente)
+    const visor = document.getElementById('visor-pdf-dictamen'); // 🎯 ¡ID CORREGIDO!
     if (visor) {
         if (estudio.archivo_pdf_url) {
-            await abrirVisorPDFFirmado(estudio.archivo_pdf_url.split(',')[0].trim());
+            const cantidad = estudio.archivo_pdf_url.split(',').length;
+            visor.className = "mb-3"; // Quitamos la caja negra para que se vea limpio
+            visor.innerHTML = `
+                <div class="text-center p-4 rounded shadow-sm" style="background: #f8fafc; border: 2px dashed #00cfd5;">
+                    <h6 class="text-dark fw-bold mb-3"><i class="fas fa-file-pdf text-danger fa-lg me-2"></i> Documento Adjunto</h6>
+                    <button type="button" onclick="abrirVisorLaboratorio('${estudio.archivo_pdf_url}')" class="btn btn-primary fw-bold rounded-pill shadow-sm px-4">
+                        <i class="fas fa-search-plus me-2"></i> Abrir Visor (${cantidad})
+                    </button>
+                </div>
+            `;
         } else {
-            visor.innerHTML = '<div class="alert alert-warning">No hay reporte PDF asociado.</div>';
+            visor.className = "mb-3";
+            visor.innerHTML = '<div class="alert alert-warning small text-center fw-bold"><i class="fas fa-file-slash me-1"></i> No hay documentos previos.</div>';
         }
     }
+
+    
 
     // 4. LISTA Y MODAL
     const listaEstudios = document.getElementById('lista-estudios-dictamen');
@@ -1370,41 +1413,19 @@ async function renderizarModoConsulta(estudio) {
     // 5. LÓGICA DIFERENCIADA PARA EL CONTENIDO DEL REPORTE
     if (estudio.metodo_carga === 'PDF_EXTERNO') {
         const urls = estudio.archivo_pdf_url ? estudio.archivo_pdf_url.split(',') : [];
+        const cantidad = urls.length;
         
-        contenedor.innerHTML = html + `<div class="text-center p-3"><i class="fas fa-spinner fa-spin me-2"></i>Generando acceso seguro al documento...</div>`;
-
-        let bloquesPdfHtml = `<div class="alert alert-info py-1 px-2 small mb-2"><i class="fas fa-file-pdf"></i> Archivo Adjunto Seguro:</div>`;
-
-        for (const nombreArchivo of urls) {
-            const rutaLimpia = nombreArchivo.trim();
-            if (!rutaLimpia) continue;
-
-            try {
-                const { data, error } = await fisioNet.storage
-                    .from('expedientes-clinicos')
-                    .createSignedUrl(rutaLimpia, 3600);
-
-                if (error) throw error;
-
-                bloquesPdfHtml += `
-                    <div class="mb-3">
-                        <a href="${data.signedUrl}" target="_blank" class="btn btn-sm btn-primary mb-2 shadow-sm">
-                            <i class="fas fa-external-link-alt"></i> Abrir PDF en ventana completa
-                        </a>
-                        <iframe src="${data.signedUrl}" width="100%" height="550px" style="border:1px solid #ccc; border-radius: 8px;"></iframe>
-                    </div>
-                `;
-            } catch (err) {
-                console.error("❌ Error al firmar archivo:", rutaLimpia, err);
-                bloquesPdfHtml += `
-                    <div class="alert alert-danger small">
-                        <i class="fas fa-exclamation-triangle"></i> No se pudo generar el enlace seguro para: ${rutaLimpia}
-                    </div>
-                `;
-            }
-        }
-
-        contenedor.innerHTML = html + bloquesPdfHtml;
+        contenedor.innerHTML = html + `
+            <div class="card shadow-sm border-0 mt-3" style="background: #f8fafc;">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-folder-open fa-3x text-secondary mb-3"></i>
+                    <h5 class="text-dark fw-bold mb-3">Documentos Externos Adjuntos</h5>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" onclick="abrirVisorLaboratorio('${estudio.archivo_pdf_url}')">
+                        <i class="fas fa-images me-2"></i> Iniciar Visor (${cantidad} Archivo${cantidad > 1 ? 's' : ''})
+                    </button>
+                </div>
+            </div>
+        `;
         return;
 
     } else {
@@ -1463,27 +1484,123 @@ async function renderizarModoConsulta(estudio) {
 }
 
 
-async function abrirVisorPDFFirmado(rutaArchivo) {
-    const contenedor = document.getElementById('contenedor-visor-pdf');
+
+// ==========================================
+// 🩻 MOTOR UNIVERSAL DE VISOR (LABORATORIO)
+// ==========================================
+let panzoomLab = null;
+let tomasLabActuales = []; 
+let indiceTomaLab = 0;     
+
+async function abrirVisorLaboratorio(rutasComa) {
+    if (!rutasComa) return;
     
-    //console.log("📂 RUTA ORIGINAL QUE LLEGA DE LA DB:", rutaArchivo);
+    tomasLabActuales = rutasComa.split(',').map(r => r.trim());
+    indiceTomaLab = 0; 
 
-    const { data, error } = await fisioNet.storage
-        .from('expedientes-clinicos')
-        .createSignedUrl(rutaArchivo, 3600);
-
-    if (error) {
-        console.error("❌ ERROR AL FIRMAR EN SUPABASE:", error.message);
-        return;
+    if (!document.getElementById('visor-lab-overlay')) {
+        document.body.insertAdjacentHTML('beforeend', `
+            <div id="visor-lab-overlay" class="d-none animate__animated animate__fadeIn" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(5px); z-index: 9999; display: flex; flex-direction: column;">
+                <div style="padding: 15px 20px; background: #0f172a; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);">
+                    <div class="d-flex align-items-center">
+                        <h5 class="text-white mb-0 fw-bold me-3"><i class="fas fa-microscope text-info me-2"></i> Visor Laboratorio</h5>
+                        <span id="visor-lab-contador" class="badge bg-dark border border-secondary" style="font-size: 0.8rem;"></span>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-info btn-sm me-2 fw-bold" onclick="if(panzoomLab) panzoomLab.reset()"><i class="fas fa-search-minus"></i> RESET ZOOM</button>
+                        <button class="btn btn-danger btn-sm fw-bold" onclick="cerrarVisorLaboratorio()"><i class="fas fa-times"></i> CERRAR</button>
+                    </div>
+                </div>
+                <div style="flex: 1; position: relative; display: flex;">
+                    <button id="btn-visor-lab-prev" class="btn btn-dark shadow" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px; opacity: 0.8;" onclick="cambiarTomaLaboratorio(-1)">
+                        <i class="fas fa-chevron-left fa-lg"></i>
+                    </button>
+                    <div id="visor-lab-lienzo" style="flex: 1; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;"></div>
+                    <button id="btn-visor-lab-next" class="btn btn-dark shadow" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px; opacity: 0.8;" onclick="cambiarTomaLaboratorio(1)">
+                        <i class="fas fa-chevron-right fa-lg"></i>
+                    </button>
+                </div>
+            </div>
+        `);
     }
 
-    //console.log("🔗 URL FIRMADA GENERADA POR SUPABASE:", data.signedUrl);
+    const visor = document.getElementById('visor-lab-overlay');
+    visor.classList.remove('d-none');
+    visor.style.display = 'flex'; 
 
-    contenedor.innerHTML = `
-        <embed src="${data.signedUrl}" 
-               type="application/pdf" 
-               width="100%" 
-               height="600px" 
-               style="border: none;">
-    `;
+    await renderizarTomaLaboratorio();
+}
+
+async function renderizarTomaLaboratorio() {
+    const lienzo = document.getElementById('visor-lab-lienzo');
+    const archivoRuta = tomasLabActuales[indiceTomaLab];
+
+    document.getElementById('visor-lab-contador').innerText = `Archivo ${indiceTomaLab + 1} de ${tomasLabActuales.length}`;
+    
+    const mostrarFlechas = tomasLabActuales.length > 1 ? 'block' : 'none';
+    document.getElementById('btn-visor-lab-prev').style.display = mostrarFlechas;
+    document.getElementById('btn-visor-lab-next').style.display = mostrarFlechas;
+
+    lienzo.innerHTML = '<div class="spinner-border text-info" role="status" style="width: 3rem; height: 3rem;"></div>';
+
+    if (panzoomLab) {
+        panzoomLab.destroy();
+        panzoomLab = null;
+    }
+
+    try {
+        const { data, error } = await fisioNet.storage.from('expedientes-clinicos').createSignedUrl(archivoRuta, 3600);
+        if (error) throw error;
+
+        if (typeof Panzoom === 'undefined') {
+            await new Promise(resolve => {
+                const script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js";
+                script.onload = resolve;
+                document.head.appendChild(script);
+            });
+        }
+
+        lienzo.innerHTML = ''; 
+        if (archivoRuta.toLowerCase().endsWith('.pdf')) {
+            lienzo.innerHTML = `<embed src="${data.signedUrl}" type="application/pdf" width="100%" height="100%" style="border: none;">`;
+        } else {
+            lienzo.innerHTML = `<img id="img-visor-lab" src="${data.signedUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">`;
+            const img = document.getElementById('img-visor-lab');
+            
+            setTimeout(() => {
+                panzoomLab = Panzoom(img, { maxScale: 6, minScale: 1, contain: 'outside' });
+                lienzo.addEventListener('wheel', (e) => { 
+                    e.preventDefault(); 
+                    panzoomLab.zoomWithWheel(e); 
+                }, { passive: false });
+            }, 150);
+        }
+    } catch (err) {
+        console.error("Error en renderizado:", err);
+        lienzo.innerHTML = `<div class="text-center text-white"><i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i><h5>Archivo no disponible.</h5></div>`;
+    }
+}
+
+function cambiarTomaLaboratorio(direccion) {
+    if (tomasLabActuales.length <= 1) return; 
+    indiceTomaLab += direccion;
+    if (indiceTomaLab >= tomasLabActuales.length) indiceTomaLab = 0;
+    if (indiceTomaLab < 0) indiceTomaLab = tomasLabActuales.length - 1;
+    renderizarTomaLaboratorio();
+}
+
+function cerrarVisorLaboratorio() {
+    const visor = document.getElementById('visor-lab-overlay');
+    if (visor) {
+        visor.classList.add('d-none');
+        setTimeout(() => visor.style.display = 'none', 300);
+        document.getElementById('visor-lab-lienzo').innerHTML = ''; 
+    }
+    if (panzoomLab) {
+        panzoomLab.destroy();
+        panzoomLab = null;
+    }
+    tomasLabActuales = [];
+    indiceTomaLab = 0;
 }
