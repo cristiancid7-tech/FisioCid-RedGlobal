@@ -1679,12 +1679,19 @@ window.cambiarTomaPACS = cambiarTomaPACS;
 // ============================================================================
 // 📡 ESCÁNER DE RADIÓLOGOS DISPONIBLES (SIN JOINS COMPLEJOS / BLINDADO HTTP 400)
 // ============================================================================
+// ============================================================================
+// 📡 ESCÁNER DE RADIÓLOGOS DISPONIBLES (SIN JOINS COMPLEJOS / BLINDADO HTTP 400)
+// ============================================================================
 async function cargarRadiologosDisponibles() {
     const select = document.getElementById('select-radiologo-asignado');
     if (!select) return;
 
+    // 🔥 1. Obtenemos tu usuario activo desde Supabase
+    const { data: { user } } = await fisioNet.auth.getUser();
     const idClinica = localStorage.getItem('id_clinica_activa');
-    if (!idClinica) return;
+    
+    // Si no hay clínica o no hay usuario, detenemos la carga
+    if (!idClinica || !user) return;
 
     try {
         // 1. Obtener los colaboradores de la clínica activa
@@ -1705,13 +1712,13 @@ async function cargarRadiologosDisponibles() {
 
         if (errExt) throw errExt;
 
-        let opcionesHtml = '<option value="" disabled selected>SELECCIONE MÉDICO-RADIÓLOGO...</option>';
+        // 🔥 2. EL TRUCO: La opción por defecto ya lleva tu ID (user.id) oculto y válido
+        let opcionesHtml = `<option value="${user.id}" selected>📌 A QUIEN CORRESPONDA (ARCHIVO GENERAL)</option>`;
 
         // 🔵 PROCESAR INTERNOS
         if (colaboradores && colaboradores.length > 0) {
             const idsProf = colaboradores.map(c => c.id_profesional);
 
-            // Consultamos los perfiles directamente
             const { data: perfiles } = await fisioNet
                 .from('perfiles_profesionales')
                 .select('id, nombre_completo, especialidad')
@@ -1747,8 +1754,9 @@ async function cargarRadiologosDisponibles() {
             }
         }
 
+        // 🔥 3. Aviso sutil si no hay especialistas extra en tu red
         if (!opcionesHtml.includes('optgroup')) {
-            opcionesHtml = '<option value="" disabled>NO HAY MÉDICOS RADIÓLOGOS REGISTRADOS</option>';
+            opcionesHtml += '<option value="" disabled>⚠️ NO HAY MÁS MÉDICOS RADIÓLOGOS REGISTRADOS</option>';
         }
 
         select.innerHTML = opcionesHtml;
