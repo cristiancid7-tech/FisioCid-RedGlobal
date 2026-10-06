@@ -2215,10 +2215,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) { window.location.href = 'login.html'; return; }
 
-    // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO
+    // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO (AHORA INCLUYE LA INSIGNIA)
     const { data: perfilProf } = await fisioNet
         .from('perfiles_profesionales')
-        .select('nombre_completo')
+        .select('nombre_completo, insignia_especial')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -2231,6 +2231,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Actualizamos la bienvenida en pantalla
     const txtSaludo = document.getElementById('txtSaludo');
     if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
+
+    // ✨ LÓGICA DE LA INSIGNIA DORADA VIP
+    const contenedorInsignia = document.getElementById('contenedorInsigniaEspecial');
+    if (contenedorInsignia) {
+        if (perfilProf && perfilProf.insignia_especial) {
+            // Diseño premium dorado con sombra, gradiente y corona
+            contenedorInsignia.innerHTML = `
+                <span style="background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 900; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4); border: 1px solid #fef08a; text-transform: uppercase;">
+                    <i class="fas fa-crown" style="color: #fef08a; font-size: 0.8rem;"></i> ${perfilProf.insignia_especial}
+                </span>
+            `;
+            contenedorInsignia.style.display = 'block';
+        } else {
+            contenedorInsignia.style.display = 'none';
+        }
+    }
 
     const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
