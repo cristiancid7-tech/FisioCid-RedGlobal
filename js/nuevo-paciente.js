@@ -2,6 +2,17 @@
 let pacienteExistenteId = null;
 let edicionFichaAutorizada = false;
 
+function sanitizarTexto(texto) {
+    if (!texto) return ""; // Evita errores si el texto llega vacío o undefined
+    
+    return texto
+        .trim()                       // 1. Quita los espacios accidentales al inicio y al final
+        .replace(/\s+/g, " ")         // 2. Convierte múltiples espacios en blanco seguidos en uno solo
+        .replace(/</g, "&lt;")        // 3. Desactiva etiquetas HTML como <script>
+        .replace(/>/g, "&gt;")
+        .replace(/['"`;-]/g, "");     // 4. Remueve comillas, puntos y comas o guiones de SQL
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     aplicarIdentidadCamaleonica();
 
