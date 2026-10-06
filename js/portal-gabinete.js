@@ -205,7 +205,7 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
 
         const { data: estudioActual, error: errQuery } = await fisioNet
             .from('estudios_gabinete')
-            .select('paciente_id, hallazgo_tecnica, diagnostico_radiologico') // Usamos los nombres reales de la tabla
+            .select('paciente_id, hallazgo_tecnica, diagnostico_radiologico, tipo_estudio') // Usamos los nombres reales de la tabla
             .eq('id', idBuscado) // 🔥 AJUSTE: Usamos la variable limpia idBuscado
             .maybeSingle();
 
@@ -229,7 +229,7 @@ async function abrirEstudioParaDictamenMaestro(estudioId, archivoUrl, pacienteNo
             //console.log("🚀 Disparando carga de historial para:", estudioActual.paciente_id);
             await cargarLineaTiempoPACS(estudioActual.paciente_id, estudioId);
           
-            await verificarYRenderizarBotonIntegrar();
+           await verificarYRenderizarBotonIntegrar(estudioActual.tipo_estudio);
             //console.log("✅ Blindaje y carga completados con éxito.");
         }
 
@@ -824,7 +824,8 @@ async function guardarEstudioGabinete(event) {
 
     // 3. Validaciones obligatorias
     if (!idClinicaActiva) { alert("Error: Falta ID de clínica activa."); return; }
-    if (!radiologoId) { alert("⚠️ Es obligatorio asignar un Médico Radiólogo."); return; }
+    // Si no hay radiólogo asignado, el estudio se guarda como referencia visual, asumiendo tu propio ID como responsable de la subida.
+const radiologoFinal = radiologoId || user.id;
 
     if (btn) {
         btn.disabled = true;
@@ -872,7 +873,7 @@ async function guardarEstudioGabinete(event) {
             id_socio_emisor: idClinicaActiva,
             doctor_emisor_id: doctorEmisorVinculado || null,          // Corregido: UUID si es de la red
             medico_solicitante_manual: medicoSolicitanteTexto,       // Corregido: Texto del médico
-            id_radiologo_firmante: radiologoId,                      // Radiólogo asignado
+          id_radiologo_firmante: radiologoFinal,                     // Radiólogo asignado
             creado_por: user.id,
             tecnico_captura: user.email, 
             paciente_nombre_manual: nombrePacManual,
@@ -935,11 +936,25 @@ async function mostrarNombreEspecialista() {
             `;
         }
 
-        const inputDiag = document.getElementById('conclusion-estudio');
-        const esRadiologo = perfil.especialidad?.toUpperCase().includes('RADIOLOG');
+        // 🎯 Verificamos autorización clínica extendida y corregimos el ID del input
+        const inputDiag = document.getElementById('conclusion-estudio-pacs');
+        const inputHallazgos = document.getElementById('descripcion-hallazgos-pacs');
         
-        if (inputDiag && !esRadiologo) {
-            inputDiag.placeholder = "🔒 Bloqueado: Solo Médicos Radiólogos pueden emitir diagnósticos.";
+        const especialidadActual = (perfil.especialidad || '').toUpperCase();
+        const esEspecialistaAutorizado = especialidadActual.includes('RADIOLOG') || 
+                                         especialidadActual.includes('CARDIOLOG') || 
+                                         especialidadActual.includes('MEDICO') || 
+                                         especialidadActual.includes('ENFERMER');
+        
+        if (!esEspecialistaAutorizado) {
+            if (inputDiag) {
+                inputDiag.placeholder = "🔒 Bloqueado: Solo Especialistas Clínicos pueden emitir dictámenes.";
+                inputDiag.disabled = true;
+            }
+            if (inputHallazgos) {
+                inputHallazgos.placeholder = "🔒 Bloqueado: Permiso clínico requerido.";
+                inputHallazgos.disabled = true;
+            }
         }
 
     } catch (err) {
@@ -1881,31 +1896,75 @@ function cerrarModoComparativa() {
 // Lo exponemos globalmente para que el botón HTML lo ejecute sin fallas
 window.cerrarModoComparativa = cerrarModoComparativa;
 
-async function verificarYRenderizarBotonIntegrar() {
+// ============================================================================
+// 🛡️ MOTOR DE REGLAS Y CANDADOS DE ESPECIALIDAD FISIOCID
+// ============================================================================
+async function verificarYRenderizarBotonIntegrar(tipoEstudioActual) {
     const contenedor = document.getElementById('contenedor-btn-integrar');
-    if (!contenedor) return;
+    const inputDiag = document.getElementById('conclusion-estudio-pacs');
+    const inputHallazgos = document.getElementById('descripcion-hallazgos-pacs');
 
-    const { data: { user } } = await fisioNet.auth.getUser();
-    
-    // Consulta al perfil profesional
-    const { data: perfil } = await fisioNet
-        .from('perfiles_profesionales')
-        .select('especialidad')
-        .eq('id', user.id)
-        .single();
+    if (!contenedor || !tipoEstudioActual) return;
 
-    // Si es MEDICO-RADIOLOGO, inyectamos el botón
-    if (perfil?.especialidad === 'MEDICO-RADIOLOGO') {
+    // 1. Obtenemos la especialidad del usuario desde el caché
+    const especialidadActual = (perfilEspecialistaCache?.especialidad || '').toUpperCase();
+
+    // 2. 🚦 DICCIONARIO DE PERMISOS (Aquí configuras los match exactos)
+    let tienePermiso = false;
+
+    if (especialidadActual.includes('RADIOLOG')) {
+        // El Radiólogo solo puede dictaminar Imagenología
+        tienePermiso = ['USG', 'RX', 'RM', 'TAC'].includes(tipoEstudioActual);
+        
+    } else if (especialidadActual.includes('CARDIOLOG')) {
+        // El Cardiólogo solo puede dictaminar su rama
+        tienePermiso = ['ECG', 'ECO'].includes(tipoEstudioActual);
+        
+    } else if (especialidadActual.includes('ENFERMER')) {
+        // Enfermería puede registrar pruebas básicas o de esfuerzo
+        tienePermiso = ['ESPIRO', 'LAB', 'ECG'].includes(tipoEstudioActual);
+        
+    } else if (especialidadActual.includes('MEDICO')) {
+        // El Médico General/Fisio Médico puede abarcar más áreas generales
+        tienePermiso = ['LAB', 'ESPIRO', 'ECG', 'EMG', 'USG', 'RX'].includes(tipoEstudioActual);
+    }
+
+    // 3. 🔒 APLICAMOS EL CANDADO VISUAL A LA INTERFAZ
+    if (tienePermiso) {
+        // ✔️ MATCH: Desbloqueamos los campos para escribir
+        if (inputDiag) {
+            inputDiag.disabled = false;
+            inputDiag.placeholder = "Escribe la conclusión o diagnóstico final...";
+        }
+        if (inputHallazgos) {
+            inputHallazgos.disabled = false;
+            inputHallazgos.placeholder = "Describe los hallazgos técnicos o medidas...";
+        }
+
+        // Renderizamos el botón verde de Guardar
         contenedor.innerHTML = `
             <button type="button" id="btn-finalizar-pacs" 
                     class="btn btn-success fw-bold w-100 py-2 shadow" 
                     style="border-radius: 8px; background-color: #48bb78; border: none; font-size: 0.75rem;"
                     onclick="integrarDictamenRadiologicoAlExpediente()">
-                <i class="fas fa-file-import me-1"></i> INTEGRAR A EXPEDIENTE FISIOCID
+                <i class="fas fa-file-import me-1"></i> FIRMAR E INTEGRAR DICTAMEN
             </button>`;
     } else {
-        // Si no es, simplemente no hay nada que mostrar.
-        contenedor.innerHTML = '';
+        // ❌ NO MATCH: Blindamos los campos de texto
+        if (inputDiag) {
+            inputDiag.disabled = true;
+            inputDiag.placeholder = `🔒 Especialidad (${especialidadActual}) no autorizada para dictaminar: ${tipoEstudioActual}`;
+        }
+        if (inputHallazgos) {
+            inputHallazgos.disabled = true;
+            inputHallazgos.placeholder = "🔒 Acceso denegado a los hallazgos de este estudio.";
+        }
+
+        // Ocultamos el botón verde y mostramos una advertencia
+        contenedor.innerHTML = `
+            <div class="alert alert-warning text-center p-2 mb-0" style="font-size: 0.75rem; border-radius: 8px;">
+                <i class="fas fa-lock"></i> No tienes permisos para dictaminar un estudio de <strong>${tipoEstudioActual}</strong>.
+            </div>`;
     }
 }
 function iniciarNuevoRegistro() {
