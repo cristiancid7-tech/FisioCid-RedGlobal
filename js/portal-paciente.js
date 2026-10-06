@@ -164,24 +164,188 @@ function seleccionarPerfil(idPaciente) {
 }
 
 // ==========================================
-// 📡 2. MOTOR DE AUTORIZACIÓN EN TIEMPO REAL (OTP)
 // ==========================================
+// 📡 2. MOTOR DE AUTORIZACIÓN EN TIEMPO REAL (OTP) CON AUTO-CIERRE
+// ==========================================
+let temporizadorOTP = null; // Variable para controlar la cuenta regresiva
+
 async function escucharSolicitudesEnVivo(pacienteId) {
     //console.log("👂 Escuchando solicitudes médicas en tiempo real para:", pacienteId);
+    
+    // Primero, verificamos si hay alguna atorada/pendiente al entrar
     verificarSolicitudesPendientes(pacienteId);
 
+    // Escuchador de NUEVAS solicitudes (INSERT) y CAMBIOS DE ESTADO (UPDATE)
     fisioNet
         .channel('solicitudes_medicas_otp')
         .on('postgres_changes', { 
-            event: 'INSERT', 
+            event: '*', // Escuchamos todo: INSERT y UPDATE
             schema: 'public', 
             table: 'solicitudes_acceso_otp',
             filter: `id_paciente=eq.${pacienteId}`
         }, payload => {
-            //console.log("🔔 ¡NUEVA SOLICITUD DETECTADA EN VIVO! Payload:", payload.new);
-            mostrarBannerSolicitud(payload.new);
+            
+            // Si entra una NUEVA solicitud
+            if (payload.eventType === 'INSERT') {
+                mostrarBannerSolicitud(payload.new);
+            } 
+            
+            // Si el estado CAMBIA (ej. El doctor usó el código y cambió a 'ACTIVO' o 'EXPIRADO')
+            else if (payload.eventType === 'UPDATE') {
+                const estado = payload.new.estado_solicitud;
+                if (estado !== 'PENDIENTE' && estado !== 'APROBADO') {
+                    // Si ya se usó, se canceló o expiró, escondemos el banner inmediatamente
+                    cerrarBannerSolicitud();
+                    alert(`El acceso ha cambiado a estado: ${estado}`);
+                }
+            }
         })
         .subscribe();
+}
+
+async function verificarSolicitudesPendientes(pacienteId) {
+    try {
+        const { data: solicitudes, error } = await fisioNet
+            .from('solicitudes_acceso_otp')
+            .select('*')
+            .eq('id_paciente', pacienteId)
+            // Solo recuperamos las que requieran acción del paciente
+            .in('estado_solicitud', ['PENDIENTE', 'APROBADO']) 
+            .order('creado_en', { ascending: false })
+            .limit(1);
+
+        if (error) throw error;
+
+        if (solicitudes && solicitudes.length > 0) {
+            mostrarBannerSolicitud(solicitudes[0]);
+        }
+    } catch (err) {
+        console.error("💥 Error al buscar solicitudes pendientes:", err.message);
+    }
+}
+
+function mostrarBannerSolicitud(solicitud) {
+    idSolicitudActiva = solicitud.id;
+    
+    const card = document.getElementById('cardSolicitudActiva');
+    const lblDoctor = document.getElementById('lblNombreDoctorSolicitante');
+    const lblCodigo = document.getElementById('lblCodigoOTPPaciente');
+    
+    // Si la solicitud ya estaba aprobada, no reiniciamos el temporizador completo, 
+    // pero para este ejemplo, asumimos un contador base de 5 mins.
+    if (lblDoctor) lblDoctor.innerText = solicitud.nombre_profesional || "Dr. FisioCid";
+    if (lblCodigo) lblCodigo.innerText = solicitud.codigo_otp || "000 000";
+    
+    if (card) {
+        card.style.display = 'block';
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Iniciar cuenta regresiva de 5 minutos
+        iniciarTemporizadorSeguridad(idSolicitudActiva);
+    }
+}
+
+function iniciarTemporizadorSeguridad(idSolicitud) {
+    // Si ya había un timer corriendo, lo limpiamos
+    if (temporizadorOTP) clearInterval(temporizadorOTP);
+    
+    let tiempoRestante = 300; // 5 minutos en segundos (5 * 60)
+    const lblTemporizador = document.getElementById('lblTemporizadorOTP');
+    
+    // Si no tienes un label en el HTML, crea uno temporal o avisa en consola
+    if (!lblTemporizador) {
+        console.warn("⚠️ No se encontró el elemento 'lblTemporizadorOTP' en el HTML. Agrega un <span id='lblTemporizadorOTP'></span> para ver el reloj.");
+    }
+
+    temporizadorOTP = setInterval(async () => {
+        tiempoRestante--;
+        
+        if (lblTemporizador) {
+            const min = Math.floor(tiempoRestante / 60);
+            const sec = tiempoRestante % 60;
+            lblTemporizador.innerText = `Expira en ${min}:${sec.toString().padStart(2, '0')}`;
+        }
+
+        if (tiempoRestante <= 0) {
+            clearInterval(temporizadorOTP);
+            cerrarBannerSolicitud();
+            
+            // Caducamos la solicitud en la base de datos por seguridad
+            await fisioNet
+                .from('solicitudes_acceso_otp')
+                .update({ estado_solicitud: 'EXPIRADO' })
+                .eq('id', idSolicitud)
+                .eq('estado_solicitud', 'PENDIENTE'); // Solo caduca si seguía pendiente
+                
+            alert("⏳ El tiempo para autorizar el código ha expirado por seguridad. El doctor deberá solicitar uno nuevo.");
+        }
+    }, 1000);
+}
+
+function cerrarBannerSolicitud() {
+    const card = document.getElementById('cardSolicitudActiva');
+    if (card) card.style.display = 'none';
+    if (temporizadorOTP) clearInterval(temporizadorOTP);
+    idSolicitudActiva = null;
+}
+
+async function aprobarAccesoDoctor() {
+    if (!idSolicitudActiva) {
+        alert("⚠️ No hay ninguna solicitud activa para autorizar.");
+        return;
+    }
+
+    const permiteNotas = document.getElementById('chkPermisoNotas')?.checked || false;
+    const permiteEstudios = document.getElementById('chkPermisoEstudios')?.checked || false;
+    const permiteLab = document.getElementById('chkPermisoLab')?.checked || false;
+    const permiteCitas = document.getElementById('chkPermisoCitas')?.checked || false;
+
+    if (!permiteNotas && !permiteEstudios && !permiteLab && !permiteCitas) {
+        alert("⚠️ Selecciona al menos una categoría de información para compartir con tu médico.");
+        return;
+    }
+
+    // Cambiamos el texto del botón temporalmente
+    const btnAprobar = document.getElementById('btnAprobarAccesoOTP');
+    if(btnAprobar) {
+        btnAprobar.innerText = "Autorizando...";
+        btnAprobar.disabled = true;
+    }
+
+    try {
+        const { error } = await fisioNet
+            .from('solicitudes_acceso_otp')
+            .update({
+                estado_solicitud: 'APROBADO',
+                permisos_concedidos: {
+                    notas: permiteNotas,
+                    estudios: permiteEstudios,
+                    laboratorio: permiteLab,
+                    citas: permiteCitas
+                },
+                fecha_autorizacion: new Date().toISOString()
+            })
+            .eq('id', idSolicitudActiva);
+
+        if (error) throw error;
+
+        // NO CERRAMOS EL BANNER TODAVÍA. 
+        // Cambiamos la interfaz para decirle al paciente que le dicte el código al doctor.
+        alert("✅ ¡Acceso Autorizado! Por favor, dícale el Código de 6 dígitos a su doctor.");
+        
+        if(btnAprobar) {
+            btnAprobar.innerText = "Esperando al Doctor...";
+            btnAprobar.classList.replace('btn-primary', 'btn-success');
+        }
+
+    } catch (err) {
+        console.error("❌ Error al autorizar acceso:", err.message);
+        alert("Error al procesar la autorización: " + err.message);
+        if(btnAprobar) {
+            btnAprobar.innerText = "Autorizar Acceso";
+            btnAprobar.disabled = false;
+        }
+    }
 }
 
 async function verificarSolicitudesPendientes(pacienteId) {
