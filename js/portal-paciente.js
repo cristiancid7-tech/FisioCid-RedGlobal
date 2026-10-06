@@ -157,6 +157,9 @@ function seleccionarPerfil(idPaciente) {
         
         autoRellenarDatosCita(paciente);
         cargarRegistrosClinicos(idPaciente);
+        
+        // 🔥 ESTA ES LA LÍNEA NUEVA
+        renderizarInfoPaciente(paciente);
     }
 }
 
@@ -704,65 +707,99 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
     }
 });
 
+
 // ==========================================
-// 📄 4. CARGA DE REGISTROS CLÍNICOS
+// 📄 4. CARGA DE REGISTROS CLÍNICOS (MEJORADA)
 // ==========================================
 async function cargarRegistrosClinicos(pacienteId) {
     try {
-        //console.log("📥 Consultando base de datos para el paciente ID:", pacienteId);
+        const contenedor = document.getElementById('listaEstudios');
+        if (contenedor) {
+            contenedor.innerHTML = `
+                <div class="p-5 text-center text-muted">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p>Sincronizando historial clínico, laboratorio e imágenes PACS...</p>
+                </div>`;
+        }
 
-        const { data: notas, error: errNotas } = await fisioNet
-            .from('historial_clinico')
-            .select('id_nota, fecha_nota, motivo_consulta, diagnostico_principal, plan_tratamiento, nota_evolucion, especialidad_nota, nombre_clinica, sintomas')
-            .eq('id_paciente', pacienteId)
-            .order('fecha_nota', { ascending: false });
+        // 1. Obtener la CURP del paciente para búsquedas más profundas
+        const pacienteActual = listaFamiliares.find(p => p.id === pacienteId);
+        const curpPaciente = (pacienteActual && pacienteActual.curp) ? pacienteActual.curp.toUpperCase() : null;
 
-        if (errNotas) console.error("❌ Error en historial_clinico:", errNotas);
-        notasGlobales = notas || [];
+        let filtroGab = `paciente_id.eq.${pacienteId}`;
+        let filtroLab = `paciente_id.eq.${pacienteId}`;
+        if (curpPaciente) {
+            filtroGab = `${filtroGab},curp.eq.${curpPaciente}`;
+            filtroLab = `${filtroLab},paciente_curp.eq.${curpPaciente}`;
+        }
+
+        // 🚀 CONSULTA PARALELA MAESTRA (Las 3 tablas al mismo tiempo)
+        const [promesaNotas, promesaGab, promesaLab] = await Promise.all([
+            fisioNet.from('historial_clinico')
+                .select('id_nota, fecha_nota, motivo_consulta, diagnostico_principal, plan_tratamiento, nota_evolucion, especialidad_nota, nombre_clinica, sintomas')
+                .eq('id_paciente', pacienteId)
+                .order('fecha_nota', { ascending: false }),
+
+            fisioNet.from('estudios_gabinete')
+                .select('id, paciente_id, fecha_registro, tipo_estudio, zona_anatomica, archivo_url, especialista_nombre, diagnostico_radiologico, estado_dictamen, hallazgos_resumen')
+                .or(filtroGab)
+                .order('fecha_registro', { ascending: false }),
+
+            fisioNet.from('estudios_laboratorio')
+                .select('id, paciente_id, created_at, estudios_etiquetas, archivo_pdf_url, especialista_quimico, observaciones, estado')
+                .or(filtroLab)
+                .order('created_at', { ascending: false })
+        ]);
+
+        if (promesaNotas.error) console.error("❌ Error Notas:", promesaNotas.error.message);
+        if (promesaGab.error) console.error("❌ Error Gabinete:", promesaGab.error.message);
+        if (promesaLab.error) console.error("❌ Error Laboratorio:", promesaLab.error.message);
+
+        // --- CARGAR NOTAS ---
+        notasGlobales = promesaNotas.data || [];
         renderizarNotas(notasGlobales);
 
-        const { data: gabinete, error: errGab } = await fisioNet
-            .from('estudios_gabinete')
-            .select('id, tipo_estudio, archivo_url, categoria, hallazgos_resumen, fecha_registro, especialista_nombre, diagnostico_radiologico')
-            .eq('paciente_id', pacienteId)
-            .order('fecha_registro', { ascending: false });
+        // --- UNIFICAR ESTUDIOS (GABINETE + LABORATORIO) ---
+        const dataGab = promesaGab.data || [];
+        const dataLab = promesaLab.data || [];
 
-        if (errGab) console.error("❌ Error en estudios_gabinete:", errGab);
+        const formGab = dataGab.map(g => ({
+            id: g.id,
+            origen: 'GABINETE',
+            icono: 'fa-x-ray',
+            color: '#00cfd5', // Color FisioCid
+            titulo: g.tipo_estudio || 'ESTUDIO PACS',
+            zona: g.zona_anatomica ? ` • ${g.zona_anatomica.toUpperCase()}` : '',
+            resumen: g.hallazgos_resumen || g.diagnostico_radiologico || 'Estudio de imagen procesado en visor.',
+            url: g.archivo_url,
+            especialista: g.especialista_nombre || 'Radiología',
+            fecha: g.fecha_registro,
+            estado: g.estado_dictamen || 'PENDIENTE'
+        }));
 
-        const { data: lab, error: errLab } = await fisioNet
-            .from('estudios_laboratorio')
-            .select('id, estudios_etiquetas, archivo_pdf_url, observaciones, created_at, especialista_quimico')
-            .eq('paciente_id', pacienteId)
-            .order('created_at', { ascending: false });
+        const formLab = dataLab.map(l => ({
+            id: l.id,
+            origen: 'LABORATORIO',
+            icono: 'fa-vial',
+            color: '#8b5cf6', // Morado para lab
+            titulo: l.estudios_etiquetas || 'ANÁLISIS CLÍNICO',
+            zona: '',
+            resumen: l.observaciones || 'Resultados de laboratorio químico adjuntos.',
+            url: l.archivo_pdf_url,
+            especialista: l.especialista_quimico || 'Laboratorio',
+            fecha: l.created_at,
+            estado: l.estado || 'COMPLETADO'
+        }));
 
-        if (errLab) console.error("❌ Error en estudios_laboratorio:", errLab);
-
-        const listaEstudiosCombinada = [
-            ...(gabinete || []).map(g => ({
-                id: g.id,
-                origen: 'GABINETE',
-                titulo: g.tipo_estudio || 'Estudio de Imagen',
-                resumen: g.hallazgos_resumen || g.diagnostico_radiologico || 'Estudio adjunto al expediente.',
-                url: g.archivo_url,
-                especialista: g.especialista_nombre,
-                fecha: g.fecha_registro
-            })),
-            ...(lab || []).map(l => ({
-                id: l.id,
-                origen: 'LABORATORIO',
-                titulo: l.estudios_etiquetas || 'Análisis Clínico',
-                resumen: l.observaciones || 'Resultados de laboratorio adjuntos.',
-                url: l.archivo_pdf_url,
-                especialista: l.especialista_quimico,
-                fecha: l.created_at
-            }))
-        ].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
-
-        estudiosGlobales = listaEstudiosCombinada;
+        // 🔀 FUSIÓN CRONOLÓGICA
+        estudiosGlobales = [...formGab, ...formLab].sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+        
         renderizarEstudios(estudiosGlobales);
 
     } catch (err) {
         console.error("💥 Error general al recuperar registros:", err);
+        const contenedor = document.getElementById('listaEstudios');
+        if (contenedor) contenedor.innerHTML = '<div class="p-3 text-center text-danger small">Error al compilar el expediente de estudios.</div>';
     }
 }
 
@@ -795,34 +832,66 @@ function renderizarNotas(lista) {
     }).join('');
 }
 
-function renderizarEstudios(lista) {
+
+// ==========================================
+// 🎨 RENDERIZADO VISUAL DE ESTUDIOS (ESTILO TIMELINE)
+// ==========================================
+function renderizarEstudios(registros) {
     const contenedor = document.getElementById('listaEstudios');
     if (!contenedor) return;
 
-    if (!lista || lista.length === 0) {
-        contenedor.innerHTML = `<div class="text-center text-muted py-5"><i class="fas fa-microscope fa-3x mb-3 text-secondary d-block"></i>No tienes estudios de gabinete o laboratorio adjuntos.</div>`;
+    if (registros.length === 0) {
+        contenedor.innerHTML = `
+            <div class="text-center text-muted py-5 fade-in">
+                <i class="fas fa-microscope fa-3x mb-3" style="color: #cbd5e1;"></i>
+                <p>No tienes estudios de gabinete o laboratorio adjuntos.</p>
+            </div>`;
         return;
     }
 
-    contenedor.innerHTML = lista.map(e => {
-        const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Reciente';
-        const esLab = e.origen === 'LABORATORIO';
-        const icono = esLab ? 'fa-vial icon-lab' : 'fa-x-ray icon-img';
+    contenedor.innerHTML = registros.map(reg => {
+        const fechaLegible = reg.fecha ? new Date(reg.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Reciente';
+        const estadoActual = reg.estado.toUpperCase();
+        const colorEstado = estadoActual === 'PENDIENTE' ? 'bg-warning text-dark' : 'bg-success text-white';
 
         return `
-            <div class="record-card fade-in">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="record-date"><i class="fas fa-calendar-alt me-1"></i> ${fecha}</span>
-                    <span class="badge ${esLab ? 'bg-warning text-dark' : 'bg-primary'} rounded-pill">
-                        <i class="fas ${esLab ? 'fa-vial' : 'fa-camera'} me-1"></i> ${e.origen}
-                    </span>
+        <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid ${reg.color} !important; text-align: left; border-radius: 12px;">
+            <div class="card-body p-4">
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge text-white" style="background-color: ${reg.color}; font-size: 0.7rem; padding: 6px 10px;">
+                            <i class="fas ${reg.icono} me-1"></i> ${reg.origen}
+                        </span>
+                        <span class="badge ${colorEstado}" style="font-size: 0.65rem; padding: 6px 10px;">
+                            <i class="fas ${estadoActual === 'PENDIENTE' ? 'fa-clock' : 'fa-check-circle'}"></i> ${estadoActual}
+                        </span>
+                    </div>
+                    <span class="text-muted fw-bold" style="font-size: 0.85rem;"><i class="fas fa-calendar-alt me-1"></i> ${fechaLegible}</span>
                 </div>
-                <h6 class="record-doctor"><i class="fas ${icono} me-2"></i>${e.titulo.toUpperCase()}</h6>
-                <p class="record-summary mb-2">${e.resumen}</p>
-                ${e.especialista ? `<div class="text-muted small mb-2"><strong>Especialista:</strong> ${e.especialista}</div>` : ''}
-                ${e.url ? `<a href="${e.url}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill mt-1"><i class="fas fa-file-pdf me-1"></i> Abrir Documento / PDF</a>` : '<span class="badge bg-light text-muted">Sin archivo adjunto</span>'}
+
+                <h5 class="fw-bold mb-2 text-dark text-uppercase">
+                    ${reg.titulo} <span class="text-muted" style="font-size: 0.9rem;">${reg.zona}</span>
+                </h5>
+                
+                <div class="p-3 my-3 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.9rem; line-height: 1.5; color: #334155;">
+                    <strong><i class="fas fa-file-medical-alt me-1 text-secondary"></i> Conclusión / Hallazgos:</strong><br>
+                    ${reg.resumen}
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center border-top pt-3 mt-2">
+                    ${reg.url 
+                        ? `<button type="button" onclick="abrirVisorPaciente('${reg.url}')" class="btn btn-outline-dark fw-bold rounded-pill shadow-sm" style="font-size: 0.85rem; padding: 8px 20px;">
+                            <i class="fas ${reg.origen === 'GABINETE' ? 'fa-expand-arrows-alt' : 'fa-file-pdf'} me-1"></i> 
+                            ${reg.origen === 'GABINETE' ? 'Ver Imagen PACS' : 'Descargar PDF'}
+                           </button>` 
+                        : `<span class="badge bg-light text-muted border p-2"><i class="fas fa-eye-slash"></i> Sin archivo adjunto</span>`
+                    }
+                    <span class="text-muted fw-bold" style="font-size: 0.8rem;"><i class="fas fa-user-md text-primary me-1"></i> ${reg.especialista}</span>
+                </div>
+                
             </div>
-        `;
+        </div>`;
     }).join('');
 }
 
@@ -854,4 +923,217 @@ async function cerrarSesion() {
             window.location.href = 'login.html';
         }
     }
+}
+// ==========================================
+// 👤 6. RENDERIZADO DE PERFIL DEL PACIENTE
+// ==========================================
+function renderizarInfoPaciente(paciente) {
+    const contenedor = document.getElementById('tarjeta-info-paciente');
+    if (!contenedor) return;
+
+    // Calcular edad si tienes el campo 'fecha_nacimiento'
+    let edadStr = "No registrada";
+    if (paciente.fecha_nacimiento) {
+        const nac = new Date(paciente.fecha_nacimiento);
+        const hoy = new Date();
+        let edad = hoy.getFullYear() - nac.getFullYear();
+        if (hoy.getMonth() < nac.getMonth() || (hoy.getMonth() === nac.getMonth() && hoy.getDate() < nac.getDate())) {
+            edad--;
+        }
+        edadStr = `${edad} años`;
+    }
+
+    // Iniciales para el Avatar
+    const inicialNombre = paciente.nombre ? paciente.nombre.charAt(0).toUpperCase() : '';
+    const inicialApellido = paciente.apellido_paterno ? paciente.apellido_paterno.charAt(0).toUpperCase() : '';
+
+    contenedor.innerHTML = `
+        <div class="card shadow-sm border-0" style="border-radius: var(--radius-lg); overflow: hidden;">
+            <div class="card-body p-4 bg-white">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="text-white d-flex justify-content-center align-items-center rounded-circle me-3 shadow-sm" style="background: var(--primary-cid); width: 65px; height: 65px; font-size: 26px; font-weight: bold;">
+                        ${inicialNombre}${inicialApellido}
+                    </div>
+                    <div>
+                        <h4 class="mb-1 fw-bold text-dark">${paciente.nombre} ${paciente.apellido_paterno} ${paciente.apellido_materno || ''}</h4>
+                       
+                    </div>
+                </div>
+                
+                <div class="row g-3 mt-2">
+                    <div class="col-md-6 col-lg-3">
+                        <div class="p-3 rounded-3" style="background: #f8fafc; border-left: 4px solid var(--primary-cid);">
+                            <small class="text-muted d-block mb-1 fw-bold"><i class="fas fa-birthday-cake me-1"></i> Edad</small>
+                            <strong class="text-dark" style="font-size: 1.1rem;">${edadStr}</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="p-3 rounded-3" style="background: #f8fafc; border-left: 4px solid #22c55e;">
+                            <small class="text-muted d-block mb-1 fw-bold"><i class="fab fa-whatsapp me-1"></i> Teléfono</small>
+                            <strong class="text-dark" style="font-size: 1.1rem;">${paciente.telefono || 'No registrado'}</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="p-3 rounded-3" style="background: #f8fafc; border-left: 4px solid #f59e0b;">
+                            <small class="text-muted d-block mb-1 fw-bold"><i class="fas fa-envelope me-1"></i> Correo</small>
+                            <strong class="text-dark d-block text-truncate" style="font-size: 1rem;" title="${paciente.correo_electronico || ''}">${paciente.correo_electronico || 'No registrado'}</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="p-3 rounded-3" style="background: #f8fafc; border-left: 4px solid #ef4444;">
+                            <small class="text-muted d-block mb-1 fw-bold"><i class="fas fa-id-card me-1"></i> CURP</small>
+                            <strong class="text-dark" style="font-size: 1rem;">${paciente.curp ? paciente.curp.toUpperCase() : 'No registrada'}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ==========================================
+// 🩻 VISOR PACS ADAPTADO PARA EL PACIENTE (CON CARRUSEL)
+// ==========================================
+let panzoomPaciente = null;
+let tomasPacienteActuales = []; // Guardará todas las fotos del estudio
+let indiceTomaPaciente = 0;     // Recordará qué número de foto estamos viendo
+
+async function abrirVisorPaciente(rutasComa) {
+    if (!rutasComa) return;
+    
+    // 1. Guardar las rutas en las variables globales
+    tomasPacienteActuales = rutasComa.split(',').map(r => r.trim());
+    indiceTomaPaciente = 0; // Siempre iniciamos en la primera toma
+
+    // 2. Inyectar el HTML del Visor oscuro con FLECHAS y CONTADOR
+    if (!document.getElementById('visor-paciente-overlay')) {
+        document.body.insertAdjacentHTML('beforeend', `
+            <div id="visor-paciente-overlay" class="d-none animate__animated animate__fadeIn" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(5px); z-index: 9999; display: flex; flex-direction: column;">
+                
+                <!-- Barra superior -->
+                <div style="padding: 15px 20px; background: #0f172a; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);">
+                    <div class="d-flex align-items-center">
+                        <h5 class="text-white mb-0 fw-bold me-3"><i class="fas fa-x-ray text-info me-2"></i> Visor FisioCid</h5>
+                        <span id="visor-paciente-contador" class="badge bg-dark border border-secondary" style="font-size: 0.8rem;"></span>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-info btn-sm me-2 fw-bold" onclick="if(panzoomPaciente) panzoomPaciente.reset()"><i class="fas fa-search-minus"></i> RESET ZOOM</button>
+                        <button class="btn btn-danger btn-sm fw-bold" onclick="cerrarVisorPaciente()"><i class="fas fa-times"></i> CERRAR</button>
+                    </div>
+                </div>
+                
+                <!-- Área de la Imagen y Flechas -->
+                <div style="flex: 1; position: relative; display: flex;">
+                    
+                    <!-- Flecha Izquierda -->
+                    <button id="btn-visor-prev" class="btn btn-dark shadow" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px; opacity: 0.8;" onclick="cambiarTomaPaciente(-1)">
+                        <i class="fas fa-chevron-left fa-lg"></i>
+                    </button>
+
+                    <div id="visor-paciente-lienzo" style="flex: 1; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;"></div>
+                    
+                    <!-- Flecha Derecha -->
+                    <button id="btn-visor-next" class="btn btn-dark shadow" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px; opacity: 0.8;" onclick="cambiarTomaPaciente(1)">
+                        <i class="fas fa-chevron-right fa-lg"></i>
+                    </button>
+
+                </div>
+            </div>
+        `);
+    }
+
+    const visor = document.getElementById('visor-paciente-overlay');
+    visor.classList.remove('d-none');
+    visor.style.display = 'flex'; 
+
+    // 3. Disparar el renderizado de la primera imagen
+    await renderizarTomaPaciente();
+}
+
+async function renderizarTomaPaciente() {
+    const lienzo = document.getElementById('visor-paciente-lienzo');
+    const archivoRuta = tomasPacienteActuales[indiceTomaPaciente];
+
+    // Actualizar Contador y Ocultar/Mostrar flechas si solo hay 1 foto
+    document.getElementById('visor-paciente-contador').innerText = `Toma ${indiceTomaPaciente + 1} de ${tomasPacienteActuales.length}`;
+    
+    const mostrarFlechas = tomasPacienteActuales.length > 1 ? 'block' : 'none';
+    document.getElementById('btn-visor-prev').style.display = mostrarFlechas;
+    document.getElementById('btn-visor-next').style.display = mostrarFlechas;
+
+    // Mostrar Spinner
+    lienzo.innerHTML = '<div class="spinner-border text-info" role="status" style="width: 3rem; height: 3rem;"></div>';
+
+    // Limpiar zoom anterior si existía
+    if (panzoomPaciente) {
+        panzoomPaciente.destroy();
+        panzoomPaciente = null;
+    }
+
+    try {
+        // Firmar la URL de Supabase para la toma actual
+        const { data, error } = await fisioNet.storage.from('expedientes-clinicos').createSignedUrl(archivoRuta, 3600);
+        if (error) throw error;
+
+        // Cargar motor Panzoom si no existe
+        if (typeof Panzoom === 'undefined') {
+            await new Promise(resolve => {
+                const script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js";
+                script.onload = resolve;
+                document.head.appendChild(script);
+            });
+        }
+
+        // Renderizar la foto o PDF
+        lienzo.innerHTML = ''; 
+        if (archivoRuta.toLowerCase().endsWith('.pdf')) {
+            lienzo.innerHTML = `<embed src="${data.signedUrl}" type="application/pdf" width="100%" height="100%" style="border: none;">`;
+        } else {
+            lienzo.innerHTML = `<img id="img-visor-paciente" src="${data.signedUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">`;
+            const img = document.getElementById('img-visor-paciente');
+            
+            setTimeout(() => {
+                panzoomPaciente = Panzoom(img, { maxScale: 6, minScale: 1, contain: 'outside' });
+                lienzo.addEventListener('wheel', (e) => { 
+                    e.preventDefault(); 
+                    panzoomPaciente.zoomWithWheel(e); 
+                }, { passive: false });
+            }, 150);
+        }
+
+    } catch (err) {
+        console.error("Error en renderizado:", err);
+        lienzo.innerHTML = `<div class="text-center text-white"><i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i><h5>Archivo no disponible.</h5></div>`;
+    }
+}
+
+// Conmutador del Carrusel (Ciclo infinito)
+function cambiarTomaPaciente(direccion) {
+    if (tomasPacienteActuales.length <= 1) return; // Si solo hay 1, no hace nada
+
+    indiceTomaPaciente += direccion;
+
+    // Lógica de ciclo infinito
+    if (indiceTomaPaciente >= tomasPacienteActuales.length) indiceTomaPaciente = 0;
+    if (indiceTomaPaciente < 0) indiceTomaPaciente = tomasPacienteActuales.length - 1;
+
+    renderizarTomaPaciente();
+}
+
+function cerrarVisorPaciente() {
+    const visor = document.getElementById('visor-paciente-overlay');
+    if (visor) {
+        visor.classList.add('d-none');
+        setTimeout(() => visor.style.display = 'none', 300);
+        document.getElementById('visor-paciente-lienzo').innerHTML = ''; 
+    }
+    
+    // Limpieza total
+    if (panzoomPaciente) {
+        panzoomPaciente.destroy();
+        panzoomPaciente = null;
+    }
+    tomasPacienteActuales = [];
+    indiceTomaPaciente = 0;
 }

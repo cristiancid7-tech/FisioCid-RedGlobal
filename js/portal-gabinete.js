@@ -1676,9 +1676,7 @@ async function buscarMedicoSolicitanteEnRed(texto) {
 window.cambiarTomaPACS = cambiarTomaPACS;
 
 
-// ============================================================================
-// 📡 ESCÁNER DE RADIÓLOGOS DISPONIBLES (SIN JOINS COMPLEJOS / BLINDADO HTTP 400)
-// ============================================================================
+
 // ============================================================================
 // 📡 ESCÁNER DE RADIÓLOGOS DISPONIBLES (SIN JOINS COMPLEJOS / BLINDADO HTTP 400)
 // ============================================================================
