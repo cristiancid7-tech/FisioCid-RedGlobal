@@ -10,13 +10,13 @@ const especialidadActiva = localStorage.getItem('especialidad_usuario') || 'Labo
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-   //console.log("🚀 Portal Laboratorio Iniciando Motores...");
+    //console.log("🚀 Portal Laboratorio Iniciando Motores...");
     
-   const elSpanEspecialidad = document.getElementById('especialidad_usuario');
-if (elSpanEspecialidad) {
-    // Lo ponemos en Mayúscula Inicial o como prefieras
-    elSpanEspecialidad.innerText = especialidadActiva.charAt(0).toUpperCase() + especialidadActiva.slice(1).toLowerCase();
-}
+    const elSpanEspecialidad = document.getElementById('especialidad_usuario');
+    if (elSpanEspecialidad) {
+        // Lo ponemos en Mayúscula Inicial o como prefieras
+        elSpanEspecialidad.innerText = especialidadActiva.charAt(0).toUpperCase() + especialidadActiva.slice(1).toLowerCase();
+    }
 
     // 1. Identidad y configuración visual
     await mostrarNombreEspecialista();
@@ -26,8 +26,6 @@ if (elSpanEspecialidad) {
     // 2. ACTIVAR LOS BUSCADORES INTELIGENTES
     configurarBuscadorDoctor();
     configurarBuscadorQuimico();
-   
-  
 
     // 🔥 3. MAYÚSCULAS AUTOMÁTICAS GLOBALES (Menos en correos)
     document.addEventListener('input', (e) => {
@@ -38,9 +36,9 @@ if (elSpanEspecialidad) {
         }
     });
 
-   // 4. GESTIÓN MULTI-ARCHIVO (Acumulador de PDFs)
+    // 4. GESTIÓN MULTI-ARCHIVO (Acumulador de PDFs)
     const inputArchivos = document.getElementById('file-pdf');
-    const inputArchivosModal = document.getElementById('file-pdf-modal'); // <-- Agregamos el del modal
+    const inputArchivosModal = document.getElementById('file-pdf-modal');
 
     if (inputArchivos) {
         inputArchivos.removeEventListener('change', manejarSeleccionArchivos);
@@ -52,23 +50,40 @@ if (elSpanEspecialidad) {
     }
 
     // 🎯 5. CONFIGURACIÓN INDESTRUCTIBLE DE ESCUCHAS PARA CURP Y FOLIOS
-    // Vinculamos de forma nativa los IDs del formulario con la función procesarCurp
     const inputsCurp = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'genero-manual', 'valEstado'];
     inputsCurp.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            // Evaluamos si es un selector o fecha para usar 'change', de lo contrario 'input'
             const tipoEvento = (el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
             
             el.addEventListener(tipoEvento, () => {
                 if (id === 'valFecha') actualizarInterfazEdad();
-                
-                // Llamamos a la función tal y como está declarada abajo en tu JS
                 procesarCurp(); 
             });
         }
     });
-});
+
+    // 🔥 6. INTERCEPTOR DE DASHBOARD (Auto-relleno de Paciente)
+    const pacientePrecargado = localStorage.getItem('paciente_precargado');
+    
+    if (pacientePrecargado) {
+        try {
+            // Convertimos el texto de vuelta a objeto
+            const pacienteObj = JSON.parse(pacientePrecargado);
+            
+            // Ejecutamos tu función mágica
+            autorrellenarCamposLaboratorio(pacienteObj);
+            
+            // Limpiamos el localStorage
+            localStorage.removeItem('paciente_precargado');
+            
+            console.log("✅ Paciente importado exitosamente desde el Dashboard");
+        } catch(err) {
+            console.error("❌ Error leyendo datos del paciente precargado:", err);
+            localStorage.removeItem('paciente_precargado'); 
+        }
+    }
+}); // <-- Aquí termina el ÚNICO DOMContentLoaded
 
 
 

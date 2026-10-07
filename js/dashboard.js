@@ -1853,7 +1853,7 @@ window.responderSolicitudRed = async (idSolicitud, nuevoEstado, tipoOrigen = 'RE
 
 
 // ==========================================
-// ✉️ ENVIAR SOLICITUD DE COLABORACIÓN (VERSIÓN UNIFICADA)
+// ✉️ ENVIAR SOLICITUD DE COLABORACIÓN (CORREGIDO)
 // ==========================================
 async function enviarSolicitudColaboracion(idReceptor) {
     try {
@@ -1866,14 +1866,14 @@ async function enviarSolicitudColaboracion(idReceptor) {
             return;
         }
 
-        // 2. Obtener datos del EMISOR (Quien envía la invitación)
+        // 2. Obtener datos del EMISOR (Quien envía la invitación - o sea, TÚ)
         const { data: perfilEmisor } = await fisioNet
             .from('perfiles_profesionales')
             .select('nombre_completo, especialidad')
             .eq('id', user.id)
             .maybeSingle();
 
-        // 3. Obtener datos del RECEPTOR (Quien recibe la invitación, para la alerta)
+        // 3. Obtener datos del RECEPTOR (Quien recibe la invitación)
         const { data: perfilReceptor } = await fisioNet
             .from('perfiles_profesionales')
             .select('nombre_completo')
@@ -1893,24 +1893,22 @@ async function enviarSolicitudColaboracion(idReceptor) {
             return;
         }
 
-        // 5. Preparar datos reales del EMISOR para guardar en Supabase
+        // 5. Preparar datos reales del EMISOR (Para que el otro vea quién se lo manda)
         const nombreEmisor = perfilEmisor?.nombre_completo || user.user_metadata?.full_name || 'COLABORADOR PROFESIONAL';
         const especialidadEmisor = (perfilEmisor?.especialidad || 'ESPECIALISTA').toUpperCase().trim();
 
         // 6. Insertar en red_colaboracion
-     const nombreReceptor = perfilReceptor?.nombre_completo || 'DOCTOR / ESPECIALISTA';
-
-const { error } = await fisioNet
-    .from('red_colaboracion')
-    .insert([{
-        id_doctor_emisor: user.id,
-        id_doctor_receptor: idReceptor,
-        id_usuario_socio: idReceptor,
-        nombre_entidad: nombreReceptor, // 👈 Se guarda el receptor como nombre de entidad por defecto
-        contacto_principal: nombreReceptor,
-        tipo_entidad: especialidadEmisor,
-        estado_conexion: 'PENDIENTE'
-    }]);
+        const { error } = await fisioNet
+            .from('red_colaboracion')
+            .insert([{
+                id_doctor_emisor: user.id,
+                id_doctor_receptor: idReceptor,
+                id_usuario_socio: idReceptor, // Opcional, pero lo mantenemos por si lo usas en otro lado
+                nombre_entidad: nombreEmisor, // 👈 CORRECCIÓN: Guardamos TU nombre (el emisor)
+                contacto_principal: nombreEmisor, // 👈 CORRECCIÓN: Tu nombre como contacto
+                tipo_entidad: especialidadEmisor, // 👈 CORRECCIÓN: Tu especialidad
+                estado_conexion: 'PENDIENTE'
+            }]);
 
         if (error) throw error;
 
@@ -2086,7 +2084,20 @@ async function buscarColegasFisioCid() {
 
     if (!grid) return;
 
-    grid.innerHTML = '<div style="text-align:center; width:100%;"><i class="fas fa-spinner fa-spin"></i> Buscando colegas...</div>';
+    // 🔒 CANDADO DE SEGURIDAD FISIOCID: No buscar si no hay al menos 3 letras o un filtro activo
+    if (query.length < 3 && (filtroEspecialidad === 'ALL' || filtroEspecialidad === 'Todas las especialidades')) {
+        grid.innerHTML = `
+            <div style="text-align:center; width:100%; grid-column:1/-1; padding: 30px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                <i class="fas fa-search" style="font-size: 2rem; color: #94a3b8; margin-bottom: 12px;"></i>
+                <p style="color:#475569; font-weight: 600; margin: 0; font-size: 0.9rem;">
+                    Usa el buscador de arriba.<br>
+                    <small style="color: #64748b;">Escribe al menos 3 letras del nombre de tu colega o selecciona una especialidad para encontrarlo en la red.</small>
+                </p>
+            </div>`;
+        return; // Frenamos la consulta a la base de datos
+    }
+
+    grid.innerHTML = '<div style="text-align:center; width:100%; grid-column:1/-1; color: var(--primary);"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Buscando colegas...</div>';
 
     try {
         let consulta = fisioNet
@@ -2101,15 +2112,16 @@ async function buscarColegasFisioCid() {
             consulta = consulta.eq('especialidad', filtroEspecialidad);
         }
 
+        // Limitamos a 20 resultados máximos para no saturar la pantalla
         const { data: colegas, error } = await consulta.limit(20);
 
         if (error) throw error;
 
         if (!colegas || colegas.length === 0) {
-            grid.innerHTML = `<p style="text-align:center; grid-column:1/-1; color:#64748b;">
-                No se encontró a "${query}". <br>
-                <small>Intenta buscando solo la primera palabra del nombre.</small>
-            </p>`;
+            grid.innerHTML = `<div style="text-align:center; grid-column:1/-1; padding: 20px;">
+                <p style="color:#64748b; font-weight:bold;">No se encontró a nadie con ese nombre o especialidad. 🕵️‍♂️</p>
+                <small>Intenta buscando solo el primer nombre o apellido.</small>
+            </div>`;
             return;
         }
 
@@ -2119,17 +2131,21 @@ async function buscarColegasFisioCid() {
             const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo)}&background=random&color=fff`;
 
             grid.innerHTML += `
-                <div style="background:white; padding:20px; border-radius:15px; border:1px solid #e2e8f0; text-align:center;">
+                <div style="background:white; padding:20px; border-radius:15px; border:1px solid #e2e8f0; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                     <img src="${fotoUrl}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; margin-bottom:10px;">
-                    <h4 style="margin:0; font-size:0.9rem;">${c.nombre_completo}</h4>
-                    <p style="margin:5px 0; font-size:0.75rem; color:#64748b; font-weight:bold;">${c.especialidad}</p>
-                    <button onclick="verDetalleColega('${c.id}')" style="margin-top:10px; background:var(--primary); color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-size:0.8rem; width:100%;">Ver Perfil</button>
+                    <h4 style="margin:0; font-size:0.9rem; color: #1e293b;">${c.nombre_completo}</h4>
+                    <p style="margin:5px 0; font-size:0.75rem; color:#059669; font-weight:800; background: #ecfdf5; padding: 2px 6px; border-radius: 4px; display: inline-block;">
+                        ${c.especialidad}
+                    </p>
+                    <button onclick="verDetalleColega('${c.id}')" style="margin-top:12px; background:var(--primary); color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-size:0.8rem; width:100%; font-weight:bold; transition: 0.2s;">
+                        Ver Perfil
+                    </button>
                 </div>
             `;
         });
     } catch (err) {
         console.error("Error en el buscador:", err);
-        grid.innerHTML = '<p style="color:red; text-align:center;">Error al conectar.</p>';
+        grid.innerHTML = '<p style="color:red; text-align:center; grid-column:1/-1;">Error al conectar con el servidor.</p>';
     }
 }
 
@@ -2664,4 +2680,17 @@ function cargarHorariosEnModal(dataHorarios) {
         
         contenedor.appendChild(div);
     });
+}
+
+// Función en el Dashboard para enviar al portal correcto
+function atenderSolicitudDesdeDashboard(tipoSolicitud, pacienteObj) {
+    // 1. Guardamos el objeto del paciente en el almacenamiento local convertido a texto (JSON)
+    localStorage.setItem('paciente_precargado', JSON.stringify(pacienteObj));
+    
+    // 2. Redirigimos al portal correspondiente
+    if (tipoSolicitud === 'LABORATORIO') {
+        window.location.href = 'portal-laboratorio.html';
+    } else if (tipoSolicitud === 'GABINETE') {
+        window.location.href = 'portal-gabinete.html';
+    }
 }

@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await aplicarIdentidadGabinete();
     await cargarRadiologosDisponibles();
 
-    // 4. CARGA INTELIGENTE
+    // 4. CARGA INTELIGENTE (Visor de dictamen)
     const forzarArchivo = localStorage.getItem('forzar_apertura_archivo');
     const forzarPaciente = localStorage.getItem('forzar_apertura_paciente');
     const forzarEstudioId = localStorage.getItem('forzar_apertura_estudio_id');
@@ -61,37 +61,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         await cargarHistorialPersonal();
     }
 
- const inputArchivos = document.getElementById('archivos-gabinete');
+    // 5. LISTENER DE ARCHIVOS
+    const inputArchivos = document.getElementById('archivos-gabinete');
     if (inputArchivos) {
         inputArchivos.addEventListener('change', (e) => {
-    const nuevosArchivos = Array.from(e.target.files);
-    //console.log("📂 Archivos antes de asignar:", nuevosArchivos);
-    
-    // 🔥 AQUÍ ESTÁ EL CANDADO: ¿Estás actualizando la variable global?
-    archivosParaSubir = nuevosArchivos; 
-    //console.log("✅ Variable global actualizada:", archivosParaSubir);
-
-    renderizarMiniaturas();
-
-    // El setTimeout le da un respiro al navegador para que termine de procesar el archivo
-    setTimeout(() => {
-        try { e.target.value = ''; } catch(err) {}
-    }, 0); 
-    });
+            const nuevosArchivos = Array.from(e.target.files);
+            
+            // Variable global actualizada
+            archivosParaSubir = nuevosArchivos; 
+            
+            renderizarMiniaturas();
+            
+            setTimeout(() => {
+                try { e.target.value = ''; } catch(err) {}
+            }, 0); 
+        });
     }
+
+    // 6. MAYÚSCULAS AUTOMÁTICAS GLOBALES
     document.querySelectorAll('input:not([type="file"]), textarea').forEach(el => {
-    // Saltamos el listener si es un campo de email
-    if (el.type === 'email' || el.id === 'valEmail') return;
+        // Saltamos el listener si es un campo de email
+        if (el.type === 'email' || el.id === 'valEmail') return;
 
-    el.addEventListener('input', (e) => {
-        // Solo convertimos a mayúsculas si no es un campo de email
-        if (e.target.type !== 'email' && e.target.id !== 'valEmail') {
-            e.target.value = e.target.value.toUpperCase();
+        el.addEventListener('input', (e) => {
+            // Solo convertimos a mayúsculas si no es un campo de email
+            if (e.target.type !== 'email' && e.target.id !== 'valEmail') {
+                e.target.value = e.target.value.toUpperCase();
+            }
+        });
+    }); // <-- ¡MUY IMPORTANTE! Aquí se cierra el forEach de los inputs.
+
+    // 🔥 7. INTERCEPTOR DE DASHBOARD (Auto-relleno para nuevo estudio)
+    const pacientePrecargado = localStorage.getItem('paciente_precargado');
+    
+    if (pacientePrecargado) {
+        try {
+            const pacienteObj = JSON.parse(pacientePrecargado);
+            
+            // Usamos tu función nativa de Gabinete
+            autorrellenarPaciente(pacienteObj);
+            
+            // Limpiamos el puente
+            localStorage.removeItem('paciente_precargado');
+            console.log("✅ Paciente importado exitosamente desde el Dashboard");
+        } catch(err) {
+            console.error("❌ Error leyendo datos del paciente precargado:", err);
+            localStorage.removeItem('paciente_precargado');
         }
-    });
-});
-});
-
+    }
+}); // <-- Aquí se cierra el DOMContentLoaded principal
 
 
 function toggleSidebarPACS() {

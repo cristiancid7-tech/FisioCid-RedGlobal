@@ -1143,3 +1143,194 @@ window.inyectarEstudioAExploracion = (tipo, hallazgos, fecha) => {
         }, 800);
     }
 };
+window.enviarSolicitudLab = async () => {
+    const tipoServicio = document.getElementById('tipoServicioExterno').value;
+    const estudioTexto = document.getElementById('txtQueEstudio').value.trim().toUpperCase();
+    const idSocioDestino = document.getElementById('selectLabDestino').value;
+    const btn = document.getElementById('btnEnviarLab');
+
+    if (!estudioTexto) { alert("⚠️ Especifica qué estudio necesitas."); return; }
+    if (!idSocioDestino) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENVIANDO...';
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        
+        // Extraemos variables existentes
+        const idPacienteActual = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
+        const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
+        const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
+
+        if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
+
+        if (tipoServicio === 'LAB') {
+            // 🧪 INSERCIÓN EN TABLA DE LABORATORIO
+            const { error: errLab } = await fisioNet.from('estudios_laboratorio').insert([{
+                paciente_id: idPacienteActual,
+                id_doctor_referente: user.id,
+                doctor_referente_nombre: nombreDocStr,
+                id_socio_emisor: idSocioDestino, // Aquí guardamos el ID de la química
+                estudios_etiquetas: estudioTexto, // Lo que pidió el doc
+                paciente_nombre: nombrePacienteStr,
+                estado: 'PENDIENTE', // Estado inicial para que la química lo vea
+                fecha_captura: new Date().toISOString()
+            }]);
+            if (errLab) throw errLab;
+
+        } else {
+            // 🩻 INSERCIÓN EN TABLA DE GABINETE
+            const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
+                paciente_id: idPacienteActual,
+                doctor_emisor_id: user.id,
+                medico_solicitante_manual: nombreDocStr,
+                id_socio_emisor: idSocioDestino, // Aquí guardamos el ID del gabinete
+                tipo_estudio: estudioTexto,
+                paciente_nombre_manual: nombrePacienteStr,
+                estado_dictamen: 'PENDIENTE', // Estado inicial para el gabinete
+                fecha_registro: new Date().toISOString()
+            }]);
+            if (errGab) throw errGab;
+        }
+
+        alert("✅ ¡Estudio enviado directo a la sala de espera del socio comercial!");
+        document.getElementById('modalEstudioExpress').style.display = 'none';
+
+    } catch (err) {
+        console.error("Error al enviar solicitud:", err);
+        alert("Fallo la conexión: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "ENVIAR SOLICITUD 🚀";
+    }
+};
+// =================================================================
+// 🧪 MÓDULO: LABORATORIO INTELIGENTE (CERO REGISTROS)
+// =================================================================
+
+
+window.abrirModalEstudioExpress = async () => {
+    const modal = document.getElementById('modalEstudioExpress');
+    const inputLab = document.getElementById('inputLabDestino');
+    const datalist = document.getElementById('listaLabs');
+    
+    document.getElementById('txtQueEstudio').value = ""; 
+    inputLab.value = ""; // Limpiamos el buscador
+    datalist.innerHTML = ""; // Limpiamos opciones anteriores
+    
+    modal.style.display = 'flex';
+
+    const { data: { user } } = await fisioNet.auth.getUser();
+    if (!user) return;
+
+    // Buscamos aliados activos
+    const { data: alianzas, error } = await fisioNet
+        .from('red_colaboracion')
+        .select('*')
+        .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id}`)
+        .eq('estado_conexion', 'ACTIVO');
+
+    if (alianzas && alianzas.length > 0) {
+        for (const a of alianzas) {
+            const idSocio = (a.id_doctor_emisor === user.id) ? a.id_doctor_receptor : a.id_doctor_emisor;
+            
+            // 1. Obtenemos el nombre del responsable
+            const { data: perfilSocio } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('nombre_completo')
+                .eq('id', idSocio)
+                .maybeSingle();
+
+            // 2. Obtenemos el nombre de su clínica/laboratorio
+            const { data: clinicaSocio } = await fisioNet
+                .from('clinicas')
+                .select('nombre_clinica')
+                .eq('id_dueno', idSocio)
+                .maybeSingle();
+
+            const nombreResponsable = perfilSocio?.nombre_completo || "SIN NOMBRE";
+            // Si tiene registrada una clínica usamos ese nombre, si no, usamos el nombre de la entidad de la invitación
+            const nombreLaboratorio = clinicaSocio?.nombre_clinica || a.nombre_entidad || "LABORATORIO ALIADO";
+
+            // Creamos la etiqueta fusionada: "CLÍNICA XYZ - DR. JUAN PÉREZ"
+            const textoMostrado = `🏥 ${nombreLaboratorio.toUpperCase()} - 👤 ${nombreResponsable.toUpperCase()}`;
+            
+            // Lo agregamos al datalist (guardando el ID oculto para enviarlo a la base de datos)
+            datalist.innerHTML += `<option data-id="${idSocio}" value="${textoMostrado}"></option>`;
+        }
+    } else {
+        inputLab.placeholder = "No tienes laboratorios vinculados en tu red";
+        inputLab.disabled = true;
+    }
+};
+
+window.enviarSolicitudLab = async () => {
+    const tipoServicio = document.getElementById('tipoServicioExterno').value;
+    const estudioTexto = document.getElementById('txtQueEstudio').value.trim().toUpperCase();
+    const inputLabVal = document.getElementById('inputLabDestino').value;
+    const btn = document.getElementById('btnEnviarLab');
+
+    if (!estudioTexto) { alert("⚠️ Especifica qué estudio necesitas."); return; }
+    if (!inputLabVal) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
+
+    // Truco para extraer el ID oculto basado en el texto que seleccionó/escribió el usuario
+    const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${inputLabVal}"]`);
+    const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
+
+    if (!idSocioDestino) { 
+        alert("⚠️ Por favor, selecciona un laboratorio de la lista desplegable."); 
+        return; 
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENVIANDO...';
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        
+        const idPacienteActual = typeof idPaciente !== 'undefined' ? idPaciente : (window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id'));
+        const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
+        const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
+
+        if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
+
+        if (tipoServicio === 'LAB') {
+            const { error: errLab } = await fisioNet.from('estudios_laboratorio').insert([{
+                paciente_id: idPacienteActual,
+                id_doctor_referente: user.id,
+                doctor_referente_nombre: nombreDocStr,
+                id_socio_emisor: idSocioDestino, 
+                estudios_etiquetas: estudioTexto, 
+                paciente_nombre: nombrePacienteStr,
+                estado: 'PENDIENTE', 
+                fecha_captura: new Date().toISOString()
+            }]);
+            if (errLab) throw errLab;
+
+        } else {
+            const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
+                paciente_id: idPacienteActual,
+                doctor_emisor_id: user.id,
+                medico_solicitante_manual: nombreDocStr,
+                id_socio_emisor: idSocioDestino, 
+                tipo_estudio: estudioTexto,
+                paciente_nombre_manual: nombrePacienteStr,
+                estado_dictamen: 'PENDIENTE', 
+                fecha_registro: new Date().toISOString()
+            }]);
+            if (errGab) throw errGab;
+        }
+
+        alert("✅ ¡Estudio enviado directo a la sala de espera del socio comercial!");
+        document.getElementById('modalEstudioExpress').style.display = 'none';
+
+    } catch (err) {
+        console.error("Error al enviar solicitud:", err);
+        alert("Fallo la conexión: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "ENVIAR SOLICITUD 🚀";
+    }
+};
+
