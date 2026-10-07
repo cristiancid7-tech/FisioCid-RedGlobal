@@ -572,18 +572,20 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         let faltaContacto = false;
         let mensajeError = "";
 
-        // --- 2. REGLAS ESTRICTAS DE CALIDAD DE DATOS ---
-if (esMenorEdad) {
-    if (!telefonoTutor || telefonoTutor.length < 10 || !correoTutor || !correoTutor.includes('@')) {
-        faltaContacto = true;
-        mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nTodo paciente MENOR DE EDAD debe contar obligatoriamente con los datos de contacto de su tutor para el envío de alertas y códigos OTP.\n\nPor favor capture:\n• Teléfono del Tutor (10 dígitos).\n• Correo electrónico del Tutor.`;
-    }
-} else {
-    if (!telefonoAdulto || telefonoAdulto.length < 10 || !emailAdulto || !emailAdulto.includes('@')) {
-        faltaContacto = true;
-        mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nNo se permite el registro de pacientes sin canales de comunicación activos.\n\nPor favor capture de forma obligatoria:\n• Teléfono celular válido (10 dígitos).\n• Correo electrónico válido.`;
-    }
-}
+      // --- 2. REGLAS ESTRICTAS DE CALIDAD DE DATOS ---
+        if (esMenorEdad) {
+            // Evaluamos únicamente que exista el teléfono del tutor con al menos 10 dígitos
+            if (!telefonoTutor || telefonoTutor.length < 10) {
+                faltaContacto = true;
+                mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nTodo paciente MENOR DE EDAD debe contar obligatoriamente con el teléfono de contacto de su tutor.\n\nPor favor capture:\n• Teléfono celular válido (10 dígitos).`;
+            }
+        } else {
+            // Evaluamos únicamente que exista el teléfono del paciente adulto con al menos 10 dígitos
+            if (!telefonoAdulto || telefonoAdulto.length < 10) {
+                faltaContacto = true;
+                mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nEs necesario registrar un canal de comunicación.\n\nPor favor capture de forma obligatoria:\n• Teléfono celular válido (10 dígitos).`;
+            }
+        }
 
         if (faltaContacto) {
             alert(mensajeError);
@@ -683,7 +685,8 @@ if (!chequeoCuota.permitido) {
         const accesoRed = aceptaPrivacidad; 
         const fechaConsentimiento = new Date().toISOString(); // Timestamp legal exacto
 
-        emailAdulto = emailAdulto.toLowerCase();
+     
+        emailAdulto = emailAdulto ? emailAdulto.toLowerCase() : null;
 
         //console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
