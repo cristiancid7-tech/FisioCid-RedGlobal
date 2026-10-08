@@ -4,49 +4,205 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FisioCid - La Red para Fisioterapeutas</title>
-    <link rel="stylesheet" href="estilos.css">
+    <!-- Google Fonts Inter para aspecto profesional -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400,500,600,700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-dark: #0369a1;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 50%, #e0f2fe 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-main);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-img {
+            max-width: 195px;
+            height: auto;
+            object-fit: contain;
+            margin-bottom: 12px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.08));
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin: 0 0 5px 0;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 35px 30px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+        }
+
+        /* GRID RESPONSIVO PARA SELECCIÓN DE PERFIL */
+        .grid-perfiles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .btn-perfil {
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            cursor: pointer;
+            border-radius: 14px;
+            transition: all 0.25s ease;
+            text-align: center;
+        }
+
+        .btn-perfil:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+        }
+
+        button[type="submit"] {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button[type="submit"]:hover {
+            background: var(--primary-dark);
+        }
+
+        /* 📱 MEDIA QUERIES PARA CELULARES Y TABLETS PEQUEÑAS */
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem 0.5rem;
+            }
+            .card {
+                padding: 25px 18px;
+                border-radius: 16px;
+            }
+            .grid-perfiles {
+                grid-template-columns: 1fr; /* Los botones se ponen uno debajo del otro en celular */
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
 </head>
 <body>
 
-    <div class="container" style="max-width: 800px; margin: 0 auto; padding: 2rem;">
+    <div class="container">
         
-        <header style="text-align: center; margin-bottom: 3rem;">
-            <h1 style="color: var(--primary); font-size: 2.5rem; margin-bottom: 0.5rem;">FISIOCID</h1>
-            <p style="color: #64748b; font-size: 1.1rem;">Únete a la red profesional de gestión clínica.</p>
+        <header>
+            <img src="img/logo-fisiocid.png" alt="FisioCid Logo" class="logo-img">
+        
+            <p class="subtitle">Únete a la red profesional de gestión clínica.</p>
         </header>
 
         <div class="card" id="cardRegistro">
             <div id="paso1">
-                <h3 style="text-align: center; margin-bottom: 1.5rem;">¿CÓMO USARÁS LA PLATAFORMA?</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <button class="btn-perfil" onclick="seleccionarPerfil('DUEÑO')" 
-                            style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
+                <h3 style="text-align: center; margin-bottom: 1.5rem; font-size: 0.95rem; color: var(--primary); letter-spacing: 0.5px;">¿CÓMO USARÁS LA PLATAFORMA?</h3>
+                
+                <!-- Clase aplicada para que sea responsiva -->
+                <div class="grid-perfiles">
+                    <button class="btn-perfil" onclick="seleccionarPerfil('DUEÑO')">
                         <span style="font-size: 2rem;">🏢</span><br>
-                        <strong>DUEÑO DE CLÍNICA</strong><br>
-                        <small style="color: #94a3b8;">TENGO EQUIPO Y SUCURSAL.</small>
+                        <strong style="font-size: 0.9rem; color: var(--text-main);">DUEÑO DE CLÍNICA</strong><br>
+                        <small style="color: #94a3b8; font-size: 0.75rem;">TENGO EQUIPO Y SUCURSAL.</small>
                     </button>
-                    <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')" 
-                            style="padding: 20px; border: 2px solid #e2e8f0; background: white; cursor: pointer; border-radius: 12px; transition: 0.3s;">
+                    
+                    <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')">
                         <span style="font-size: 2rem;">🩺</span><br>
-                        <strong>INDEPENDIENTE</strong><br>
-                        <small style="color: #94a3b8;">GESTIÓN PERSONAL.</small>
+                        <strong style="font-size: 0.9rem; color: var(--text-main);">INDEPENDIENTE</strong><br>
+                        <small style="color: #94a3b8; font-size: 0.75rem;">GESTIÓN PERSONAL.</small>
                     </button>
                 </div>
             </div>
 
-            <form id="formRegistroNuevo" style="display: none; margin-top: 1rem;">
+            <form id="formRegistroNuevo" style="display: none; margin-top: 0.5rem;">
                 <input type="hidden" id="tipoPerfil">
                 
-                <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 1.5rem; text-align: center; text-transform: uppercase;"></h4>
+                <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 1.5rem; text-align: center; font-size: 1rem;"></h4>
 
                 <div class="form-group">
                     <label>NOMBRE COMPLETO (REAL)</label>
-                    <input type="text" id="regNombre" placeholder=" " required>
+                    <input type="text" id="regNombre" placeholder="Dr. Juan Pérez" required>
                 </div>
 
                 <div class="form-group">
                     <label>ESPECIALIDAD / PROFESIÓN</label>
-                    <select id="regEspecialidad" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                    <select id="regEspecialidad" required>
                         <optgroup label="MÉDICOS ESPECIALISTAS">
                             <option value="INTERNISTA">MÉDICO INTERNISTA</option>
                             <option value="CARDIOLOGO">MÉDICO CARDIÓLOGO</option>
@@ -58,7 +214,7 @@
                             <option value="NEUROCIRUJANO">MÉDICO NEUROCIRUJANO</option>
                             <option value="NEUROLOGO">MÉDICO NEURÓLOGO</option>
                             <option value="MEDICO_RADIOLOGO">MÉDICO RADIÓLOGO</option>
-                             <option value="RADIOLOGO">TECNICO RADIÓLOGO</option>
+                            <option value="RADIOLOGO">TECNICO RADIÓLOGO</option>
                             <option value="NEUMOLOGO">MÉDICO NEUMÓLOGO</option>
                             <option value="GASTROENTERÓLOGO">MÉDICO GASTROENTERÓLOGO</option>
                             <option value="URGENCIÓLOGO">MÉDICO URGENCIÓLOGO</option>
@@ -74,13 +230,13 @@
                         </optgroup>
                         <optgroup label="NUTRICIÓN, ODONTOLOGÍA Y SALUD MENTAL">
                             <option value="NUTRIOLOGO">NUTRIÓLOGO</option>
-                            <option value="ODONTOLOGO">ODONTOLOGO</option>
+                            <option value="ODONTOLOGO">ODONTÓLOGO</option>
                             <option value="PSICOLOGO CLÍNICO">PSICÓLOGO CLÍNICO</option>
                             <option value="PSICOTERAPEUTA">PSICOTERAPEUTA</option>
                             <option value="PSIQUIATRA">PSIQUIATRA</option>
                         </optgroup>
                         <optgroup label="REHABILITACIÓN Y TERAPIA">
-                            <option value="FISIOTERAPEUTA">FISIOTERAPEUTA</option>
+                            <option value="FISIOTERAPEUTA" selected>FISIOTERAPEUTA</option>
                             <option value="REHABILITADOR_FISICO">REHABILITADOR FÍSICO</option>
                             <option value="TERAPISTA_OCUPACIONAL">TERAPISTA OCUPACIONAL</option>
                             <option value="TERAPISTA_LENGUAJE">TERAPISTA DE LENGUAJE</option>
@@ -95,10 +251,10 @@
                             <option value="AUXILIAR_ENFERMERÍA">AUXILIAR DE ENFERMERÍA</option>
                             <option value="PARAMEDICO">PARAMÉDICO</option>
                         </optgroup>
-                       <optgroup label="LABORATORIO Y DIAGNÓSTICO">
-    <option value="QUIMICO_CLINICO">QUÍMICO CLÍNICO / QFB / QBP</option>
-    <option value="TECNICO_LABORATORISTA">TÉCNICO LABORATORISTA</option>
-    <option value="JEFE_LABORATORIO">JEFE DE LABORATORIO</option>
+                        <optgroup label="LABORATORIO Y DIAGNÓSTICO">
+                            <option value="QUIMICO_CLINICO">QUÍMICO CLÍNICO / QFB / QBP</option>
+                            <option value="TECNICO_LABORATORISTA">TÉCNICO LABORATORISTA</option>
+                            <option value="JEFE_LABORATORIO">JEFE DE LABORATORIO</option>
                         </optgroup>
                     </select>
                 </div>
@@ -113,56 +269,54 @@
                     <input type="tel" id="regTelefono" placeholder="2381234567" required pattern="[0-9]{10}">
                 </div>
 
-                <!-- 🎯 CAMPO DE CORREO MEJORADO CON MINÚSCULAS EN TIEMPO REAL -->
                 <div class="form-group">
                     <label>CORREO ELECTRÓNICO</label>
                     <input type="email" id="regEmail" placeholder="correo@ejemplo.com" required 
                            autocapitalize="none" autocomplete="email" style="text-transform: lowercase;">
                 </div>
 
-            
-  <div class="form-group">
-    <label>CONTRASEÑA</label>
-    <!-- Renglón Flexbox: El input toma casi todo el espacio y el botón queda en su propia casilla a la derecha -->
-    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-        <input type="password" 
-               id="regPass" 
-               placeholder="MÍNIMO 6 CARACTERES" 
-               required 
-               autocapitalize="none" 
-               autocorrect="off" 
-               style="flex: 1; text-transform: none !important; width: 100%; box-sizing: border-box;">
-        
-        <button type="button" 
-                id="btnTogglePass" 
-                onclick="toggleMostrarContrasena()" 
-                style="width: 50px; height: 42px; min-width: 50px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-shadow: none;">
-            👁️
-        </button>
-    </div>
-</div>
-<div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 1.5rem; margin-bottom: 1rem;">
-        <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px;">
-            <input type="checkbox" id="checkTerminosLegales" required style="margin-top: 3px; cursor: pointer;">
-            <label for="checkTerminosLegales" style="font-size: 0.85rem; color: #334155; line-height: 1.4; cursor: pointer;">
-                Acepto los <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Términos y Condiciones de Uso</a> y el <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Aviso de Privacidad</a>.
-            </label>
-        </div>
-        <div style="display: flex; align-items: flex-start; gap: 10px;">
-            <input type="checkbox" id="checkDeslindeMedico" required style="margin-top: 3px; cursor: pointer;">
-            <label for="checkDeslindeMedico" style="font-size: 0.78rem; color: #dc2626; font-weight: bold; line-height: 1.3; cursor: pointer;">
-                DECLARACIÓN JURADA: MANIFIESTO QUE MIS DATOS PROPORCIONADOS SON VERÍDICOS Y RECONOZCO QUE FISIOCID ES UN SOFTWARE DE GESTIÓN, DESLINDANDO A LA PLATAFORMA DE TODA RESPONSABILIDAD LEGAL POR EL ACTO MÉDICO DERIVADO DE MI PRÁCTICA PROFESIONAL.
-            </label>
-        </div>
-    </div>
+                <div class="form-group">
+                    <label>CONTRASEÑA</label>
+                    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                        <input type="password" 
+                               id="regPass" 
+                               placeholder="MÍNIMO 6 CARACTERES" 
+                               required 
+                               autocapitalize="none" 
+                               autocorrect="off" 
+                               style="flex: 1; text-transform: none !important;">
+                        
+                        <button type="button" 
+                                id="btnTogglePass" 
+                                onclick="toggleMostrarContrasena()" 
+                                style="width: 48px; height: 46px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 0;">
+                            👁️
+                        </button>
+                    </div>
+                </div>
 
-                <button type="submit" style="width: 100%; margin-top: 1rem; padding: 12px; font-weight: bold;">CREAR MI CUENTA PROFESIONAL</button>
+                <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; margin-top: 1.25rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px;">
+                        <input type="checkbox" id="checkTerminosLegales" required style="margin-top: 3px; cursor: pointer;">
+                        <label for="checkTerminosLegales" style="font-size: 0.8rem; color: #334155; line-height: 1.4; cursor: pointer; display: inline;">
+                            Acepto los <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Términos y Condiciones</a> y el <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Aviso de Privacidad</a>.
+                        </label>
+                    </div>
+                    <div style="display: flex; align-items: flex-start; gap: 10px;">
+                        <input type="checkbox" id="checkDeslindeMedico" required style="margin-top: 3px; cursor: pointer;">
+                        <label for="checkDeslindeMedico" style="font-size: 0.72rem; color: #dc2626; font-weight: bold; line-height: 1.3; cursor: pointer; display: inline;">
+                            DECLARACIÓN JURADA: MANIFIESTO QUE MIS DATOS SON VERÍDICOS Y RECONOZCO QUE FISIOCID ES UN SOFTWARE DE GESTIÓN, DESLINDANDO A LA PLATAFORMA DE RESPONSABILIDAD LEGAL POR MI PRÁCTICA PROFESIONAL.
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" style="width: 100%; margin-top: 0.5rem;">CREAR MI CUENTA PROFESIONAL</button>
                 
-                <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer;">← VOLVER</button>
+                <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">← VOLVER</button>
             </form>
         </div>
 
-        <p style="text-align: center; margin-top: 2rem;">
+        <p style="text-align: center; margin-top: 1.5rem; font-size: 0.85rem;">
             ¿Ya tienes cuenta? <a href="login.html" style="color: var(--primary); font-weight: bold; text-decoration: none;">Inicia Sesión aquí</a>
         </p>
     </div>
@@ -196,7 +350,6 @@
             }
         }
 
-        // 🎯 FUNCIÓN QUE HACE FUNCIONAR EL BOTÓN ← VOLVER
         function regresarPaso1() {
             document.getElementById('formRegistroNuevo').style.display = 'none';
             document.getElementById('paso1').style.display = 'block';
@@ -204,18 +357,17 @@
         }
 
         function toggleMostrarContrasena() {
-    const inputPass = document.getElementById('regPass');
-    const btnToggle = document.getElementById('btnTogglePass');
+            const inputPass = document.getElementById('regPass');
+            const btnToggle = document.getElementById('btnTogglePass');
 
-    if (inputPass.type === 'password') {
-        inputPass.type = 'text';
-        btnToggle.innerText = '🙈'; // Cambia el icono cuando se muestra la contraseña
-    } else {
-        inputPass.type = 'password';
-        btnToggle.innerText = '👁️'; // Cambia el icono cuando se oculta
-    }
-}
+            if (inputPass.type === 'password') {
+                inputPass.type = 'text';
+                btnToggle.innerText = '🙈';
+            } else {
+                inputPass.type = 'password';
+                btnToggle.innerText = '👁️';
+            }
+        }
     </script>
-
 </body>
 </html>
