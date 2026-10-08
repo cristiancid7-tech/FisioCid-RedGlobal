@@ -217,6 +217,35 @@
         <div id="tablaEvolucionDinamica" style="overflow-x: auto; min-height: 100px;"></div>
     </div>
 
+  <!-- ========================================================= -->
+    <!-- 📑 PESTAÑAS DE NAVEGACIÓN DEL EXPEDIENTE (ESTILO ELEGANTE) -->
+    <!-- ========================================================= -->
+    <div class="card" style="margin-bottom: 2rem; padding: 1rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            
+            <div onclick="filtrarSeccionExpediente('notas')" id="tabSecNotas" class="badge-tab active">
+                <i class="fas fa-notes-medical" style="display: block; font-size: 1.1rem; margin-bottom: 4px;"></i>
+                <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Notas Clínicas</span>
+            </div>
+            
+            <div onclick="filtrarSeccionExpediente('recetas')" id="tabSecRecetas" class="badge-tab">
+                <i class="fas fa-prescription-bottle-alt" style="display: block; font-size: 1.1rem; margin-bottom: 4px;"></i>
+                <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Recetas Médicas</span>
+            </div>
+            
+            <div onclick="filtrarSeccionExpediente('imagen')" id="tabSecImagen" class="badge-tab">
+                <i class="fas fa-x-ray" style="display: block; font-size: 1.1rem; margin-bottom: 4px;"></i>
+                <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Estudios Imagen</span>
+            </div>
+            
+            <div onclick="filtrarSeccionExpediente('laboratorio')" id="tabSecLaboratorio" class="badge-tab">
+                <i class="fas fa-flask" style="display: block; font-size: 1.1rem; margin-bottom: 4px;"></i>
+                <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Laboratorios</span>
+            </div>
+
+        </div>
+    </div>
+
     <div class="card" style="display: flex; gap: 15px; margin-bottom: 2rem; align-items: flex-end; padding: 1.5rem; border-radius: 12px; background: white;">
         <div class="form-group" style="flex: 1; margin: 0;">
             <label style="font-size: 0.75rem; font-weight: bold; color: #64748b;">DESDE:</label>

@@ -226,19 +226,24 @@
                         
                         <span id="num-expediente" style="background: #1e293b; color: #f8fafc; font-size: 0.58rem; padding: 2px 6px; border-radius: 4px; font-weight: 900; font-family: monospace; margin-left: 4px;">EXP: ---</span>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
+                   <div style="display: flex; gap: 8px; align-items: center;">
     
-<button type="button" id="btnSolicitarHistoria" 
-        style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.68rem; display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-    📝🔍 SOLICITAR HISTORIA
-</button>
+        <!-- 🚀 NUEVO BOTÓN DE PRE-RELLENO RÁPIDO -->
+        <button type="button" id="btnPrerellenarUltima" onclick="prerellenarConUltimaNotaGuardada()"
+                style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 4px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.68rem; display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            📋 PRE-RELLENAR ÚLTIMA
+        </button>
 
+        <button type="button" id="btnSolicitarHistoria" 
+                style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.68rem; display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            📝🔍 SOLICITAR HISTORIA
+        </button>
 
-    <button onclick="location.href='lista-pacientes.html'" 
-            style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.68rem; display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-        ⬅️ VOLVER
-    </button>
-</div>
+        <button onclick="location.href='lista-pacientes.html'" 
+                style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.68rem; display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            ⬅️ VOLVER
+        </button>
+    </div>
                 </div>
                 
                 <div style="display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; padding-top: 4px; border-top: 1px solid #f1f5f9;">

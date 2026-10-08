@@ -572,10 +572,14 @@ async function procesarAltaPortalPaciente(boton) {
 }
 
 // ============================================================================
-// 📊 MOTOR QUERY UNIFICADO FISIOCID: EXPEDIENTE CLÍNICO HÍBRIDO (NOTAS + GABINETE + LAB)
+// 📊 MOTOR QUERY UNIFICADO FISIOCID: EXPEDIENTE CLÍNICO HÍBRIDO (4 TABLAS)
 // ============================================================================
-window.lineaTiempoGlobalCache = []; // Caché para que el botón PDF encuentre los datos
+window.lineaTiempoGlobalCache = []; 
+window.tipoSeccionActiva = 'notas'; // Por defecto arranca en notas clínicas
 
+// ============================================================================
+// 📊 CORRECCIÓN DEL MOTOR DE RECETAS EN EL HISTORIAL CLÍNICO
+// ============================================================================
 async function cargarLineaTiempoClinica(idPaciente) {
     if (!idPaciente) return;
     const contenedor = document.getElementById('contenedorLineaTiempoHistorial');
@@ -585,42 +589,23 @@ async function cargarLineaTiempoClinica(idPaciente) {
         contenedor.innerHTML = `
             <div class="p-4 text-center text-muted">
                 <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
-                Sincronizando historial clínico, laboratorio e imágenes PACS...
+                Sincronizando expediente clínico, recetas, imágenes PACS y laboratorios...
             </div>`;
 
-        // 🚀 CONSULTA PARALELA TRIPLE
-        const [promesaNotas, promesaEstudios, promesaLaboratorio] = await Promise.all([
-            // 📝 1. TABLA: historial_clinico (Traemos todo con * para el PDF)
-            fisioNet
-                .from('historial_clinico') 
-                .select('*')
-                .eq('id_paciente', idPaciente)
-                .order('fecha_nota', { ascending: false }),
-            
-            // 🩻 2. TABLA: estudios_gabinete
-            fisioNet
-                .from('estudios_gabinete')
-                .select('id, paciente_id, fecha_registro, tipo_estudio, zona_anatomica, archivo_url, especialista_nombre, diagnostico_radiologico, estado_dictamen')
-                .eq('paciente_id', idPaciente)
-                .order('fecha_registro', { ascending: false }),
-                
-            // 🧪 3. TABLA: estudios_laboratorio
-            fisioNet
-                .from('estudios_laboratorio')
-                .select('id, paciente_id, created_at, estudios_etiquetas, archivo_pdf_url, especialista_quimico, observaciones, estado')
-                .eq('paciente_id', idPaciente)
-                .order('created_at', { ascending: false })
+        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Usando 'fecha_creacion' correctamente)
+        const [promesaNotas, promesaRecetas, promesaEstudios, promesaLaboratorio] = await Promise.all([
+            fisioNet.from('historial_clinico').select('*').eq('id_paciente', idPaciente).order('fecha_nota', { ascending: false }),
+            fisioNet.from('recetas_medicas').select('*').eq('id_paciente', idPaciente).order('fecha_creacion', { ascending: false }),
+            fisioNet.from('estudios_gabinete').select('*').eq('paciente_id', idPaciente).order('fecha_registro', { ascending: false }),
+            fisioNet.from('estudios_laboratorio').select('*').eq('paciente_id', idPaciente).order('created_at', { ascending: false })
         ]);
 
-        if (promesaNotas.error) console.error("❌ Error Notas:", promesaNotas.error.message);
-        if (promesaEstudios.error) console.error("❌ Error Gabinete:", promesaEstudios.error.message);
-        if (promesaLaboratorio.error) console.error("❌ Error Laboratorio:", promesaLaboratorio.error.message);
-
         const dataNotas = promesaNotas.data || [];
+        const dataRecetas = promesaRecetas.data || [];
         const dataEstudios = promesaEstudios.data || [];
         const dataLaboratorio = promesaLaboratorio.data || [];
 
-        // 🏷️ COMPACTACIÓN Y NORMALIZACIÓN DE ATRIBUTOS
+        // 🏷️ NORMALIZACIÓN DE NOTAS
         const notasFormateadas = dataNotas.map(nota => ({
             id_registro: nota.id_nota,
             fecha_cruda: nota.fecha_nota,
@@ -628,8 +613,25 @@ async function cargarLineaTiempoClinica(idPaciente) {
             contenido: nota.nota_evolucion || 'Sin contenido en la nota.',
             tipo_registro: 'NOTA_EVOLUCION',
             fecha_orden: new Date(nota.fecha_nota || new Date()),
-            raw: nota // Guardamos el objeto original intacto para el PDF
+            raw: nota 
         }));
+
+        // 💊 NORMALIZACIÓN DE RECETAS (Leyendo el JSON de medicamentos y diagnóstico)
+        const recetasFormateadas = dataRecetas.map(receta => {
+            let resumenMeds = "";
+            if (receta.medicamentos && Array.isArray(receta.medicamentos)) {
+                resumenMeds = receta.medicamentos.map((m, idx) => `${idx + 1}. ${m.nombre} (${m.dosis} - ${m.frecuencia})`).join(' | ');
+            }
+            return {
+                id_registro: receta.id,
+                fecha_cruda: receta.fecha_creacion,
+                titulo: `Receta / Folio: ${receta.folio_expediente || 'S/F'}`,
+                contenido: `Diagnóstico: ${receta.diagnostico || 'N/A'} | Fármacos: ${resumenMeds} | Indicaciones: ${receta.indicaciones_generales || 'N/A'}`,
+                tipo_registro: 'RECETA_MEDICA',
+                fecha_orden: new Date(receta.fecha_creacion || new Date()),
+                raw: receta
+            };
+        });
 
         const estudiosFormateados = dataEstudios.map(estudio => ({
             id_registro: estudio.id,
@@ -651,29 +653,117 @@ async function cargarLineaTiempoClinica(idPaciente) {
             contenido: lab.observaciones || 'Resultados de laboratorio registrados.',
             archivo_url: lab.archivo_pdf_url,
             especialista: lab.especialista_quimico || 'Laboratorio',
-            zona: '',
             estado: lab.estado || 'COMPLETADO',
             tipo_registro: 'ESTUDIO_LABORATORIO',
             fecha_orden: new Date(lab.created_at || new Date())
         }));
 
-        // 🔀 FUSIÓN CRONOLÓGICA TRIPLE
-        window.lineaTiempoGlobalCache = [...notasFormateadas, ...estudiosFormateados, ...laboratoriosFormateados].sort((a, b) => b.fecha_orden - a.fecha_orden);
+        // 🔀 FUSIÓN Y ORDEN CRONOLÓGICO GLOBAL
+        window.lineaTiempoGlobalCache = [
+            ...notasFormateadas, 
+            ...recetasFormateadas, 
+            ...estudiosFormateados, 
+            ...laboratoriosFormateados
+        ].sort((a, b) => b.fecha_orden - a.fecha_orden);
         
-        renderizarLineaTiempoVisual(window.lineaTiempoGlobalCache);
+        filtrarSeccionExpediente(window.tipoSeccionActiva || 'notas');
 
     } catch (err) {
-        console.error("❌ Error critico en Motor FisioCid:", err.message);
+        console.error("❌ Error crítico en Motor FisioCid:", err.message);
         contenedor.innerHTML = '<div class="p-3 text-center text-danger small">Error al compilar el expediente híbrido.</div>';
     }
 }
+
+// 🎯 DISPARADOR SEGURO PARA IMPRIMIR DESDE EL TIMELINE (NOTAS Y RECETAS)
+window.generarPdfDesdeTimeline = (idRegistro) => {
+    const registro = window.lineaTiempoGlobalCache.find(r => String(r.id_registro) === String(idRegistro));
+    
+    if (!registro) {
+        alert("⚠️ No se encontró el registro seleccionado.");
+        return;
+    }
+
+    const nombreEnPantalla = document.getElementById('nombre')?.innerText || "";
+    const nombreLimpio = nombreEnPantalla.replace(/<[^>]*>?/gm, '').trim(); 
+
+    // Si es una Receta Médica, armamos el objeto compatible con el generador PDF
+    if (registro.tipo_registro === 'RECETA_MEDICA') {
+        let textoMeds = "PRESCRIPCIÓN MÉDICA:\n\n";
+        if (registro.raw.medicamentos && Array.isArray(registro.raw.medicamentos)) {
+            registro.raw.medicamentos.forEach((m, idx) => {
+                textoMeds += `${idx + 1}. ${m.nombre}\n   Dosis: ${m.dosis || 'N/A'} | Frecuencia: ${m.frecuencia || 'N/A'} | Duración: ${m.duracion || 'N/A'}\n\n`;
+            });
+        }
+        if (registro.raw.indicaciones_generales) {
+            textoMeds += `INDICACIONES GENERALES:\n${registro.raw.indicaciones_generales}`;
+        }
+
+        const datosRecetaPDF = {
+            nombre_paciente: nombreLimpio || "PACIENTE",
+            fecha_nota: registro.raw.fecha_creacion,
+            ta_sistolica: registro.raw.sistolica,
+            ta_diastolica: registro.raw.diastolica,
+            frecuencia_cardiaca: registro.raw.frecuencia_cardiaca,
+            spo2: registro.raw.spo2,
+            peso: registro.raw.peso,
+            eva: 0,
+            diagnostico_principal: registro.raw.diagnostico,
+            plan_tratamiento: textoMeds
+        };
+
+        if (typeof window.generarPDF === 'function') {
+            window.generarPDF(datosRecetaPDF);
+        } else {
+            alert("⚠️ Módulo de PDF no disponible.");
+        }
+        return;
+    }
+
+    // Si es una Nota de Evolución estándar
+    if (registro.raw && typeof window.generarPDF === 'function') {
+        if (!registro.raw.nombre_paciente && nombreLimpio) {
+            registro.raw.nombre_paciente = nombreLimpio;
+        }
+        window.generarPDF(registro.raw);
+    } else {
+        alert("⚠️ No se pudo generar el PDF.");
+    }
+};
+
+// 🎯 CONTROLADOR DINÁMICO DE LAS PESTAÑAS SUPERIORES
+window.filtrarSeccionExpediente = function(tipo) {
+    window.tipoSeccionActiva = tipo;
+
+    // 1. Actualizar clases active en las pestañas visuales
+    ['notas', 'recetas', 'imagen', 'laboratorio'].forEach(t => {
+        const tab = document.getElementById(`tabSec${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (tab) {
+            if (t === tipo) tab.classList.add('active');
+            else tab.classList.remove('active');
+        }
+    });
+
+    // 2. Filtrar el caché global según la pestaña elegida
+    let filtrados = window.lineaTiempoGlobalCache;
+    if (tipo === 'notas') {
+        filtrados = window.lineaTiempoGlobalCache.filter(r => r.tipo_registro === 'NOTA_EVOLUCION');
+    } else if (tipo === 'recetas') {
+        filtrados = window.lineaTiempoGlobalCache.filter(r => r.tipo_registro === 'RECETA_MEDICA');
+    } else if (tipo === 'imagen') {
+        filtrados = window.lineaTiempoGlobalCache.filter(r => r.tipo_registro === 'ESTUDIO_GABINETE');
+    } else if (tipo === 'laboratorio') {
+        filtrados = window.lineaTiempoGlobalCache.filter(r => r.tipo_registro === 'ESTUDIO_LABORATORIO');
+    }
+
+    renderizarLineaTiempoVisual(filtrados);
+};
 
 function renderizarLineaTiempoVisual(registros) {
     const contenedor = document.getElementById('contenedorLineaTiempoHistorial');
     if (!contenedor) return;
 
     if (registros.length === 0) {
-        contenedor.innerHTML = '<div class="p-4 text-center text-muted small">El expediente no registra movimientos históricos.</div>';
+        contenedor.innerHTML = '<div class="p-4 text-center text-muted small bg-white rounded shadow-sm">No hay registros disponibles en esta sección.</div>';
         return;
     }
 
@@ -684,19 +774,15 @@ function renderizarLineaTiempoVisual(registros) {
 
         if (reg.tipo_registro === 'NOTA_EVOLUCION') {
             return `
-            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #4a5568 !important; text-align: left;">
+            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #4a5568 !important; text-align: left; background: white;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="badge bg-secondary opacity-75" style="font-size: 0.6rem;"><i class="fas fa-notes-medical"></i> EVOLUCIÓN</span>
                         <small class="text-muted fw-bold" style="font-size: 0.7rem;">${fechaLegible}</small>
                     </div>
                     <h6 class="fw-bold text-dark mb-1 text-uppercase" style="font-size: 0.8rem;">Motivo: ${reg.titulo}</h6>
-                    <p class="text-muted mb-2 small" style="font-size: 0.75rem; line-height: 1.3;">
-                        ${reg.contenido}
-                    </p>
-                    
+                    <p class="text-muted mb-2 small" style="font-size: 0.75rem; line-height: 1.3;">${reg.contenido}</p>
                     <div class="d-flex justify-content-end border-top pt-2 mt-2">
-                        <!-- ✨ BOTÓN PDF AÑADIDO PARA LA NOTA -->
                         <button type="button" class="btn btn-sm btn-outline-danger fw-bold px-3 py-1 shadow-sm" style="font-size: 0.7rem; border-radius: 6px;"
                             onclick="generarPdfDesdeTimeline('${reg.id_registro}')">
                             <i class="fas fa-file-pdf"></i> Imprimir Nota
@@ -705,28 +791,62 @@ function renderizarLineaTiempoVisual(registros) {
                 </div>
             </div>`;
         } 
+       else if (reg.tipo_registro === 'RECETA_MEDICA') {
+            const esPendiente = reg.raw.estado_nota === 'PENDIENTE';
+            
+            // Etiqueta visual dinámica según el estatus
+            const badgeEstatus = esPendiente 
+                ? `<span class="badge bg-warning text-dark" style="font-size: 0.6rem;"><i class="fas fa-clock"></i> NOTA PENDIENTE</span>`
+                : `<span class="badge bg-success text-white" style="font-size: 0.6rem;"><i class="fas fa-check-circle"></i> NOTA COMPLETADA</span>`;
+
+            // Botón de acción inteligente: Si está pendiente, invita a redactarla
+            const botonAccionNota = esPendiente
+                ? `<a href="historial-clinico.html?id=${reg.raw.id_paciente}&receta_id=${reg.raw.id}" class="btn btn-sm btn-warning fw-bold px-3 py-1 shadow-sm text-dark" style="font-size: 0.7rem; border-radius: 6px;">
+                        <i class="fas fa-pen-fancy me-1"></i> Redactar Nota Pendiente
+                   </a>`
+                : `<span class="text-success fw-bold" style="font-size: 0.7rem;"><i class="fas fa-check"></i> Nota Registrada</span>`;
+
+            return `
+            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #10b981 !important; text-align: left; background: white;">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex gap-2 align-items-center">
+                            <span class="badge text-white" style="font-size: 0.6rem; background-color: #10b981 !important;"><i class="fas fa-prescription"></i> RECETA MÉDICA</span>
+                            ${badgeEstatus}
+                        </div>
+                        <small class="text-muted fw-bold" style="font-size: 0.7rem;">${fechaLegible}</small>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1 text-uppercase" style="font-size: 0.8rem;">Prescripción y Tratamiento</h6>
+                    <p class="text-muted mb-2 small" style="font-size: 0.75rem; line-height: 1.3;">${reg.contenido}</p>
+                    <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+                        <div class="d-flex gap-2 align-items-center">
+                            ${botonAccionNota}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3 py-1 shadow-sm" style="font-size: 0.7rem; border-radius: 6px;"
+                            onclick="generarPdfDesdeTimeline('${reg.id_registro}')">
+                            <i class="fas fa-file-pdf"></i> Imprimir Receta
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
         else if (reg.tipo_registro === 'ESTUDIO_GABINETE') {
             const deshabilitado = !reg.archivo_url ? 'disabled' : '';
             return `
-            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #00cfd5 !important; background: rgba(0, 207, 213, 0.01); text-align: left;">
+            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #00cfd5 !important; background: white; text-align: left;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <div class="d-flex gap-1 align-items-center">
                             <span class="badge text-white" style="font-size: 0.6rem; background-color: #00cfd5 !important;"><i class="fas fa-x-ray"></i> GABINETE</span>
-                            <span class="badge ${colorEstado}" style="font-size: 0.55rem;"><i class="fas fa-signature"></i> ${estadoActual}</span>
+                            <span class="badge ${colorEstado}" style="font-size: 0.55rem;">${estadoActual}</span>
                         </div>
                         <small class="text-muted fw-bold" style="font-size: 0.7rem;">${fechaLegible}</small>
                     </div>
-                    <h6 class="fw-bold mb-1 text-dark text-uppercase" style="font-size: 0.8rem;">
-                        ${reg.titulo} <span class="text-muted" style="font-size: 0.7rem;">• ${reg.zona}</span>
-                    </h6>
-                    
-                    <div class="p-2 my-2 rounded bg-white border-start border-info shadow-sm" style="font-size: 0.75rem; line-height: 1.3;">
-                        <strong>Conclusión Radiológica:</strong> <span class="text-dark">${reg.contenido}</span>
+                    <h6 class="fw-bold mb-1 text-dark text-uppercase" style="font-size: 0.8rem;">${reg.titulo} • <span class="text-muted">${reg.zona}</span></h6>
+                    <div class="p-2 my-2 rounded bg-light border-start border-info" style="font-size: 0.75rem; line-height: 1.3;">
+                        <strong>Conclusión:</strong> ${reg.contenido}
                     </div>
-
                     <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
-                        <!-- ✨ AHORA ABRE EL VISOR OSCURO -->
                         <button type="button" class="btn btn-sm btn-dark fw-bold px-3 py-1 shadow-sm" style="font-size: 0.7rem; border-radius: 6px;"
                             ${deshabilitado} onclick="abrirVisorPaciente('${reg.archivo_url}')">
                             <i class="fas fa-expand-arrows-alt me-1"></i> Abrir PACS
@@ -739,30 +859,25 @@ function renderizarLineaTiempoVisual(registros) {
         else if (reg.tipo_registro === 'ESTUDIO_LABORATORIO') {
             const deshabilitado = !reg.archivo_url ? 'disabled' : '';
             return `
-            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #8b5cf6 !important; background: rgba(139, 92, 246, 0.02); text-align: left;">
+            <div class="card mb-3 border-0 shadow-sm animate__animated animate__fadeIn" style="border-left: 4px solid #8b5cf6 !important; background: white; text-align: left;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <div class="d-flex gap-1 align-items-center">
                             <span class="badge text-white" style="font-size: 0.6rem; background-color: #8b5cf6 !important;"><i class="fas fa-vial"></i> LABORATORIO</span>
-                            <span class="badge ${colorEstado}" style="font-size: 0.55rem;"><i class="fas fa-signature"></i> ${estadoActual}</span>
+                            <span class="badge ${colorEstado}" style="font-size: 0.55rem;">${estadoActual}</span>
                         </div>
                         <small class="text-muted fw-bold" style="font-size: 0.7rem;">${fechaLegible}</small>
                     </div>
-                    <h6 class="fw-bold mb-1 text-dark text-uppercase" style="font-size: 0.8rem;">
-                        ${reg.titulo}
-                    </h6>
-                    
-                    <div class="p-2 my-2 rounded bg-white border-start shadow-sm" style="font-size: 0.75rem; line-height: 1.3; border-color: #8b5cf6 !important;">
-                        <strong>Observaciones:</strong> <span class="text-dark">${reg.contenido}</span>
+                    <h6 class="fw-bold mb-1 text-dark text-uppercase" style="font-size: 0.8rem;">${reg.titulo}</h6>
+                    <div class="p-2 my-2 rounded bg-light border-start" style="font-size: 0.75rem; line-height: 1.3; border-color: #8b5cf6 !important;">
+                        <strong>Observaciones:</strong> ${reg.contenido}
                     </div>
-
                     <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
-                        <!-- ✨ AHORA ABRE EL VISOR OSCURO PARA EL PDF DEL QUÍMICO -->
                         <button type="button" class="btn btn-sm text-white fw-bold px-3 py-1 shadow-sm" style="font-size: 0.7rem; border-radius: 6px; background-color: #8b5cf6;"
                             ${deshabilitado} onclick="abrirVisorPaciente('${reg.archivo_url}')">
                             <i class="fas fa-file-pdf me-1"></i> Ver Resultados
                         </button>
-                        <span class="text-muted" style="font-size: 0.65rem;"><i class="fas fa-microscope text-purple"></i> Q.B.P. ${reg.especialista}</span>
+                        <span class="text-muted" style="font-size: 0.65rem;"><i class="fas fa-microscope"></i> ${reg.especialista}</span>
                     </div>
                 </div>
             </div>`;

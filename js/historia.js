@@ -181,14 +181,16 @@ const cargarExpedienteFijo = async () => {
         if (errorNotas) throw errorNotas;
 
         if (notasAnteriores && notasAnteriores.length > 0) {
-            //console.log(`📜 [FisiodCid Red]: Historial detectado (${notasAnteriores.length} notas). Almacenando última evolución.`);
             FisioCidEngine.ultimaNotaCargada = notasAnteriores[0];
+
+            // 🚀 AUTOMATIZACIÓN: Pre-rellenar somatometría y diagnóstico de la última visita
+            prerellenarConUltimaNotaGuardada();
 
             // 🎯 CASO PACIENTE EXISTENTE: Sí tiene historial, abrimos el selector interactivo
             if (typeof modalEngine !== 'undefined' && modalEngine.mostrarSelectorTipoConsulta) {
-                //console.log("🎛️ Desplegando modal de tipo de consulta subsecuente...");
                 modalEngine.mostrarSelectorTipoConsulta();
             }
+        
         } else {
             // 🆕 CASO PACIENTE NUEVO ABSOLUTO (Cero "Show")
             //console.log("🆕 [BÚNKER CLÍNICO]: Cero notas previas en DB. Saltando directo a Valoración Inicial.");
@@ -272,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarExpedienteFijo();
     inicializarEscuchaMotivo();
     adaptarInterfazPorEspecialidad();
+    cargarDatosDesdeRecetaPendiente();
 });
 
 window.calcularIMC = () => {
@@ -413,6 +416,14 @@ if (formHistoria) {
             alert("Error al guardar la consulta: " + error.message);
             if (btn) { btn.innerText = "REINTENTAR"; btn.disabled = false; }
         }
+        // 🚀 SI VENÍA VINCULADA A UNA RECETA PENDIENTE, LA MARCAMOS COMO COMPLETADA
+            if (window.recetaPendienteVinculadaId) {
+                await fisioNet
+                    .from('recetas_medicas')
+                    .update({ estado_nota: 'COMPLETADO' })
+                    .eq('id', window.recetaPendienteVinculadaId);
+                console.log("✅ Receta vinculada actualizada a estatus COMPLETADO.");
+            }
     });
 }
 
@@ -1334,3 +1345,123 @@ window.enviarSolicitudLab = async () => {
     }
 };
 
+// ============================================================================
+// ⚡ MOTOR DE PRE-RELLENO INTELIGENTE (SOMATOMETRÍA Y DIAGNÓSTICO)
+// ============================================================================
+
+window.prerellenarConUltimaNotaGuardada = () => {
+    if (!window.FisioCidEngine || !window.FisioCidEngine.ultimaNotaCargada) {
+        alert("⚠️ No hay registros previos de este paciente para pre-rellenar.");
+        return;
+    }
+
+    const u = window.FisioCidEngine.ultimaNotaCargada;
+    const llenarSiExiste = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null && val !== "") {
+            el.value = val;
+            // Efecto visual sutil de confirmación
+            el.style.backgroundColor = "#fef3c7";
+            setTimeout(() => el.style.backgroundColor = "white", 800);
+        }
+    };
+
+    // 1. Somatometría y Signos Vitales
+    llenarSiExiste('valSistolica', u.ta_sistolica);
+    llenarSiExiste('valDiastolica', u.ta_diastolica);
+    llenarSiExiste('valFC', u.frecuencia_cardiaca);
+    llenarSiExiste('valFR', u.frecuencia_respiratoria);
+    llenarSiExiste('valTemp', u.temperatura);
+    llenarSiExiste('valSpO2', u.spo2);
+    llenarSiExiste('valPeso', u.peso);
+    llenarSiExiste('valTalla', u.talla);
+    
+    if (typeof calcularIMC === 'function') {
+        calcularIMC();
+    }
+
+    // 2. Diagnósticos Clínicos y CIE-10
+    llenarSiExiste('diagnostico_principal', u.diagnostico_principal);
+    llenarSiExiste('codigo_cie_final', u.codigo_cie10);
+    llenarSiExiste('diagnostico_funcional', u.diagnostico_funcional);
+
+    // 3. Plan de tratamiento previo sugerido (opcional)
+    llenarSiExiste('plan_tratamiento', u.plan_tratamiento);
+
+    console.log("⚡ [FisioCid]: Somatometría y diagnóstico pre-rellenados con éxito.");
+};
+
+// ============================================================================
+// 💊 CARGAR Y PRE-RELLENAR DESDE RECETA PENDIENTE (RECETA_ID)
+// ============================================================================
+async function cargarDatosDesdeRecetaPendiente() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const recetaId = urlParams.get('receta_id');
+    
+    if (!recetaId) return; // Si es consulta normal, no hace nada
+
+    try {
+        console.log("🔍 Detectada receta pendiente ID:", recetaId);
+        
+        const { data: receta, error } = await fisioNet
+            .from('recetas_medicas')
+            .select('*')
+            .eq('id', recetaId)
+            .single();
+
+        if (error || !receta) {
+            console.warn("⚠️ No se pudo recuperar la información de la receta:", error?.message);
+            return;
+        }
+
+        // Armamos el texto estructurado de los medicamentos del JSON
+        let resumenMeds = "";
+        if (receta.medicamentos && Array.isArray(receta.medicamentos)) {
+            resumenMeds = receta.medicamentos.map((m, idx) => 
+                `${idx + 1}. Fármaco: ${m.nombre} | Dosis: ${m.dosis} | Frecuencia: ${m.frecuencia} | Duración: ${m.duracion}`
+            ).join('\n');
+        }
+
+        // Función auxiliar para rellenar y dar feedback visual
+        const llenarCampo = (id, valor) => {
+            const el = document.getElementById(id);
+            if (el && valor) {
+                el.value = valor;
+                el.style.backgroundColor = "#dcfce7"; // Tono verdecito indicando pre-relleno inteligente
+                setTimeout(() => el.style.backgroundColor = "white", 1500);
+            }
+        };
+
+        // Inyectamos diagnóstico principal
+        llenarCampo('diagnostico_principal', receta.diagnostico);
+        
+        // Armamos el plan de tratamiento combinando fármacos e indicaciones
+        let textoTratamiento = "";
+        if (resumenMeds) textoTratamiento += `PRESCRIPCIÓN / FÁRMACOS:\n${resumenMeds}\n\n`;
+        if (receta.indicaciones_generales) textoTratamiento += `INDICACIONES GENERALES:\n${receta.indicaciones_generales}`;
+        
+        llenarCampo('plan_tratamiento', textoTratamiento);
+        llenarCampo('cambios_medicacion', resumenMeds);
+
+        // Guardamos el ID de la receta en una variable global para marcarla como completada al guardar
+        window.recetaPendienteVinculadaId = recetaId;
+
+        // Banner flotante superior de aviso para el doctor
+        const bannerReceta = document.createElement('div');
+        bannerReceta.className = 'alert alert-success border-0 shadow-sm mb-3 animate__animated animate__fadeInDown';
+        bannerReceta.style.borderRadius = '12px';
+        bannerReceta.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <strong>💊 RECETA CARGADA AUTOMÁTICAMENTE:</strong> Los datos de la prescripción previa se han volcado en los campos de diagnóstico y tratamiento.
+                </div>
+                <span class="badge bg-success">Folio: ${receta.folio_expediente || 'S/F'}</span>
+            </div>
+        `;
+        const formularioEl = document.getElementById('formHistoria');
+        if (formularioEl) formularioEl.prepend(bannerReceta);
+
+    } catch (err) {
+        console.error("❌ Error al procesar la receta pendiente:", err);
+    }
+}
