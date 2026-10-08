@@ -280,8 +280,6 @@ function limpiarApellidoMexicano(apellidoRaw) {
 }
 
 function procesarCurp() {
-
-
     const nomRaw = document.getElementById('valNombre')?.value || "";
     const patRaw = document.getElementById('valPaterno')?.value.trim() || "";
     const matRaw = document.getElementById('valMaterno')?.value.trim() || "X";
@@ -297,13 +295,16 @@ function procesarCurp() {
 
     const pat = limpiarApellidoMexicano(patRaw); 
     const mat = limpiarApellidoMexicano(matRaw); 
-    const nom = nomRaw.trim().toUpperCase();
+    
+    // 🎯 CORRECCIÓN: Llamamos a la función inteligente que elimina "MARIA/JOSE" y toma el nombre real (ROSARIO)
+    const nomObj = procesarNombreMexicano(nomRaw);
+    const nom = nomObj.nombre.toUpperCase();
     
     if (nom.length >= 2 && pat.length >= 2 && fec && est.length === 2) {
         const l1 = pat[0] || ""; 
         const l2 = pat.slice(1).match(/[AEIOU]/)?.[0] || "X";
         const l3 = mat[0] || "X"; 
-        const l4 = nom[0] || "";
+        const l4 = nom[0] || ""; // Ahora sí tomará la 'R' de Rosario correctamente
         const aa = fec.substring(2, 4); 
         const mm = fec.substring(5, 7); 
         const dd = fec.substring(8, 10);
@@ -317,11 +318,16 @@ function procesarCurp() {
         const p1 = document.getElementById('curp-parte1'); if (p1) p1.value = curpCompleta.substring(0, 11);
         const p2 = document.getElementById('curp-estado'); if (p2) p2.value = curpCompleta.substring(11, 13);
         const p3 = document.getElementById('curp-consonantes'); if (p3) p3.value = curpCompleta.substring(13, 16);
-        const p4 = document.getElementById('curp-homo'); if (p4) p4.value = curpCompleta.substring(16, 18);
+        const p4 = document.getElementById('curp-homo'); 
+        
+        const homoclaveGenerada = curpCompleta.substring(16, 18);
+        if (p4) p4.value = homoclaveGenerada;
 
-        // 🚀 GATILLO MAESTRO DE CRISTIAN: La Homoclave dispara la gestión del Folio
-        if (!pacienteExistenteId && typeof gestionarFolioAutomatico === 'function') {
-            gestionarFolioAutomatico(null);
+        // 🎯 DISPARADOR DIRECTO: Si la homoclave está lista, generamos el folio de inmediato
+        if (homoclaveGenerada.length === 2 && !pacienteExistenteId) {
+            if (typeof gestionarFolioAutomatico === 'function') {
+                gestionarFolioAutomatico(null);
+            }
         }
     }
 }

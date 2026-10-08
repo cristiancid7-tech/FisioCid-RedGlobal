@@ -275,13 +275,16 @@ function procesarCurp() {
 
     const pat = limpiarApellidoMexicano(patRaw); 
     const mat = limpiarApellidoMexicano(matRaw); 
-    const nom = nomRaw.trim().toUpperCase();
+    
+    // 🎯 CORRECCIÓN: Llamamos a la función inteligente que elimina "MARIA/JOSE" y toma el nombre real (ROSARIO)
+    const nomObj = procesarNombreMexicano(nomRaw);
+    const nom = nomObj.nombre.toUpperCase();
     
     if (nom.length >= 2 && pat.length >= 2 && fec && est.length === 2) {
         const l1 = pat[0] || ""; 
         const l2 = pat.slice(1).match(/[AEIOU]/)?.[0] || "X";
         const l3 = mat[0] || "X"; 
-        const l4 = nom[0] || "";
+        const l4 = nom[0] || ""; // Ahora sí tomará la 'R' de Rosario correctamente
         const aa = fec.substring(2, 4); 
         const mm = fec.substring(5, 7); 
         const dd = fec.substring(8, 10);
