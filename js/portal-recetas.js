@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
-// 💾 6. PROCESAMIENTO, GUARDADO Y GENERACIÓN DE PDF DE RECETA (Con FR y Temperatura)
+// 💾 6. PROCESAMIENTO, GUARDADO Y GENERACIÓN DE PDF DE RECETA (Con flujo de Espera)
 // ============================================================================
 async function procesarReceta() {
     const btn = document.getElementById('btnGuardarReceta');
@@ -549,43 +549,70 @@ async function procesarReceta() {
             throw new Error("Debes agregar al menos un medicamento a la receta.");
         }
 
-        // 3. Signos vitales y somatometría (incluyendo FR y Temperatura)
+        // 3. Signos vitales y somatometría
         const sistolica = parseInt(document.getElementById('valSistolica')?.value) || null;
         const diastolica = parseInt(document.getElementById('valDiastolica')?.value) || null;
         const frecuencia_cardiaca = parseInt(document.getElementById('valFC')?.value) || null;
-        const frecuencia_respiratoria = parseInt(document.getElementById('valFR')?.value) || null; // 🚀 NUEVO
-        const temperatura = parseFloat(document.getElementById('valTemp')?.value) || null;         // 🚀 NUEVO
+        const frecuencia_respiratoria = parseInt(document.getElementById('valFR')?.value) || null;
+        const temperatura = parseFloat(document.getElementById('valTemp')?.value) || null;
         const spo2 = parseInt(document.getElementById('valSpO2')?.value) || null;
         const peso = parseFloat(document.getElementById('valPeso')?.value) || null;
         const talla = parseFloat(document.getElementById('valTalla')?.value) || null;
         const imc = parseFloat(document.getElementById('valIMC')?.value) || null;
 
-        // 4. Estructura de datos para la tabla recetas_medicas
-        const payload = {
-            id_paciente: pacienteExistenteId,
-            id_clinica: idClinica,
-            medico_id: user.id,
-            folio_expediente: folio,
-            diagnostico: diagnostico,
-            indicaciones_generales: indicaciones,
-            estado_nota: 'PENDIENTE',
-            sistolica,
-            diastolica,
-            frecuencia_cardiaca,
-            frecuencia_respiratoria, // 🚀 NUEVO EN SUPABASE
-            temperatura,             // 🚀 NUEVO EN SUPABASE
-            spo2,
-            peso,
-            talla,
-            imc,
-            medicamentos: listaMedicamentos
-        };
+        // 4. LÓGICA INTELIGENTE DE GUARDADO (UPDATE vs INSERT)
+        if (window.recetaPendienteVinculadaId) {
+            // 🚀 CASO A: Viene de la Sala de Espera. Actualizamos el registro existente.
+            const { error: errUpdate } = await fisioNet
+                .from('recetas_medicas')
+                .update({
+                    diagnostico: diagnostico,
+                    indicaciones_generales: indicaciones,
+                    medicamentos: listaMedicamentos,
+                    estado_nota: 'COMPLETADO', // Sale de la sala de espera
+                    sistolica,
+                    diastolica,
+                    frecuencia_cardiaca,
+                    frecuencia_respiratoria,
+                    temperatura,
+                    spo2,
+                    peso,
+                    talla,
+                    imc
+                })
+                .eq('id', window.recetaPendienteVinculadaId);
 
-        const { error } = await fisioNet
-            .from('recetas_medicas')
-            .insert([payload]);
+            if (errUpdate) throw errUpdate;
+            console.log("✅ Cita en espera atendida y actualizada a COMPLETADO.");
 
-        if (error) throw error;
+        } else {
+            // 🚀 CASO B: Receta creada desde cero por el doctor. Insertamos un registro nuevo.
+            const payloadNuevo = {
+                id_paciente: pacienteExistenteId,
+                id_clinica: idClinica,
+                medico_id: user.id,
+                folio_expediente: folio,
+                diagnostico: diagnostico,
+                indicaciones_generales: indicaciones,
+                estado_nota: 'COMPLETADO', // O 'PENDIENTE' según prefieras para recetas directas
+                sistolica,
+                diastolica,
+                frecuencia_cardiaca,
+                frecuencia_respiratoria,
+                temperatura,
+                spo2,
+                peso,
+                talla,
+                imc,
+                medicamentos: listaMedicamentos
+            };
+
+            const { error: errInsert } = await fisioNet
+                .from('recetas_medicas')
+                .insert([payloadNuevo]);
+
+            if (errInsert) throw errInsert;
+        }
 
         // 5. Armar Nombre Completo y Edad para el PDF
         const nombreVal = document.getElementById('valNombre')?.value.trim() || '';
@@ -597,7 +624,7 @@ async function procesarReceta() {
         const edadPaciente = calcularEdad(fechaNacVal);
         const pacienteTextoPDF = edadPaciente !== "N/A" ? `${nombreCompleto}  (${edadPaciente} AÑOS)` : nombreCompleto;
 
-        // 6. Construir texto limpio del plan de tratamiento
+        // 6. Construir texto limpio del plan de tratamiento para el PDF
         let textoMedicamentosParaPDF = "PRESCRIPCIÓN MÉDICA:\n\n";
         listaMedicamentos.forEach((m, index) => {
             textoMedicamentosParaPDF += `${index + 1}. ${m.nombre}\n   Dosis: ${m.dosis || 'N/A'} | Frecuencia: ${m.frecuencia || 'N/A'} | Duración: ${m.duracion || 'N/A'}\n\n`;
@@ -613,8 +640,8 @@ async function procesarReceta() {
             ta_sistolica: sistolica,
             ta_diastolica: diastolica,
             frecuencia_cardiaca: frecuencia_cardiaca,
-            frecuencia_respiratoria: frecuencia_respiratoria, // 🚀 NUEVO PARA EL PDF
-            temperatura: temperatura,                       // 🚀 NUEVO PARA EL PDF
+            frecuencia_respiratoria: frecuencia_respiratoria,
+            temperatura: temperatura,
             spo2: spo2,
             peso: peso,
             eva: 0,
@@ -622,13 +649,17 @@ async function procesarReceta() {
             plan_tratamiento: textoMedicamentosParaPDF
         };
 
-        // 7. Generación del PDF
+        // 7. Generación del PDF y limpieza de variable global
         if (typeof window.generarPDF === 'function') {
             await window.generarPDF(datosParaPDF);
-            alert("✅ ¡Receta guardada en base de datos y PDF generado con éxito!");
+            window.recetaPendienteVinculadaId = null; // Limpiamos la bandera
+            alert("✅ ¡Receta guardada y PDF generado con éxito!");
         } else {
             alert("⚠️ Receta guardada en base de datos, pero el módulo de PDF no está vinculado.");
         }
+
+        // Redirigir o limpiar pantalla tras finalizar
+        window.location.href = 'lista-pacientes.html';
 
     } catch (error) {
         console.error("❌ Error al procesar receta:", error);
@@ -731,4 +762,289 @@ async function cargarHistorialPersonal() {
             <i class="fas fa-exclamation-triangle"></i> Error al recuperar historial: ${err.message}
         </div>`;
     }
+}
+
+// ============================================================================
+// ⏳ GUARDAR PACIENTE EN SALA DE ESPERA (RECEPCIÓN / TRIAGE)
+// ============================================================================
+async function guardarEnEspera() {
+    const btn = document.getElementById('btnGuardarEspera');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> GUARDANDO EN ESPERA...';
+    }
+
+    try {
+        if (!pacienteExistenteId) {
+            throw new Error("Por favor busca y selecciona un paciente registrado antes de enviarlo a espera.");
+        }
+
+        const diagnostico = document.getElementById('diagnostico-receta')?.value.trim() || '';
+        const indicaciones = document.getElementById('indicacionesExtras')?.value.trim() || '';
+        const folio = document.getElementById('inputFolioExpediente')?.value.trim() || '';
+        const idClinica = localStorage.getItem('id_clinica_activa');
+
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
+
+        // Recopilar medicamentos (si la recepcionista ya los anotó, o dejar vacío)
+        const filasMeds = document.querySelectorAll('.fila-medicamento');
+        const listaMedicamentos = [];
+        filasMeds.forEach(fila => {
+            const nombre = fila.querySelector('.med-nombre')?.value.trim() || '';
+            const dosis = fila.querySelector('.med-dosis')?.value.trim() || '';
+            const frecuencia = fila.querySelector('.med-frecuencia')?.value.trim() || '';
+            const duracion = fila.querySelector('.med-duracion')?.value.trim() || '';
+            if (nombre) {
+                listaMedicamentos.push({ nombre, dosis, frecuencia, duracion });
+            }
+        });
+
+        // Somatometría completa capturada en recepción
+        const sistolica = parseInt(document.getElementById('valSistolica')?.value) || null;
+        const diastolica = parseInt(document.getElementById('valDiastolica')?.value) || null;
+        const frecuencia_cardiaca = parseInt(document.getElementById('valFC')?.value) || null;
+        const frecuencia_respiratoria = parseInt(document.getElementById('valFR')?.value) || null;
+        const temperatura = parseFloat(document.getElementById('valTemp')?.value) || null;
+        const spo2 = parseInt(document.getElementById('valSpO2')?.value) || null;
+        const peso = parseFloat(document.getElementById('valPeso')?.value) || null;
+        const talla = parseFloat(document.getElementById('valTalla')?.value) || null;
+        const imc = parseFloat(document.getElementById('valIMC')?.value) || null;
+
+        const payloadEspera = {
+            id_paciente: pacienteExistenteId,
+            id_clinica: idClinica,
+            medico_id: user.id,
+            folio_expediente: folio,
+            diagnostico: diagnostico,
+            indicaciones_generales: indicaciones,
+            estado_nota: 'ESPERA', // 🎯 ESTATUS CLAVE PARA SALA DE ESPERA
+            sistolica,
+            diastolica,
+            frecuencia_cardiaca,
+            frecuencia_respiratoria,
+            temperatura,
+            spo2,
+            peso,
+            talla,
+            imc,
+            medicamentos: listaMedicamentos
+        };
+
+        const { error } = await fisioNet
+            .from('recetas_medicas')
+            .insert([payloadEspera]);
+
+        if (error) throw error;
+
+        alert("✅ ¡Paciente enviado a la Sala de Espera con éxito! El doctor ya puede consultarlo.");
+        
+        // Limpiamos o redirigimos según prefieras
+        location.reload();
+
+    } catch (error) {
+        console.error("❌ Error al enviar a espera:", error);
+        alert("❌ Error: " + error.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-clock me-2"></i> GUARDAR EN ESPERA';
+        }
+    }
+}
+
+// ============================================================================
+// 👥 CONSULTAR Y MOSTRAR CITAS EN ESPERA PARA EL DOCTOR (CORREGIDO)
+// ============================================================================
+async function abrirModalCitasEnEspera() {
+    const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    if (!idClinica) {
+        alert("⚠️ No hay una clínica activa seleccionada.");
+        return;
+    }
+
+    try {
+        console.log("🔍 Consultando sala de espera para clínica:", idClinica);
+
+        // Consultamos registros con estatus ESPERA ordenados por fecha_creacion
+        const { data: enEspera, error } = await fisioNet
+            .from('recetas_medicas')
+            .select(`
+                *,
+                pacientes_maestros:id_paciente (
+                    id,
+                    nombre,
+                    apellido_paterno,
+                    apellido_materno,
+                    fecha_nacimiento,
+                    curp,
+                    telefono
+                )
+            `)
+            .eq('id_clinica', idClinica)
+            .eq('estado_nota', 'ESPERA')
+            .order('fecha_creacion', { ascending: false }); // 🎯 CAMBIO CLAVE AQUÍ
+
+        if (error) {
+            console.error("❌ Error de Supabase en Citas en Espera:", error.message);
+            throw error;
+        }
+
+        if (!enEspera || enEspera.length === 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Sala de Espera Vacía',
+                text: 'No hay pacientes en espera en este momento.',
+                confirmButtonColor: '#2563eb'
+            });
+            return;
+        }
+
+        // Construimos el HTML interactivo para el listado
+        let htmlLista = `
+            <div style="text-align: left; max-height: 400px; overflow-y: auto;">
+                <p class="text-muted small mb-3">Selecciona un paciente para cargar sus signos vitales y datos al consultorio:</p>
+                <div class="list-group">
+        `;
+
+        enEspera.forEach(item => {
+            const p = item.pacientes_maestros || {};
+            const nombreCompleto = `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim() || "PACIENTE SIN NOMBRE";
+            
+            // Usamos fecha_creacion para mostrar la hora de llegada
+            const horaLlegada = item.fecha_creacion ? new Date(item.fecha_creacion).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente';
+            
+            htmlLista += `
+                <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-3 mb-2 border rounded shadow-sm"
+                        onclick='cargarPacienteDesdeEspera(${JSON.stringify(item)})' style="border-left: 4px solid #f59e0b !important; cursor: pointer;">
+                    <div>
+                        <h6 class="mb-1 fw-bold text-dark text-uppercase">${nombreCompleto}</h6>
+                        <small class="text-muted">
+                            <i class="fas fa-stethoscope me-1 text-primary"></i> T.A: ${item.sistolica || '--'}/${item.diastolica || '--'} | 
+                            Peso: ${item.peso || '--'} kg | Temp: ${item.temperatura || '--'}°C
+                        </small>
+                    </div>
+                    <span class="badge bg-warning text-dark rounded-pill p-2">🕒 ${horaLlegada}</span>
+                </button>
+            `;
+        });
+
+        htmlLista += `</div></div>`;
+
+        Swal.fire({
+            title: '👥 PACIENTES EN ESPERA',
+            html: htmlLista,
+            showConfirmButton: false,
+            showCloseButton: true,
+            width: '550px'
+        });
+
+    } catch (err) {
+        console.error("❌ Error detallado al cargar citas en espera:", err);
+        alert("Hubo un error al consultar la sala de espera: " + (err.message || err));
+    }
+}
+
+// Función que toma el objeto en espera y lo inyecta en los inputs de la pantalla
+function cargarPacienteDesdeEspera(item) {
+    Swal.close();
+    
+    // 1. Asignamos el ID del paciente y la receta pendiente
+    pacienteExistenteId = item.id_paciente;
+    window.recetaPendienteVinculadaId = item.id; 
+
+    // 2. Rellenamos datos generales si tenemos el objeto de paciente maestro
+    if (item.pacientes_maestros) {
+        const p = item.pacientes_maestros;
+        const ponerVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
+        
+        ponerVal('valNombre', p.nombre);
+        ponerVal('valPaterno', p.apellido_paterno);
+        ponerVal('valMaterno', p.apellido_materno);
+        ponerVal('valFecha', p.fecha_nacimiento);
+    }
+
+    // 3. Rellenamos la somatometría capturada por la recepcionista
+    const ponerValNum = (id, val) => { const el = document.getElementById(id); if(el && val !== null) el.value = val; };
+    
+    ponerValNum('valSistolica', item.sistolica);
+    ponerValNum('valDiastolica', item.diastolica);
+    ponerValNum('valFC', item.frecuencia_cardiaca);
+    ponerValNum('valFR', item.frecuencia_respiratoria);
+    ponerValNum('valTemp', item.temperatura);
+    ponerValNum('valSpO2', item.spo2);
+    ponerValNum('valPeso', item.peso);
+    ponerValNum('valTalla', item.talla);
+
+    if (typeof calcularIMC === 'function') calcularIMC();
+
+    // 4. Rellenar diagnóstico preliminar o indicaciones si las hubo
+    const diagEl = document.getElementById('diagnostico-receta');
+    if (diagEl && item.diagnostico) diagEl.value = item.diagnostico;
+
+    const indEl = document.getElementById('indicacionesExtras');
+    if (indEl && item.indicaciones_generales) indEl.value = item.indicaciones_generales;
+
+    console.log("⚡ Datos de sala de espera cargados correctamente al consultorio.");
+}
+
+
+// ============================================================================
+// 👥 CARGAR PACIENTE DESDE LA SALA DE ESPERA (CORREGIDO Y COMPLETO)
+// ============================================================================
+async function cargarPacienteDesdeEspera(item) {
+    Swal.close();
+    
+    // Vinculamos el ID de la receta en espera para actualizarla al guardar
+    window.recetaPendienteVinculadaId = item.id; 
+
+    try {
+        // 1. Consultamos el perfil completo del paciente maestro directamente por su ID
+        const { data: paciente, error } = await fisioNet
+            .from('pacientes_maestros')
+            .select('*')
+            .eq('id', item.id_paciente)
+            .single();
+
+        if (error) throw error;
+
+        // 2. Usamos tu función existente que ya mapea, congela y formatea todos los datos básicos
+        if (paciente && typeof autorrellenarPaciente === 'function') {
+            autorrellenarPaciente(paciente);
+        } else {
+            console.warn("⚠️ No se encontró la función autorrellenarPaciente en el ámbito global.");
+        }
+
+    } catch (err) {
+        console.error("❌ Error al recuperar los datos maestros del paciente:", err);
+        alert("No se pudieron cargar los datos de identidad del paciente.");
+    }
+
+    // 3. Rellenamos la somatometría completa capturada por la recepcionista en recepción
+    const ponerValNum = (id, val) => { 
+        const el = document.getElementById(id); 
+        if (el && val !== null && val !== undefined) el.value = val; 
+    };
+    
+    ponerValNum('valSistolica', item.sistolica);
+    ponerValNum('valDiastolica', item.diastolica);
+    ponerValNum('valFC', item.frecuencia_cardiaca);
+    ponerValNum('valFR', item.frecuencia_respiratoria);
+    ponerValNum('valTemp', item.temperatura);
+    ponerValNum('valSpO2', item.spo2);
+    ponerValNum('valPeso', item.peso);
+    ponerValNum('valTalla', item.talla);
+
+    // Disparamos el cálculo del IMC automáticamente
+    if (typeof calcularIMC === 'function') {
+        calcularIMC();
+    }
+
+    // 4. Rellenar diagnóstico preliminar o indicaciones generales si la recepcionista los anotó
+    const diagEl = document.getElementById('diagnostico-receta');
+    if (diagEl && item.diagnostico) diagEl.value = item.diagnostico;
+
+    const indEl = document.getElementById('indicacionesExtras');
+    if (indEl && item.indicaciones_generales) indEl.value = item.indicaciones_generales;
+
+    console.log("⚡ Datos de identidad y somatometría cargados con éxito al consultorio.");
 }
