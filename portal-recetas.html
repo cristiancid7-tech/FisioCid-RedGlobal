@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nueva Receta | FisioCid Especialistas</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Animate.css para las transiciones suaves -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
+    <style>
+        :root {
+            --color-camaleon: #00cfd5; /* El color principal de tu clínica */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f7f6;
+        }
+
+        /* Estilos base de FisioCid (Reciclados de tu Gabinete) */
+        .card-fisiocid { background: white; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 20px; }
+        .header-fisiocid { border-left: 5px solid var(--color-camaleon); background: #f8fafc; padding: 15px 20px; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 10px; text-transform: uppercase; font-size: 0.85rem; }
+        .form-fisiocid { border: 2px solid #f1f5f9; border-radius: 10px; padding: 12px; transition: all 0.3s ease; }
+        .form-fisiocid:focus { border-color: var(--color-camaleon); box-shadow: 0 0 0 3px rgba(0, 207, 213, 0.1); outline: none; }
+        .label-fisiocid { font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 5px; }
+        
+        /* Ajustes específicos para el recetario */
+        .input-group-text.fisiocid-addon { background: #f8fafc; border: 2px solid #f1f5f9; border-right: none; color: #64748b; font-weight: bold; font-size: 0.85rem; }
+        .input-group .form-fisiocid { border-left: none; }
+        .input-group .form-fisiocid:focus { border-left: 2px solid var(--color-camaleon); }
+        
+        .fila-medicamento { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 15px; transition: all 0.3s ease; }
+        .fila-medicamento:hover { border-color: var(--color-camaleon); background: #f0fdfa; }
+    </style>
+</head>
+<body class="text-dark">
+
+<!-- ========================================================= -->
+<!-- 🚀 BARRA DE NAVEGACIÓN SUPERIOR -->
+<!-- ========================================================= -->
+<nav class="navbar border-bottom p-3 bg-white shadow-sm">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <span class="h4 mb-0 fw-black" style="letter-spacing: -1px; font-weight: 900;">
+            <i class="fas fa-shield-alt" style="color: var(--color-camaleon);"></i> 
+            FisioCid <span style="color: var(--color-camaleon);">Especialistas</span>
+        </span>
+        <div class="d-flex align-items-center gap-3">
+            <div id="info-emisor" class="text-end small">
+                <span class="text-muted italic fw-bold">Nueva Receta Médica</span>
+            </div>
+            <a href="dashboard.html" class="btn btn-outline-secondary btn-sm rounded-pill fw-bold px-3">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</nav>
+
+<main class="container mt-4 pb-5">
+    
+    <!-- ========================================================= -->
+    <!-- 👤 1. IDENTIDAD DEL PACIENTE (Tu código exacto intacto) -->
+    <!-- ========================================================= -->
+    <section class="card-fisiocid mb-4 animate__animated animate__fadeIn">
+        <div class="header-fisiocid justify-content-between">
+            <span><i class="fas fa-user-circle"></i> Identidad del Paciente</span>
+        </div>
+        
+        <div class="p-4">
+            <div id="vista-manual" class="row g-3">
+                <div class="col-md-6">
+                    <label class="label-fisiocid" style="color: var(--color-camaleon); font-weight: 800;">Folio de Expediente Sede</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fas fa-folder-open text-secondary"></i></span>
+                        <input type="text" id="inputFolioExpediente" class="form-control form-fisiocid bg-light fw-bold" readonly placeholder="Calculando consecutivo...">
+                    </div>
+                    <small id="statusFolio" class="fw-bold text-muted mt-1 d-block" style="font-size: 0.65rem; letter-spacing: 0.3px;"></small>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6 position-relative">
+                        <label class="label-fisiocid">Nombre(s) <span class="text-primary">*</span></label>
+                        <input type="text" id="valNombre" class="form-control form-fisiocid" oninput="procesarCurp()" placeholder="Escribe para buscar...">
+                        <div id="sugerencias-gabinete" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1050; top: 100%;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="label-fisiocid">Apellido Paterno</label>
+                        <input type="text" id="valPaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="label-fisiocid">Apellido Materno</label>
+                        <input type="text" id="valMaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="label-fisiocid">Fecha Nac.</label>
+                    <input type="date" id="valFecha" class="form-control form-fisiocid" oninput="procesarCurp(); actualizarInterfazEdad();">
+                </div>
+                <div class="col-md-3">
+                    <label class="label-fisiocid">Género</label>
+                    <select id="genero-manual" class="form-select form-fisiocid" onchange="procesarCurp()">
+                        <option>SELECCION</option>
+                        <option value="HOMBRE">HOMBRE</option>
+                        <option value="MUJER">MUJER</option>
+                        <option value="NO BINARIO">NO BINARIO</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid" style="color: var(--color-camaleon); font-weight: 800;">Estado de Nacimiento</label>
+                    <select id="valEstado" class="form-select form-fisiocid" onchange="procesarCurp()">
+                        <option value="">SELECCIONAR ESTADO</option>
+                        <option value="AS">AGUASCALIENTES</option><option value="BC">BAJA CALIFORNIA</option>
+                        <option value="BS">BAJA CALIFORNIA SUR</option><option value="CC">CAMPECHE</option>
+                        <option value="CL">COAHUILA</option><option value="CM">COLIMA</option>
+                        <option value="CS">CHIAPAS</option><option value="CH">CHIHUAHUA</option>
+                        <option value="DF">CIUDAD DE MÉXICO</option><option value="DG">DURANGO</option>
+                        <option value="GT">GUANAJUATO</option><option value="GR">GUERRERO</option>
+                        <option value="HG">HIDALGO</option><option value="JC">JALISCO</option>
+                        <option value="MC">MÉXICO</option><option value="MN">MICHOACÁN</option>
+                        <option value="MS">MORELOS</option><option value="NT">NAYARIT</option>
+                        <option value="NL">NUEVO LEÓN</option><option value="OC">OAXACA</option>
+                        <option value="PL">PUEBLA</option><option value="QT">QUERÉTARO</option>
+                        <option value="QR">QUINTANA ROO</option><option value="SP">SAN LUIS POTOSÍ</option>
+                        <option value="SL">SINALOA</option><option value="SR">SONORA</option>
+                        <option value="TC">TABASCO</option><option value="TS">TAMAULIPAS</option>
+                        <option value="TL">TLAXCALA</option><option value="VZ">VERACRUZ</option>
+                        <option value="YN">YUCATÁN</option><option value="ZS">ZACATECAS</option>
+                        <option value="NE">EXTRANJERO</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <div class="label-fisiocid text-primary mb-1">CURP (Llave Maestra FisioCid)</div>
+                    <div class="input-group">
+                        <input type="text" id="curp-parte1" class="form-control fw-bold bg-light" style="width: 45%;" readonly>
+                        <input type="text" id="curp-estado" class="form-control fw-bold text-center border-primary" placeholder="--" maxlength="2" style="width: 15%; color: #0d6efd;" oninput="saltarAHomoclave(this)">
+                        <div class="input-group-text p-0" style="width: 40%;">
+                            <input type="text" id="curp-consonantes" class="form-control border-0 bg-light fw-bold" style="width: 60%;" readonly>
+                            <input type="text" id="curp-homo" class="form-control border-0 fw-bold text-center" placeholder="--" maxlength="2" style="width: 40%; color: #0d6efd;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row g-3 mt-2">
+                <div id="bloque-contacto-adulto" class="col-12 row g-3 m-0 p-0">
+                    <div class="col-md-6">
+                        <label class="label-fisiocid text-success">Teléfono del Paciente</label>
+                        <input type="tel" id="tel-manual" class="form-control form-fisiocid" placeholder="10 dígitos">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="label-fisiocid text-success">Correo Electrónico</label>
+                        <input type="email" id="valEmail" class="form-control form-fisiocid" placeholder="paciente@ejemplo.com">
+                    </div>
+                </div>
+
+               <!-- Seccion Tutor Oculta -->
+<div id="seccion-tutor" class="col-12 d-none">
+    <div class="row g-3 p-3 mt-2 rounded" style="background-color: #fffbeb; border: 1px dashed #fcd34d;">
+        <div class="col-12">
+            <span class="badge bg-warning text-dark mb-2"><i class="fas fa-child"></i> Paciente Pediátrico / Menor de Edad</span>
+        </div>
+        <div class="col-md-5">
+            <label class="label-fisiocid">Nombre del Tutor Responsable</label>
+            <input type="text" id="tutor-nombre" class="form-control form-fisiocid text-uppercase" placeholder="Nombre completo del tutor">
+        </div>
+        <div class="col-md-3">
+            <label class="label-fisiocid">Parentesco</label>
+            <input type="text" id="tutor-parentesco" class="form-control form-fisiocid text-uppercase" placeholder="Ej. MADRE, PADRE">
+        </div>
+        <div class="col-md-4">
+            <label class="label-fisiocid text-success fw-bold">Teléfono del Tutor (OTP)</label>
+            <input type="tel" id="tutor-tel" class="form-control form-fisiocid" placeholder="10 dígitos">
+        </div>
+    </div>
+</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- 🫀 2. SIGNOS VITALES Y SOMATOMETRÍA -->
+    <!-- ========================================================= -->
+    <section class="card-fisiocid mb-4 animate__animated animate__fadeInLeft">
+        <div class="header-fisiocid justify-content-between">
+            <span><i class="fas fa-heartbeat text-danger"></i> Signos Vitales y Somatometría</span>
+            <span class="badge bg-light text-dark border" style="font-size: 0.65rem;">OPCIONAL PARA RECETA</span>
+        </div>
+        <div class="p-4">
+            <div class="row g-3">
+                <!-- Tensión Arterial -->
+                <div class="col-md-3">
+                    <label class="label-fisiocid">Tensión Arterial (TA)</label>
+                    <div class="input-group">
+                        <input type="number" id="valSistolica" class="form-control form-fisiocid text-center" placeholder="Sist.">
+                        <span class="input-group-text bg-white border-top border-bottom border-secondary-subtle">/</span>
+                        <input type="number" id="valDiastolica" class="form-control form-fisiocid text-center" placeholder="Diast.">
+                    </div>
+                </div>
+                <!-- Frecuencia Cardíaca -->
+                <div class="col-md-2">
+                    <label class="label-fisiocid">Frec. Cardíaca</label>
+                    <div class="input-group">
+                        <input type="number" id="valFC" class="form-control form-fisiocid" placeholder="0">
+                        <span class="input-group-text fisiocid-addon">lpm</span>
+                    </div>
+                </div>
+                <!-- SpO2 -->
+                <div class="col-md-2">
+                    <label class="label-fisiocid">Oxigenación</label>
+                    <div class="input-group">
+                        <input type="number" id="valSpO2" class="form-control form-fisiocid" placeholder="0">
+                        <span class="input-group-text fisiocid-addon">%</span>
+                    </div>
+                </div>
+                <!-- Peso -->
+                <div class="col-md-2">
+                    <label class="label-fisiocid">Peso</label>
+                    <div class="input-group">
+                        <input type="number" id="valPeso" class="form-control form-fisiocid" step="0.1" placeholder="0.0" oninput="calcularIMC()">
+                        <span class="input-group-text fisiocid-addon">kg</span>
+                    </div>
+                </div>
+                <!-- Talla -->
+                <div class="col-md-2">
+                    <label class="label-fisiocid">Talla</label>
+                    <div class="input-group">
+                        <input type="number" id="valTalla" class="form-control form-fisiocid" step="0.01" placeholder="0.00" oninput="calcularIMC()">
+                        <span class="input-group-text fisiocid-addon">m</span>
+                    </div>
+                </div>
+                <!-- IMC Automático -->
+                <div class="col-md-1">
+                    <label class="label-fisiocid">IMC</label>
+                    <input type="text" id="valIMC" class="form-control form-fisiocid bg-light fw-bold text-center" readonly placeholder="--">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- 💊 3. RECETARIO INTELIGENTE -->
+    <!-- ========================================================= -->
+    <section class="card-fisiocid mb-4 animate__animated animate__fadeInUp">
+        <div class="header-fisiocid justify-content-between">
+            <span><i class="fas fa-prescription-bottle-alt text-primary"></i> Prescripción Médica</span>
+        </div>
+        <div class="p-4">
+            
+            <!-- Diagnóstico Impreso en Receta -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <label class="label-fisiocid text-primary">Diagnóstico / Motivo de Prescripción (Se imprimirá en la receta)</label>
+                    <input type="text" id="diagnostico-receta" class="form-control form-fisiocid text-uppercase fw-bold" placeholder="EJ. INFECCIÓN DE VÍAS RESPIRATORIAS ALTAS">
+                </div>
+            </div>
+
+            <!-- Contenedor Dinámico -->
+            <div id="contenedor-medicamentos">
+                <!-- Las filas se inyectan aquí con JS -->
+            </div>
+
+            <button class="btn btn-outline-primary fw-bold w-100 py-2 mt-2 shadow-sm" style="border-radius: 10px; border-style: dashed; border-width: 2px;" onclick="agregarFilaMedicamento()">
+                <i class="fas fa-plus-circle me-1"></i> AÑADIR OTRO MEDICAMENTO
+            </button>
+            
+            <!-- Indicaciones Generales -->
+            <div class="mt-4">
+                <label class="label-fisiocid">Indicaciones Generales / Cuidados en Casa</label>
+                <textarea id="indicacionesExtras" class="form-control form-fisiocid text-uppercase" rows="3" placeholder="Ej. Aumentar la ingesta de líquidos, reposo relativo..."></textarea>
+            </div>
+        </div>
+    </section>
+
+<!-- ========================================================= -->
+    <!-- 💾 BOTÓN MAESTRO DE ACCIÓN -->
+    <!-- ========================================================= -->
+    <div class="text-center mt-5">
+        <button id="btnGuardarReceta" class="btn btn-lg px-5 shadow-lg animate__animated animate__pulse animate__infinite" onclick="procesarReceta()" style="background-color: var(--color-camaleon); border: none; border-radius: 50px; padding: 18px; font-weight: 900; color: white;">
+            <i class="fas fa-print me-2"></i> GUARDAR E IMPRIMIR RECETA PDF
+        </button>
+    </div>
+
+</main>
+
+<!-- 🚀 AQUÍ LLAMAMOS A TU NUEVO ARCHIVO JS -->
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/portal-recetas.js"></script>
+</body>
+</html>

@@ -2544,7 +2544,8 @@ function renderizarBotonesPorRol() {
     if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'flex' : 'none';
 
     const catalogoBotones = {
-        agregarPaciente: `<button class="btn-action" onclick="window.location.href='nuevo-paciente.html'">📝 Agregar Paciente</button>`,
+        nuevareceta: `<button class="btn-action" onclick="window.location.href='portal-recetas.html'">📋 Nueva Receta</button>`,
+        agregarPaciente: `<button class="btn-action" onclick="window.location.href='nuevo-paciente.html'">📝 Agregar/Editar Paciente</button>`,
         listaPacientes: `<button class="btn-action" onclick="window.location.href='lista-pacientes.html'">👥 Lista de Pacientes</button>`,
         inventario:      `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
         nuevoEstudio:   `<button class="btn-action" onclick="window.location.href='portal-gabinete.html'">📡 Nuevo Estudio</button>`,
@@ -2557,6 +2558,7 @@ function renderizarBotonesPorRol() {
     switch(miRol) {
         case 'ADMIN_SISTEMA':
             botonesAJS = [
+                catalogoBotones.nuevareceta, // 👈 Agregado aquí
                 catalogoBotones.agregarPaciente, catalogoBotones.listaPacientes,
                 catalogoBotones.inventario, catalogoBotones.nuevoEstudio,
                 catalogoBotones.laboratorio, catalogoBotones.finanzas
@@ -2565,6 +2567,7 @@ function renderizarBotonesPorRol() {
 
         case 'ADMINISTRATIVO':
             botonesAJS = [
+                catalogoBotones.nuevareceta, // 👈 (Opcional) Agregado aquí si también lo ocupan
                 catalogoBotones.agregarPaciente, 
                 catalogoBotones.listaPacientes, 
                 catalogoBotones.inventario,
@@ -2574,7 +2577,8 @@ function renderizarBotonesPorRol() {
 
         case 'STAFF_CLINICO':
             botonesAJS = [
-              catalogoBotones.agregarPaciente, 
+                catalogoBotones.nuevareceta, // 👈 Agregado aquí para que los terapeutas/doctores lo vean
+                catalogoBotones.agregarPaciente, 
                 catalogoBotones.listaPacientes, 
                 catalogoBotones.nuevoEstudio, 
                 catalogoBotones.laboratorio
@@ -2594,7 +2598,6 @@ function renderizarBotonesPorRol() {
 
     contenedor.innerHTML = botonesAJS.join('');
 }
-
 function cargarHorariosEnModal(dataHorarios) {
     const contenedor = document.getElementById('contenedorHorarios');
     if (!contenedor) return;
