@@ -18,19 +18,46 @@ async function verificarSesionSegura() {
 // Ejecutar verificación de inmediato
 verificarSesionSegura();
 
+
 async function comprobarConfiguracionInicialRequerida() {
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
 
+        const modal = document.getElementById('modalConfigInicial');
+        if (!modal) return;
+
+        // 🛡️ FILTRO DE SEGURIDAD: Si el usuario es colaborador/staff (no es ADMIN_SISTEMA principal),
+        // NUNCA se le debe abrir el modal de configuración inicial.
+        const rolActual = (localStorage.getItem('rol_actual') || '').toUpperCase();
+        const clinicaActiva = localStorage.getItem('id_clinica_activa');
+
+        if (rolActual && rolActual !== 'ADMIN_SISTEMA') {
+            modal.remove(); // Destruimos el modal del DOM para este usuario
+            return;
+        }
+
+        // Verificación adicional directa en colaboradores por si entra por primera vez a la sede
+        if (clinicaActiva) {
+            const { data: colab } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('rol_sistema')
+                .eq('id_profesional', user.id)
+                .eq('id_clinica', clinicaActiva)
+                .maybeSingle();
+
+            if (colab && colab.rol_sistema && colab.rol_sistema !== 'ADMIN_SISTEMA') {
+                modal.remove();
+                return;
+            }
+        }
+
+        // Si es el dueño/administrador principal, aplicamos la regla normal de precios y horarios
         const { data: perfil } = await fisioNet
             .from('perfiles_profesionales')
             .select('costo_consulta_base, horario_atencion')
             .eq('id', user.id)
             .maybeSingle();
-
-        const modal = document.getElementById('modalConfigInicial');
-        if (!modal) return;
 
         if (!perfil || !perfil.costo_consulta_base || !perfil.horario_atencion) {
             modal.style.display = 'flex';
