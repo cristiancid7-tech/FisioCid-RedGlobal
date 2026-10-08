@@ -5,70 +5,94 @@
 
 let pacienteExistenteId = null;
 let edicionFichaAutorizada = false;
-let debounceTimer;
-
+let debounceTimer; 
+let listaSugerencias = null; // 🌍 Declarada globalmente para evitar errores de alcance
 // ============================================================================
-// 🔍 1. MOTOR DE BÚSQUEDA INTELIGENTE (MULTIPALABRA ROBUSTO)
+// 🔍 1. MOTOR DE BÚSQUEDA INTELIGENTE (MULTIPALABRA Y SEGURO)
 // ============================================================================
-const inputNombre = document.getElementById('valNombre');
-const listaSugerencias = document.getElementById('sugerencias-gabinete');
 
-inputNombre?.addEventListener('input', async (e) => {
-    const texto = e.target.value.trim().toUpperCase();
-    clearTimeout(debounceTimer);
-    
-    if (texto.length < 2) {
-        listaSugerencias?.classList.add('d-none');
+document.addEventListener('DOMContentLoaded', () => {
+    const inputNombre = document.getElementById('valNombre');
+    // Buscamos ambos IDs posibles para evitar que falle por nombre de HTML
+    const listaSugerencias = document.getElementById('sugerencias-gabinete') || document.getElementById('sugerencias-pacientes');
+
+    if (!inputNombre) {
+        console.warn("⚠️ Advertencia: No se encontró el input #valNombre en el DOM.");
         return;
     }
 
-    debounceTimer = setTimeout(async () => {
-        try {
-            const palabras = texto.split(/\s+/).filter(Boolean);
-            let query = fisioNet.from('pacientes_maestros').select('*');
-
-            palabras.forEach(palabra => {
-                query = query.or(`nombre.ilike.%${palabra}%,apellido_paterno.ilike.%${palabra}%,apellido_materno.ilike.%${palabra}%,curp.ilike.%${palabra}%`);
-            });
-
-            const { data: pacientes, error } = await query.limit(10);
-            if (error) throw error;
-
-            if (pacientes && pacientes.length > 0) {
-                listaSugerencias.innerHTML = '';
-                listaSugerencias.classList.remove('d-none');
-
-                pacientes.forEach(p => {
-                    const btn = document.createElement('button');
-                    btn.className = 'list-group-item list-group-item-action p-2.5 text-start border-bottom';
-                    
-                    const apPat = p.apellido_paterno || '';
-                    const apMat = p.apellido_materno || '';
-                    const nombreCompleto = `${p.nombre} ${apPat} ${apMat}`.trim();
-
-                    btn.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong class="text-dark fs-7">${nombreCompleto.toUpperCase()}</strong>
-                            <span class="badge bg-light text-secondary border">🎂 ${p.fecha_nacimiento || 'S/F'}</span>
-                        </div>
-                        <div class="text-muted mt-1" style="font-size: 0.65rem;">
-                            <i class="fas fa-id-card me-1"></i>CURP: <span class="fw-bold text-primary">${p.curp || 'N/A'}</span>
-                        </div>
-                    `;
-                    
-                    btn.onclick = (event) => {
-                        event.preventDefault();
-                        autorrellenarPaciente(p);
-                    };
-                    listaSugerencias.appendChild(btn);
-                });
-            } else {
-                listaSugerencias.classList.add('d-none');
-            }
-        } catch (err) {
-            console.error("Error en búsqueda:", err.message);
+    inputNombre.addEventListener('input', async (e) => {
+        const texto = e.target.value.trim().toUpperCase();
+        clearTimeout(debounceTimer);
+        
+        if (texto.length < 2) {
+            listaSugerencias?.classList.add('d-none');
+            return;
         }
-    }, 300);
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                // 1. Dividimos lo que escribe el usuario por espacios (Ej: "CRISTIAN CID" -> ["CRISTIAN", "CID"])
+                const palabras = texto.split(/\s+/).filter(Boolean);
+                
+                let query = fisioNet.from('pacientes_maestros').select('*');
+
+                // 2. Aplicamos un filtro por cada palabra en nombre, apellidos o CURP
+                palabras.forEach(palabra => {
+                    query = query.or(`nombre.ilike.%${palabra}%,apellido_paterno.ilike.%${palabra}%,apellido_materno.ilike.%${palabra}%,curp.ilike.%${palabra}%`);
+                });
+
+                const { data: pacientes, error } = await query.limit(10);
+
+                if (error) throw error;
+
+                if (pacientes && pacientes.length > 0) {
+                    if (listaSugerencias) {
+                        listaSugerencias.innerHTML = '';
+                        listaSugerencias.classList.remove('d-none');
+
+                        pacientes.forEach(p => {
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'list-group-item list-group-item-action p-2.5 text-start border-bottom';
+                            
+                            const apPat = p.apellido_paterno || '';
+                            const apMat = p.apellido_materno || '';
+                            const nombreCompleto = `${p.nombre} ${apPat} ${apMat}`.trim();
+
+                            btn.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="text-dark fs-7">${nombreCompleto.toUpperCase()}</strong>
+                                    <span class="badge bg-light text-secondary border">🎂 ${p.fecha_nacimiento || 'S/F'}</span>
+                                </div>
+                                <div class="text-muted mt-1" style="font-size: 0.65rem;">
+                                    <i class="fas fa-id-card me-1"></i>CURP: <span class="fw-bold text-primary">${p.curp || 'N/A'}</span>
+                                </div>
+                            `;
+                            
+                            // ... dentro de tu ciclo donde creas el botón de sugerencia:
+btn.onclick = (event) => {
+    event.preventDefault();
+    
+    // 🎯 OCULTAR EL MENÚ FLOTANTE AL SELECCIONAR
+    if (listaSugerencias) {
+        listaSugerencias.innerHTML = '';
+        listaSugerencias.classList.add('d-none');
+    }
+
+    autorrellenarPaciente(p);
+};
+                            listaSugerencias.appendChild(btn);
+                        });
+                    }
+                } else {
+                    listaSugerencias?.classList.add('d-none');
+                }
+            } catch (err) {
+                console.error("❌ Error en motor de búsqueda:", err.message);
+            }
+        }, 300);
+    });
 });
 
 // ============================================================================
@@ -80,36 +104,42 @@ function autorrellenarPaciente(p) {
     window.pacienteSeleccionado = p;
     window.pacienteCargado = p; 
 
-    const mapear = (id, valor) => {
-        const el = document.getElementById(id);
-        if (el) el.value = valor || "";
+    // Función inteligente que busca por múltiples posibles IDs en tu HTML
+    const mapearPorIds = (ids, valor) => {
+        for (let id of ids) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = valor || "";
+                break;
+            }
+        }
     };
 
-    mapear('valNombre', p.nombre);
-    mapear('valPaterno', p.apellido_paterno);
-    mapear('valMaterno', p.apellido_materno);
-    mapear('valFecha', p.fecha_nacimiento);
-    mapear('genero-manual', p.genero);
-    mapear('tel-manual', p.telefono);
-    mapear('valEmail', p.correo_electronico || "");
+    mapearPorIds(['valNombre', 'nombre'], p.nombre);
+    mapearPorIds(['valPaterno', 'apellidoP', 'apellido_paterno'], p.apellido_paterno);
+    mapearPorIds(['valMaterno', 'apellidoM', 'apellido_materno'], p.apellido_materno);
+    mapearPorIds(['valFecha', 'fechaNac', 'fecha_nacimiento'], p.fecha_nacimiento);
+    mapearPorIds(['genero-manual', 'genero'], p.genero);
+    mapearPorIds(['tel-manual', 'telefono'], p.telefono);
+    mapearPorIds(['valEmail', 'email', 'correo_electronico'], p.correo_electronico || "");
 
     // PEDIATRÍA
-    mapear('tutor-nombre', p.nombre_tutor);
-    mapear('tutor-parentesco', p.parentesco_tutor);
-    mapear('tutor-tel', p.telefono_tutor);
+    mapearPorIds(['tutor-nombre'], p.nombre_tutor);
+    mapearPorIds(['tutor-parentesco'], p.parentesco_tutor);
+    mapearPorIds(['tutor-tel'], p.telefono_tutor);
 
     if (p.estado_nacimiento) {
-        mapear('valEstado', p.estado_nacimiento);
+        mapearPorIds(['valEstado', 'estado'], p.estado_nacimiento);
     } else if (p.curp && p.curp.length >= 18) {
-        mapear('valEstado', p.curp.substring(11, 13).toUpperCase());
+        mapearPorIds(['valEstado', 'estado'], p.curp.substring(11, 13).toUpperCase());
     }
 
     if (p.curp && p.curp.length >= 18) {
         const c = p.curp.toUpperCase();
-        mapear('curp-parte1', c.substring(0, 11));
-        mapear('curp-estado', c.substring(11, 13));
-        mapear('curp-consonantes', c.substring(13, 16));
-        mapear('curp-homo', c.substring(16, 18));
+        mapearPorIds(['curp-parte1'], c.substring(0, 11));
+        mapearPorIds(['curp-estado'], c.substring(11, 13));
+        mapearPorIds(['curp-consonantes'], c.substring(13, 16));
+        mapearPorIds(['curp-homo'], c.substring(16, 18));
     }
 
     congelarCamposIdentidad(true);
@@ -192,17 +222,42 @@ function crearBotonDesbloqueoDinamico() {
 // ============================================================================
 // 🧮 3. MOTOR MATEMÁTICO CURP Y EDAD
 // ============================================================================
+// 1. Función para limpiar conectores y caracteres especiales
 function limpiarPalabras(texto) {
     if (!texto) return [];
+    // Convertimos a mayúsculas y quitamos acentos
     let textoLimpio = texto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const conectores = ["DA", "DAS", "DE", "DEL", "DER", "DI", "DIE", "DD", "EL", "LA", "LOS", "LAS", "LE", "LES", "MAC", "MC", "VAN", "VON", "Y"];
-    return textoLimpio.trim().split(/\s+/).filter(palabra => !conectores.includes(palabra));
+    
+    // Conectores oficiales de RENAPO que no se toman en cuenta
+    const conectores = [
+        "DA", "DAS", "DE", "DEL", "DER", "DI", "DIE", "DD", "EL", "LA", 
+        "LOS", "LAS", "LE", "LES", "MAC", "MC", "VAN", "VON", "Y"
+    ];
+    
+    // Separamos por espacios y filtramos los conectores
+    let palabras = textoLimpio.trim().split(/\s+/);
+    return palabras.filter(palabra => !conectores.includes(palabra));
 }
 
+// 2. Función actualizada para procesar el nombre (Aplica regla de Jose/Maria)
+function procesarNombreMexicano(nombreRaw) {
+    let palabras = limpiarPalabras(nombreRaw);
+    
+    // Regla: Si hay más de un nombre y el primero es MARIA o JOSE (o abreviaturas), se ignora.
+    if (palabras.length > 1 && ["MARIA", "MA.", "MA", "JOSE", "J.", "J"].includes(palabras[0])) {
+        palabras.shift(); // Quita MARIA/JOSE de la lista
+    }
+    
+    // Retorna la primera palabra válida que haya quedado (en este caso ROSARIO)
+    return { nombre: palabras[0] || "X" };
+}
+
+// 3. Función actualizada para apellidos (Limpia conectores como "DE LA")
 function limpiarApellidoMexicano(apellidoRaw) {
     let palabras = limpiarPalabras(apellidoRaw);
-    return palabras[0] || "X";
+    return palabras[0] || "X"; // Toma la primera palabra válida del apellido
 }
+
 
 function procesarCurp() {
     const nomRaw = document.getElementById('valNombre')?.value || "";
@@ -417,7 +472,7 @@ window.eliminarFila = function(id) {
 };
 
 // ============================================================================
-// 🚀 INICIALIZACIÓN DE LA PÁGINA
+// 🚀 INICIALIZACIÓN DE LA PÁGINA (Sin el bug del cursor)
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
     agregarFilaMedicamento();
@@ -446,36 +501,225 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Motor de mayúsculas global
-    document.querySelectorAll('input:not([type="file"]), textarea').forEach(el => {
-        if (el.type === 'email' || el.id === 'valEmail') return;
-        el.addEventListener('input', (e) => {
-            if (e.target.type !== 'email' && e.target.id !== 'valEmail') {
-                e.target.value = e.target.value.toUpperCase();
-            }
-        });
-    });
+    // Nota: Eliminamos el bloque global de mayúsculas por JS 
+    // para permitir escribir puntos, decimales y evitar que el cursor brinque al inicio.
 });
 
 // ============================================================================
-// 💾 6. PROCESAMIENTO FINAL DE RECETA
+// 💾 6. PROCESAMIENTO, GUARDADO Y GENERACIÓN DE PDF DE RECETA (Con Nombre Completo y Edad)
 // ============================================================================
 async function procesarReceta() {
     const btn = document.getElementById('btnGuardarReceta');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> GUARDANDO...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> GUARDANDO Y GENERANDO PDF...';
 
     try {
-        if (!document.getElementById('valNombre').value || !document.getElementById('valFecha').value) {
-            throw new Error("Por favor ingresa Nombre y Fecha de Nacimiento del paciente.");
+        if (!pacienteExistenteId) {
+            throw new Error("Por favor busca y selecciona un paciente registrado antes de guardar la receta.");
         }
 
-        alert("✅ ¡Todo el entorno está conectado! Buscar paciente, llenar, calcular edad y curp funcionan.");
+        const diagnostico = document.getElementById('diagnostico-receta')?.value.trim() || '';
+        const indicaciones = document.getElementById('indicacionesExtras')?.value.trim() || '';
+        const folio = document.getElementById('inputFolioExpediente')?.value.trim() || '';
+        const idClinica = localStorage.getItem('id_clinica_activa');
 
-    } catch(error) {
+        // 1. Obtener usuario autenticado actual
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
+
+        // 2. Recopilar medicamentos de la tabla dinámica
+        const filasMeds = document.querySelectorAll('.fila-medicamento');
+        const listaMedicamentos = [];
+        
+        filasMeds.forEach(fila => {
+            const nombre = fila.querySelector('.med-nombre')?.value.trim() || '';
+            const dosis = fila.querySelector('.med-dosis')?.value.trim() || '';
+            const frecuencia = fila.querySelector('.med-frecuencia')?.value.trim() || '';
+            const duracion = fila.querySelector('.med-duracion')?.value.trim() || '';
+            
+            if (nombre) {
+                listaMedicamentos.push({ nombre, dosis, frecuencia, duracion });
+            }
+        });
+
+        if (listaMedicamentos.length === 0) {
+            throw new Error("Debes agregar al menos un medicamento a la receta.");
+        }
+
+        // 3. Signos vitales y somatometría (opcionales)
+        const sistolica = parseInt(document.getElementById('valSistolica')?.value) || null;
+        const diastolica = parseInt(document.getElementById('valDiastolica')?.value) || null;
+        const frecuencia_cardiaca = parseInt(document.getElementById('valFC')?.value) || null;
+        const spo2 = parseInt(document.getElementById('valSpO2')?.value) || null;
+        const peso = parseFloat(document.getElementById('valPeso')?.value) || null;
+        const talla = parseFloat(document.getElementById('valTalla')?.value) || null;
+        const imc = parseFloat(document.getElementById('valIMC')?.value) || null;
+
+        // 4. Estructura de datos para la tabla recetas_medicas
+        const payload = {
+            id_paciente: pacienteExistenteId,
+            id_clinica: idClinica,
+            medico_id: user.id,
+            folio_expediente: folio,
+            diagnostico: diagnostico,
+            indicaciones_generales: indicaciones,
+            estado_nota: 'PENDIENTE',
+            sistolica,
+            diastolica,
+            frecuencia_cardiaca,
+            spo2,
+            peso,
+            talla,
+            imc,
+            medicamentos: listaMedicamentos
+        };
+
+        const { error } = await fisioNet
+            .from('recetas_medicas')
+            .insert([payload]);
+
+        if (error) throw error;
+
+        // 5. Armar Nombre Completo y Edad para el PDF
+        const nombreVal = document.getElementById('valNombre')?.value.trim() || '';
+        const paternoVal = document.getElementById('valPaterno')?.value.trim() || '';
+        const maternoVal = document.getElementById('valMaterno')?.value.trim() || '';
+        const fechaNacVal = document.getElementById('valFecha')?.value || '';
+
+        const nombreCompleto = `${nombreVal} ${paternoVal} ${maternoVal}`.trim() || window.pacienteSeleccionado?.nombre || "PACIENTE";
+        const edadPaciente = calcularEdad(fechaNacVal);
+        const pacienteTextoPDF = edadPaciente !== "N/A" ? `${nombreCompleto}  (${edadPaciente} AÑOS)` : nombreCompleto;
+
+        // 6. Construir texto limpio del plan de tratamiento
+        let textoMedicamentosParaPDF = "PRESCRIPCIÓN MÉDICA:\n\n";
+        listaMedicamentos.forEach((m, index) => {
+            textoMedicamentosParaPDF += `${index + 1}. ${m.nombre}\n   Dosis: ${m.dosis || 'N/A'} | Frecuencia: ${m.frecuencia || 'N/A'} | Duración: ${m.duracion || 'N/A'}\n\n`;
+        });
+
+        if (indicaciones) {
+            textoMedicamentosParaPDF += `INDICACIONES GENERALES:\n${indicaciones}`;
+        }
+
+        const datosParaPDF = {
+            nombre_paciente: pacienteTextoPDF,
+            fecha_nota: new Date().toISOString(),
+            ta_sistolica: sistolica,
+            ta_diastolica: diastolica,
+            frecuencia_cardiaca: frecuencia_cardiaca,
+            spo2: spo2,
+            peso: peso,
+            eva: 0,
+            diagnostico_principal: diagnostico,
+            plan_tratamiento: textoMedicamentosParaPDF
+        };
+
+        // 7. Generación del PDF
+        if (typeof window.generarPDF === 'function') {
+            await window.generarPDF(datosParaPDF);
+            alert("✅ ¡Receta guardada en base de datos y PDF generado con éxito!");
+        } else {
+            alert("⚠️ Receta guardada en base de datos, pero el módulo de PDF no está vinculado.");
+        }
+
+    } catch (error) {
+        console.error("❌ Error al procesar receta:", error);
         alert("❌ Error: " + error.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-print me-2"></i> GUARDAR E IMPRIMIR RECETA PDF';
+    }
+}
+
+
+// ============================================================================
+// 📜 CARGA DE HISTORIAL GABINETE (BANDEJA UNIVERSAL DE RADIOLOGÍA)
+// ============================================================================
+async function cargarHistorialPersonal() {
+    const contenedor = document.getElementById('lista-historial-gabinete');
+    if (!contenedor) return;
+
+    try {
+        contenedor.innerHTML = `
+            <div class="p-4 text-center text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Cargando bandeja de estudios radiológicos...
+            </div>`;
+
+        // 1. Obtener la sesión activa de Supabase Auth
+        const { data: { user }, error: authErr } = await fisioNet.auth.getUser();
+        if (authErr || !user) {
+            console.error("❌ Usuario no autenticado.");
+            contenedor.innerHTML = '<div class="p-4 text-center text-warning small">Sesión no detectada.</div>';
+            return;
+        }
+
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa');
+
+        // 2. Consultar perfil profesional para conocer la especialidad del usuario
+        const { data: perfil } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('especialidad')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        const especialidad = (perfil?.especialidad || '').toUpperCase();
+        const esRadiologo = especialidad.includes('RADIOLOG');
+
+        console.group("📡 CONSULTA DE HISTORIAL GABINETE");
+        //console.log("👤 Usuario ID:", user.id);
+        //console.log("🎓 Especialidad:", especialidad || 'STAFF');
+        //console.log("🏥 Clínica Activa:", idClinicaActiva);
+
+        let query = fisioNet.from('estudios_gabinete').select(`
+            *,
+            pacientes_maestros:paciente_id (
+                fecha_nacimiento,
+                apellido_paterno,
+                apellido_materno,
+                curp
+            )
+        `);
+
+        // 🎯 LÓGICA DE FILTRADO SEPARADA:
+        if (esRadiologo) {
+            // BANDEJA GLOBAL DEL RADIÓLOGO: Trae TODO estudio donde esté asignada como firmante,
+            // emisor o creador, independientemente de qué sede o clínica externa lo haya subido.
+            //console.log("🟢 Modo: Bandeja de Dictamen Radiológico Activa (Universal)");
+            query = query.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+        } else {
+            // BANDEJA DE STAFF CLINICO: Trae los estudios de la sede activa
+            //console.log("🔵 Modo: Staff de Clínica Local");
+            if (idClinicaActiva && idClinicaActiva !== "null") {
+                query = query.or(`id_socio_emisor.eq.${idClinicaActiva},creado_por.eq.${user.id}`);
+            } else {
+                query = query.eq('creado_por', user.id);
+            }
+        }
+
+        // 3. Ejecutar ordenado por fecha descendente (Los más recientes primero)
+        const { data: estudios, error } = await query
+            .order('fecha_registro', { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+
+        //console.log(`✅ Estudios recuperados (${estudios?.length || 0}):`, estudios);
+        console.groupEnd();
+
+        historialGabineteCache = estudios ? estudios.map(est => ({
+            ...est,
+            fecha_nacimiento: est.pacientes_maestros?.fecha_nacimiento || null,
+            apellido_paterno: est.pacientes_maestros?.apellido_paterno || "",
+            apellido_materno: est.pacientes_maestros?.apellido_materno || "",
+            curp: est.pacientes_maestros?.curp || "N/A"
+        })) : [];
+
+        renderizarListaHistorialGabinete(historialGabineteCache);
+
+    } catch (err) {
+        console.error("❌ Error en cargarHistorialPersonal:", err);
+        contenedor.innerHTML = `<div class="p-4 text-center text-danger small">
+            <i class="fas fa-exclamation-triangle"></i> Error al recuperar historial: ${err.message}
+        </div>`;
     }
 }

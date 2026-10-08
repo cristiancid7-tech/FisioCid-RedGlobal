@@ -139,8 +139,17 @@ window.generarPDF = async (datos) => {
             y += 6;
         }
 
-        // E. CUADRO DE INDICACIONES Y PLAN
-        let altoCuadro = (formatoPref === 'CARTA') ? 110 : (formatoPref === 'TICKET' ? 70 : 40);
+       // E. CUADRO DE INDICACIONES Y PLAN (DINÁMICO SEGÚN LA CANTIDAD DE TEXTO)
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        
+        const txtPlan = datos.plan_tratamiento || datos.nota_evolucion || datos.cambios_medicacion || "Seguir las indicaciones dadas en consulta.";
+        const lineasPlan = doc.splitTextToSize(txtPlan, innerWidth - 8);
+        
+        // Calculamos la altura en base al número de líneas (aprox. 4.5 mm por línea + espacio del encabezado)
+        const alturaCalculada = (lineasPlan.length * 4.5) + 12;
+        const altoMinimo = (formatoPref === 'CARTA') ? 50 : (formatoPref === 'TICKET' ? 40 : 30);
+        let altoCuadro = Math.max(alturaCalculada, altoMinimo);
 
         doc.setDrawColor(r, g, b);
         doc.setLineWidth(0.3);
@@ -156,12 +165,10 @@ window.generarPDF = async (datos) => {
         doc.setTextColor(30);
         doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
-        
-        const txtPlan = datos.plan_tratamiento || datos.nota_evolucion || datos.cambios_medicacion || "Seguir las indicaciones dadas en consulta.";
-        const lineasPlan = doc.splitTextToSize(txtPlan, innerWidth - 8);
         doc.text(lineasPlan, margin + 4, y + 12);
 
-        y += (altoCuadro + 12);
+        // Avanzamos el cursor "y" de manera fluida tomando en cuenta el alto real que ocupó la caja
+        y += (altoCuadro + 8);
 
         // F. FIRMA Y LEYENDA LEGAL
         doc.setDrawColor(180);
