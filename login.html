@@ -5,12 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FisioCid - Acceso Profesional</title>
     <link rel="stylesheet" href="estilos.css">
+
+    <style>
+
+  header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .logo-img {
+            max-width: 195px;
+            height: auto;
+            object-fit: contain;
+            margin-bottom: 12px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.08));
+        }
+    
+        /* 📱 MEDIA QUERIES PARA CELULARES Y TABLETS PEQUEÑAS */
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem 0.5rem;
+            }
+            .card {
+                padding: 25px 18px;
+                border-radius: 16px;
+            }
+            .grid-perfiles {
+                grid-template-columns: 1fr; /* Los botones se ponen uno debajo del otro en celular */
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
 </head>
 <body>
 
   <div class="flex-center">
         <div class="card">
-            <h2 style="text-align: center; color: var(--primary); margin-bottom: 0.5rem;">FISIOCID</h2>
+         
+              <img src="img/logo-fisiocid.png" alt="FisioCid Logo" class="logo-img" img-align="center">
+        
             <p style="text-align: center; font-size: 0.8rem; color: var(--secondary); margin-bottom: 1.5rem;">
                 SISTEMA DE GESTIÓN CLÍNICA
             </p>
