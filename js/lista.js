@@ -97,32 +97,37 @@ function dibujarTabla(lista) {
             }
         }
 
-        // 🛡️ VERIFICACIÓN DE EXPEDIENTE COMPLETO
+        
+     // 🛡️ VERIFICACIÓN DE EXPEDIENTE COMPLETO
         const esRegistroCompleto = p.curp && p.curp.length === 18 && !p.curp.includes('??');
 
         const fila = document.createElement('tr');
         let contenidoBotones = "";
 
         if (esRegistroCompleto) {
-            // 🎨 DISEÑO COMPACTO DE BOTONES (Iconos para ahorrar espacio)
+            // 🎨 DISEÑO COMPACTO, ELEGANTE Y CON BOTÓN DE RECETA INTEGRADO
             contenidoBotones = `
                 <button onclick="verFichaContacto('${idPaciente}')" title="Ficha de Contacto"
-                    style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 6px 10px; font-size: 0.9rem; border-radius: 6px; cursor: pointer;">
+                    style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
                     📇 CONTACTO
                 </button>
                 <button onclick="verHistorial('${idPaciente}')" title="Ver Historia Clínica"
-                    style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 0.9rem; border-radius: 6px; cursor: pointer;">
+                    style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
                     👁️ HISTORIAL
                 </button>
+                <button onclick="location.href='portal-recetas.html?id=${idPaciente}'" title="Crear Receta Rápida"
+                    style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
+                    💊 + RECETA
+                </button>
                 <button onclick="location.href='historia-clinica.html?id=${idPaciente}'" title="Nueva Nota"
-                    style="background: var(--primary); color: white; border: none; padding: 6px 10px; font-size: 0.9rem; border-radius: 6px; cursor: pointer;">
+                    style="background: var(--primary); color: white; border: none; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
                     📝 + NOTA
                 </button>
             `;
         } else {
             contenidoBotones = `
                 <button onclick="location.href='nuevo-paciente.html?id=${idPaciente}'"
-                        style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 6px 15px; font-size: 0.7rem; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+                    style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 4px 10px; font-size: 0.7rem; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
                     ⚠️ COMPLETAR REGISTRO
                 </button>
             `;
