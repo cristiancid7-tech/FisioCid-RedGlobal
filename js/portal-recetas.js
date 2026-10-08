@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
-// 💾 6. PROCESAMIENTO, GUARDADO Y GENERACIÓN DE PDF DE RECETA (Con Nombre Completo y Edad)
+// 💾 6. PROCESAMIENTO, GUARDADO Y GENERACIÓN DE PDF DE RECETA (Con FR y Temperatura)
 // ============================================================================
 async function procesarReceta() {
     const btn = document.getElementById('btnGuardarReceta');
@@ -549,10 +549,12 @@ async function procesarReceta() {
             throw new Error("Debes agregar al menos un medicamento a la receta.");
         }
 
-        // 3. Signos vitales y somatometría (opcionales)
+        // 3. Signos vitales y somatometría (incluyendo FR y Temperatura)
         const sistolica = parseInt(document.getElementById('valSistolica')?.value) || null;
         const diastolica = parseInt(document.getElementById('valDiastolica')?.value) || null;
         const frecuencia_cardiaca = parseInt(document.getElementById('valFC')?.value) || null;
+        const frecuencia_respiratoria = parseInt(document.getElementById('valFR')?.value) || null; // 🚀 NUEVO
+        const temperatura = parseFloat(document.getElementById('valTemp')?.value) || null;         // 🚀 NUEVO
         const spo2 = parseInt(document.getElementById('valSpO2')?.value) || null;
         const peso = parseFloat(document.getElementById('valPeso')?.value) || null;
         const talla = parseFloat(document.getElementById('valTalla')?.value) || null;
@@ -570,6 +572,8 @@ async function procesarReceta() {
             sistolica,
             diastolica,
             frecuencia_cardiaca,
+            frecuencia_respiratoria, // 🚀 NUEVO EN SUPABASE
+            temperatura,             // 🚀 NUEVO EN SUPABASE
             spo2,
             peso,
             talla,
@@ -609,6 +613,8 @@ async function procesarReceta() {
             ta_sistolica: sistolica,
             ta_diastolica: diastolica,
             frecuencia_cardiaca: frecuencia_cardiaca,
+            frecuencia_respiratoria: frecuencia_respiratoria, // 🚀 NUEVO PARA EL PDF
+            temperatura: temperatura,                       // 🚀 NUEVO PARA EL PDF
             spo2: spo2,
             peso: peso,
             eva: 0,

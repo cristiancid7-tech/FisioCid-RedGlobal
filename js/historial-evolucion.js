@@ -801,7 +801,7 @@ function renderizarLineaTiempoVisual(registros) {
 
             // Botón de acción inteligente: Si está pendiente, invita a redactarla
             const botonAccionNota = esPendiente
-                ? `<a href="historial-clinico.html?id=${reg.raw.id_paciente}&receta_id=${reg.raw.id}" class="btn btn-sm btn-warning fw-bold px-3 py-1 shadow-sm text-dark" style="font-size: 0.7rem; border-radius: 6px;">
+                ? `<a href="historia-clinica.html?id=${reg.raw.id_paciente}&receta_id=${reg.raw.id}" class="btn btn-sm btn-warning fw-bold px-3 py-1 shadow-sm text-dark" style="font-size: 0.7rem; border-radius: 6px;">
                         <i class="fas fa-pen-fancy me-1"></i> Redactar Nota Pendiente
                    </a>`
                 : `<span class="text-success fw-bold" style="font-size: 0.7rem;"><i class="fas fa-check"></i> Nota Registrada</span>`;

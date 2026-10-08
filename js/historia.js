@@ -385,12 +385,26 @@ if (formHistoria) {
                 imc: parseFloat(document.getElementById('valIMC')?.value) || null,
                 hallazgos_dentales: document.getElementById('hallazgosDentales')?.value || '',
                 diagnostico_funcional: document.getElementById('diagnostico_funcional')?.value || '',
-               pronostico: `${document.getElementById('pronostico_select')?.value || ''}\n${document.getElementById('pronostico_detalle')?.value || ''}`,
+                pronostico: `${document.getElementById('pronostico_select')?.value || ''}\n${document.getElementById('pronostico_detalle')?.value || ''}`,
                 fecha_nota: new Date().toISOString()
             };
 
             const { error: errHistorial } = await fisioNet.from('historial_clinico').insert([nuevaNota]);
             if (errHistorial) throw errHistorial;
+
+            // 🚀 4.1. SI VENÍA VINCULADA A UNA RECETA PENDIENTE, LA MARCAMOS COMO COMPLETADA
+            if (window.recetaPendienteVinculadaId) {
+                const { error: errReceta } = await fisioNet
+                    .from('recetas_medicas')
+                    .update({ estado_nota: 'COMPLETADO' })
+                    .eq('id', window.recetaPendienteVinculadaId);
+                
+                if (errReceta) {
+                    console.warn("⚠️ No se pudo actualizar el estatus de la receta:", errReceta.message);
+                } else {
+                    console.log("✅ Receta vinculada actualizada a estatus COMPLETADO.");
+                }
+            }
 
             // 5. 🔒 LIMPIAR PERMISO OTP DE SESIÓN
             const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
@@ -408,7 +422,7 @@ if (formHistoria) {
                 }
             }
 
-            // Redirigir a la lista de pacientes
+            // Redirigir a la lista de pacientes (AHORA SÍ DESPUÉS DE QUE TODO SE GUARDÓ)
             window.location.href = 'lista-pacientes.html';
 
         } catch (error) {
@@ -416,14 +430,6 @@ if (formHistoria) {
             alert("Error al guardar la consulta: " + error.message);
             if (btn) { btn.innerText = "REINTENTAR"; btn.disabled = false; }
         }
-        // 🚀 SI VENÍA VINCULADA A UNA RECETA PENDIENTE, LA MARCAMOS COMO COMPLETADA
-            if (window.recetaPendienteVinculadaId) {
-                await fisioNet
-                    .from('recetas_medicas')
-                    .update({ estado_nota: 'COMPLETADO' })
-                    .eq('id', window.recetaPendienteVinculadaId);
-                console.log("✅ Receta vinculada actualizada a estatus COMPLETADO.");
-            }
     });
 }
 
@@ -1392,7 +1398,7 @@ window.prerellenarConUltimaNotaGuardada = () => {
 };
 
 // ============================================================================
-// 💊 CARGAR Y PRE-RELLENAR DESDE RECETA PENDIENTE (RECETA_ID)
+// 💊 CARGAR Y PRE-RELLENAR DESDE RECETA PENDIENTE (RECETA Y SOMATOMETRÍA)
 // ============================================================================
 async function cargarDatosDesdeRecetaPendiente() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -1422,20 +1428,19 @@ async function cargarDatosDesdeRecetaPendiente() {
             ).join('\n');
         }
 
-        // Función auxiliar para rellenar y dar feedback visual
+        // Función auxiliar para rellenar y dar feedback visual verde
         const llenarCampo = (id, valor) => {
             const el = document.getElementById(id);
-            if (el && valor) {
+            if (el && valor !== undefined && valor !== null && valor !== "") {
                 el.value = valor;
                 el.style.backgroundColor = "#dcfce7"; // Tono verdecito indicando pre-relleno inteligente
                 setTimeout(() => el.style.backgroundColor = "white", 1500);
             }
         };
 
-        // Inyectamos diagnóstico principal
+        // 1. PRE-RELLENAR DIAGNÓSTICO Y TRATAMIENTO
         llenarCampo('diagnostico_principal', receta.diagnostico);
         
-        // Armamos el plan de tratamiento combinando fármacos e indicaciones
         let textoTratamiento = "";
         if (resumenMeds) textoTratamiento += `PRESCRIPCIÓN / FÁRMACOS:\n${resumenMeds}\n\n`;
         if (receta.indicaciones_generales) textoTratamiento += `INDICACIONES GENERALES:\n${receta.indicaciones_generales}`;
@@ -1443,7 +1448,22 @@ async function cargarDatosDesdeRecetaPendiente() {
         llenarCampo('plan_tratamiento', textoTratamiento);
         llenarCampo('cambios_medicacion', resumenMeds);
 
-        // Guardamos el ID de la receta en una variable global para marcarla como completada al guardar
+        // 2. 🚀 PRE-RELLENAR SOMATOMETRÍA Y SIGNOS VITALES
+        llenarCampo('valSistolica', receta.sistolica);
+        llenarCampo('valDiastolica', receta.diastolica);
+        llenarCampo('valFC', receta.frecuencia_cardiaca);
+        llenarCampo('valFR', receta.frecuencia_respiratoria);
+        llenarCampo('valTemp', receta.temperatura);
+        llenarCampo('valSpO2', receta.spo2);
+        llenarCampo('valPeso', receta.peso);
+        llenarCampo('valTalla', receta.talla);
+
+        // Disparamos el cálculo automático del IMC si peso y talla vienen rellenos
+        if (typeof calcularIMC === 'function') {
+            calcularIMC();
+        }
+
+        // Guardamos el ID de la receta para marcarla como completada al guardar la nota
         window.recetaPendienteVinculadaId = recetaId;
 
         // Banner flotante superior de aviso para el doctor
@@ -1453,7 +1473,7 @@ async function cargarDatosDesdeRecetaPendiente() {
         bannerReceta.innerHTML = `
             <div class="d-flex align-items-center justify-content-between">
                 <div>
-                    <strong>💊 RECETA CARGADA AUTOMÁTICAMENTE:</strong> Los datos de la prescripción previa se han volcado en los campos de diagnóstico y tratamiento.
+                    <strong>💊 RECETA Y SOMATOMETRÍA CARGADAS:</strong> Los signos vitales, peso, diagnóstico y prescripción previa se han volcado automáticamente.
                 </div>
                 <span class="badge bg-success">Folio: ${receta.folio_expediente || 'S/F'}</span>
             </div>
