@@ -27,17 +27,13 @@ async function comprobarConfiguracionInicialRequerida() {
         const modal = document.getElementById('modalConfigInicial');
         if (!modal) return;
 
-        // 🛡️ FILTRO DE SEGURIDAD: Si el usuario es colaborador/staff (no es ADMIN_SISTEMA principal),
-        // NUNCA se le debe abrir el modal de configuración inicial.
-        const rolActual = (localStorage.getItem('rol_actual') || '').toUpperCase();
         const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
-        if (rolActual && rolActual !== 'ADMIN_SISTEMA') {
-            modal.remove(); // Destruimos el modal del DOM para este usuario
-            return;
-        }
+        // 🛡️ CONSULTA DIRECTA DE SEGURIDAD (Sin depender solo del localStorage)
+        // Verificamos de inmediato en la base de datos si es administrador principal o colaborador.
+        let esAdminSistema = false;
 
-        // Verificación adicional directa en colaboradores por si entra por primera vez a la sede
+        // Si hay una clínica activa, revisamos si es colaborador de esa clínica
         if (clinicaActiva) {
             const { data: colab } = await fisioNet
                 .from('colaboradores_clinica')
@@ -46,19 +42,30 @@ async function comprobarConfiguracionInicialRequerida() {
                 .eq('id_clinica', clinicaActiva)
                 .maybeSingle();
 
-            if (colab && colab.rol_sistema && colab.rol_sistema !== 'ADMIN_SISTEMA') {
-                modal.remove();
-                return;
+            if (colab) {
+                // Si está en colaboradores y su rol NO es ADMIN_SISTEMA, bloqueamos el modal
+                if (colab.rol_sistema && colab.rol_sistema !== 'ADMIN_SISTEMA') {
+                    modal.remove(); // Destruimos el modal por completo
+                    return;
+                } else if (colab.rol_sistema === 'ADMIN_SISTEMA') {
+                    esAdminSistema = true;
+                }
             }
         }
 
-        // Si es el dueño/administrador principal, aplicamos la regla normal de precios y horarios
+        // Si no se encontró en colaboradores de sede, revisamos el perfil general
         const { data: perfil } = await fisioNet
             .from('perfiles_profesionales')
-            .select('costo_consulta_base, horario_atencion')
+            .select('rol, costo_consulta_base, horario_atencion')
             .eq('id', user.id)
             .maybeSingle();
 
+        if (perfil && perfil.rol && perfil.rol !== 'ADMIN_SISTEMA') {
+            modal.remove();
+            return;
+        }
+
+        // Si llegamos aquí y es ADMIN_SISTEMA, evaluamos si le falta configurar sus precios/horarios
         if (!perfil || !perfil.costo_consulta_base || !perfil.horario_atencion) {
             modal.style.display = 'flex';
         } else {
@@ -68,6 +75,7 @@ async function comprobarConfiguracionInicialRequerida() {
         console.error("Error al verificar configuracion inicial:", err);
     }
 }
+
 async function actualizarInterfazSede() {
     const labelSede = document.getElementById('txtSedeActual') || document.getElementById('sedeActivaTexto'); 
     const txtEspUI = document.getElementById('txtEspecialidadUsuario');
