@@ -572,14 +572,11 @@ async function procesarAltaPortalPaciente(boton) {
 }
 
 // ============================================================================
-// 📊 MOTOR QUERY UNIFICADO FISIOCID: EXPEDIENTE CLÍNICO HÍBRIDO (4 TABLAS)
+// 📊 MOTOR QUERY UNIFICADO FISIOCID: EXPEDIENTE CLÍNICO HÍBRIDO (AISLADO POR CLÍNICA)
 // ============================================================================
 window.lineaTiempoGlobalCache = []; 
 window.tipoSeccionActiva = 'notas'; // Por defecto arranca en notas clínicas
 
-// ============================================================================
-// 📊 CORRECCIÓN DEL MOTOR DE RECETAS EN EL HISTORIAL CLÍNICO
-// ============================================================================
 async function cargarLineaTiempoClinica(idPaciente) {
     if (!idPaciente) return;
     const contenedor = document.getElementById('contenedorLineaTiempoHistorial');
@@ -589,15 +586,40 @@ async function cargarLineaTiempoClinica(idPaciente) {
         contenedor.innerHTML = `
             <div class="p-4 text-center text-muted">
                 <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
-                Sincronizando expediente clínico, recetas, imágenes PACS y laboratorios...
+                Sincronizando expediente clínico, recetas, imágenes PACS y laboratorios de esta sede...
             </div>`;
 
-        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Usando 'fecha_creacion' correctamente)
+        // 🏢 OBTENEMOS LA CLÍNICA ACTIVA DEL MÉDICO EN ESTA SESIÓN
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+        if (!idClinicaActiva) {
+            contenedor.innerHTML = '<div class="p-3 text-center text-danger small">⚠️ Error: No hay una clínica activa seleccionada en la sesión.</div>';
+            return;
+        }
+
+        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Notas y Recetas estrictamente filtradas por id_clinica)
         const [promesaNotas, promesaRecetas, promesaEstudios, promesaLaboratorio] = await Promise.all([
-            fisioNet.from('historial_clinico').select('*').eq('id_paciente', idPaciente).order('fecha_nota', { ascending: false }),
-            fisioNet.from('recetas_medicas').select('*').eq('id_paciente', idPaciente).order('fecha_creacion', { ascending: false }),
-            fisioNet.from('estudios_gabinete').select('*').eq('paciente_id', idPaciente).order('fecha_registro', { ascending: false }),
-            fisioNet.from('estudios_laboratorio').select('*').eq('paciente_id', idPaciente).order('created_at', { ascending: false })
+            fisioNet.from('historial_clinico')
+                .select('*')
+                .eq('id_paciente', idPaciente)
+                .eq('id_clinica', idClinicaActiva) // 🔒 Blindaje por clínica activa
+                .order('fecha_nota', { ascending: false }),
+                
+            fisioNet.from('recetas_medicas')
+                .select('*')
+                .eq('id_paciente', idPaciente)
+                .eq('id_clinica', idClinicaActiva) // 🔒 Blindaje por clínica activa
+                .order('fecha_creacion', { ascending: false }),
+                
+            fisioNet.from('estudios_gabinete')
+                .select('*')
+                .eq('paciente_id', idPaciente)
+                .order('fecha_registro', { ascending: false }),
+                
+            fisioNet.from('estudios_laboratorio')
+                .select('*')
+                .eq('paciente_id', idPaciente)
+                .order('created_at', { ascending: false })
         ]);
 
         const dataNotas = promesaNotas.data || [];
@@ -616,11 +638,11 @@ async function cargarLineaTiempoClinica(idPaciente) {
             raw: nota 
         }));
 
-        // 💊 NORMALIZACIÓN DE RECETAS (Leyendo el JSON de medicamentos y diagnóstico)
+        // 💊 NORMALIZACIÓN DE RECETAS
         const recetasFormateadas = dataRecetas.map(receta => {
             let resumenMeds = "";
             if (receta.medicamentos && Array.isArray(receta.medicamentos)) {
-                resumenMeds = receta.medicamentos.map((m, idx) => `${idx + 1}. ${m.nombre} (${m.dosis} - ${m.frecuencia})`).join(' | ');
+                resumenMeds = receta.medicamentos.map((m, idx) => `${idx + 1}. ${m.nombre} (${m.dosis} | ${m.frecuencia})`).join(' | ');
             }
             return {
                 id_registro: receta.id,
