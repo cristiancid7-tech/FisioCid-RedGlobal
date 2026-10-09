@@ -1429,8 +1429,24 @@ async function cargarSalaEspera() {
         console.error("❌ Error al cargar sala de espera:", err);
     }
 }
-
 window.procesarSolicitud = async (idSolicitud, accion) => {
+   
+    // 🛡️ 1. Validar sesión activa antes de hacer nada
+    const { data: { user }, error: authError } = await fisioNet.auth.getUser();
+    if (authError || !user) {
+        alert("⚠️ Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.");
+        location.reload();
+        return;
+    }
+
+    // 🛡️ 2. Validar clínica activa
+    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    if (!clinicaId) {
+        alert("⚠️ Error: No hay una clínica activa seleccionada en esta sesión.");
+        return;
+    }
+
+    // 🛡️ 3. Manejo de rechazo
     if (accion === 'RECHAZAR') {
         if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
         await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
@@ -1438,9 +1454,14 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         return;
     }
 
+    // 🔍 Obtener datos de la solicitud
     const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
-    const clinicaId = localStorage.getItem('id_clinica_activa');
-    const { data: { user } } = await fisioNet.auth.getUser();
+    if (!sol) {
+        alert("⚠️ No se encontró la información de esta solicitud.");
+        return;
+    }
+    
+    // ⚠️ NOTA: Eliminamos las redeclaraciones de 'clinicaId' y 'user' porque ya viven en el scope superior de la función.
 
     const nomS = sol.nombre.toUpperCase().trim();
     const apePS = sol.apellido_p.toUpperCase().trim();
@@ -2291,10 +2312,13 @@ function cerrarModalColega() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+   
     // 1. Obtener usuario auténtico en tiempo real desde Supabase Auth
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) { window.location.href = 'login.html'; return; }
 
+     iniciarCanalSalaEspera();
+     
     // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO (AHORA INCLUYE LA INSIGNIA)
     const { data: perfilProf } = await fisioNet
         .from('perfiles_profesionales')
@@ -2760,4 +2784,26 @@ function atenderSolicitudDesdeDashboard(tipoSolicitud, pacienteObj) {
     } else if (tipoSolicitud === 'GABINETE') {
         window.location.href = 'portal-gabinete.html';
     }
+}
+
+// Agrega esto en tu función de inicialización general (ej. al cargar el DOM)
+function iniciarCanalSalaEspera() {
+    fisioNet
+        .channel('cambios-solicitudes-citas')
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // INSERT, UPDATE, DELETE
+                schema: 'public',
+                table: 'solicitudes_citas'
+            },
+            (payload) => {
+                console.log("🔔 Cambio detectado en solicitudes:", payload);
+                // Recarga la sala de espera automáticamente para cualquier cambio en pendientes
+                if (typeof cargarSalaEspera === 'function') {
+                    cargarSalaEspera();
+                }
+            }
+        )
+        .subscribe();
 }
