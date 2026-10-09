@@ -1356,49 +1356,78 @@ async function ejecutarIngreso(idBox, idPaciente, idCita) {
     location.reload(); 
 }
 
+// ============================================================================
+// 📬 CARGAR SALA DE ESPERA / SOLICITUDES (BLINDADA POR SEDE Y ROL)
+// ============================================================================
 async function cargarSalaEspera() {
     const lista = document.getElementById('listaEsperaReferidos');
     const badge = document.getElementById('badgeSolicitudes');
     if (!lista) return;
 
-    const { data: solicitudes, error } = await fisioNet
-        .from('solicitudes_citas')
-        .select('*')
-        .eq('estado', 'PENDIENTE')
-        .order('creado_el', { ascending: false });
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
 
-    if (error) {
-        console.error("❌ ERROR DE SUPABASE:", error);
-        return;
-    }
+        const clinicaId = localStorage.getItem('id_clinica_activa');
+        if (!clinicaId) {
+            lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">⚠️ Selecciona una clínica activa.</p>`;
+            return;
+        }
 
-    if (badge) badge.innerText = solicitudes?.length || 0;
-    
-    if (!solicitudes || solicitudes.length === 0) {
-        lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">Sin solicitudes nuevas.</p>`;
-        return;
-    }
+        const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
+        const esPersonalAdministrativo = ['ADMIN_SISTEMA', 'ADMINISTRATIVO'].includes(miRolSistema);
 
-    lista.innerHTML = solicitudes.map(sol => {
-        const nombreFull = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`.toUpperCase();
+        // 🛡️ Consulta blindada por clínica activa
+        let queryCitas = fisioNet
+            .from('solicitudes_citas')
+            .select('*')
+            .eq('estado', 'PENDIENTE')
+            .eq('id_clinica_solicitada', clinicaId); // 🔒 Aislamiento por sede
+
+        // Si es terapeuta de planta (STAFF_CLINICO / OPERATIVO), solo ve sus citas solicitadas
+        if (!esPersonalAdministrativo) {
+            queryCitas = queryCitas.eq('id_profesional_solicitado', user.id); // 🔒 Aislamiento por doctor
+        }
+
+        const { data: solicitudes, error } = await queryCitas.order('creado_el', { ascending: false });
+
+        if (error) {
+            console.error("❌ ERROR DE SUPABASE EN SALA DE ESPERA:", error);
+            return;
+        }
+
+        if (badge) badge.innerText = solicitudes?.length || 0;
         
-        return `
-        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <strong style="display: block; font-size: 0.85rem; color: #1e293b;">${nombreFull}</strong>
-                    <small style="color: #64748b;">📅 ${sol.fecha_cita} - ⏰ ${sol.hora_cita.substring(0,5)}</small>
+        if (!solicitudes || solicitudes.length === 0) {
+            lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">Sin solicitudes nuevas en esta sede.</p>`;
+            return;
+        }
+
+        lista.innerHTML = solicitudes.map(sol => {
+            const nombreFull = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`.toUpperCase();
+            
+            return `
+            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); border-left: 5px solid #10b981 !important;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="text-align: left;">
+                        <span style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 5px; font-size: 0.6rem; font-weight: 800;">📅 SOLICITUD SEDE</span>
+                        <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-top: 5px;">${nombreFull}</strong>
+                        <small style="color: #64748b;">📅 ${sol.fecha_cita} - ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Aprobar">✅</button>
+                        <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Rechazar">🗑️</button>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 5px;">
-                    <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
-                    <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
+                <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold; text-align: left;">
+                    📞 ${sol.telefono} 
                 </div>
-            </div>
-            <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold;">
-                📞 ${sol.telefono} 
-            </div>
-        </div>`;
-    }).join('');
+            </div>`;
+        }).join('');
+
+    } catch (err) {
+        console.error("❌ Error al cargar sala de espera:", err);
+    }
 }
 
 window.procesarSolicitud = async (idSolicitud, accion) => {
