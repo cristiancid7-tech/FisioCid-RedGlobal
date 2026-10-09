@@ -569,7 +569,7 @@ async function procesarReceta() {
                     diagnostico: diagnostico,
                     indicaciones_generales: indicaciones,
                     medicamentos: listaMedicamentos,
-                    estado_nota: 'COMPLETADO', // Sale de la sala de espera
+                    estado_nota: 'PENDIENTE', // Sale de la sala de espera
                     sistolica,
                     diastolica,
                     frecuencia_cardiaca,
@@ -583,7 +583,7 @@ async function procesarReceta() {
                 .eq('id', window.recetaPendienteVinculadaId);
 
             if (errUpdate) throw errUpdate;
-            console.log("✅ Cita en espera atendida y actualizada a COMPLETADO.");
+            console.log("✅ Cita en espera atendida PENDIENTE para nota clinica.");
 
         } else {
             // 🚀 CASO B: Receta creada desde cero por el doctor. Insertamos un registro nuevo.
