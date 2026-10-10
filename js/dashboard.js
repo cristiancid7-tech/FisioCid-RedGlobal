@@ -271,14 +271,6 @@ function renderizarCitas(citas, modo) {
     if (!lista) return;
     lista.innerHTML = '';
 
-    if (!citas || citas.length === 0) {
-        lista.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1; margin: 10px 0; width: 100%;">
-                <p style="color: #94a3b8; font-size: 0.85rem; font-weight: 600; margin: 0;">📅 No hay citas agendadas para este periodo.</p>
-            </div>`;
-        return;
-    }
-
     const calcularEdadPorCurp = (curp) => {
         if (!curp || curp.length < 10) return "";
         try {
@@ -293,94 +285,211 @@ function renderizarCitas(citas, modo) {
             if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < fechaNac.getDate())) {
                 edad--;
             }
-            return isNaN(edad) ? "" : `• 🕒 ${edad} años`;
+            return isNaN(edad) ? "" : `${edad} años`;
         } catch (e) { return ""; }
     };
 
-    let ultimaFecha = "";
-    citas.forEach(cita => {
-        if (modo === 'semana' && cita.fecha !== ultimaFecha) {
-            ultimaFecha = cita.fecha;
-            const divDia = document.createElement('div');
-            divDia.style.cssText = "font-size: 0.75rem; font-weight: 800; color: #64748b; letter-spacing: 0.5px; padding: 12px 5px 6px 5px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #f1f5f9; margin-top: 10px; width: 100%;";
-            divDia.innerHTML = `<i class="far fa-calendar-alt" style="color: var(--primary);"></i> ${new Date(cita.fecha + "T00:00:00").toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}`;
-            lista.appendChild(divDia);
+    const formatearFechaCorta = (fechaStr) => {
+        if (!fechaStr) return "";
+        const f = new Date(fechaStr + "T00:00:00");
+        return f.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }).toUpperCase();
+    };
+
+    if (modo === 'semana') {
+        const fechaInput = document.getElementById('filtroFechaAgenda')?.value || new Date().toISOString().split('T')[0];
+        const fechaBase = new Date(fechaInput + "T00:00:00");
+
+        let diasSemana = [];
+        for (let i = 0; i < 6; i++) {
+            const d = new Date(fechaBase);
+            d.setDate(fechaBase.getDate() + i);
+            diasSemana.push(d.toISOString().split('T')[0]);
         }
 
-        const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', id: '' };
-        const nombreCompletoPaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim().toUpperCase();
-        const etiquetaEdad = calcularEdadPorCurp(p.curp);
-
-        const esConsultorio = cita.modalidad === 'CONSULTORIO';
-        const colorLateral = esConsultorio ? '#10b981' : '#3b82f6';
-        const fondoBadge = esConsultorio ? '#e6f4ea' : '#e8f0fe';
-        
-        const montoBaseCita = cita.monto_total || 800;
-        const conceptoCita = `CONSULTA DE ${cita.modalidad || 'CONSULTORIO'}`;
-        const citaYaPagada = cita.pago_status === 'PAGADO';
-
-        const divCita = document.createElement('div');
-        divCita.className = "cita-card-hub animate__animated animate__fadeInUp";
-        
-        divCita.style.cssText = `
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-left: 5px solid ${colorLateral};
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 14px;
-            margin-bottom: 6px;
+        const gridSemanal = document.createElement('div');
+        gridSemanal.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(6, minmax(240px, 1fr));
+            gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 15px;
             width: 100%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.01);
-            transition: all 0.2s ease;
         `;
-        
-        divCita.onmouseenter = () => { divCita.style.background = '#f8fafc'; };
-        divCita.onmouseleave = () => { divCita.style.background = '#ffffff'; };
-        
-        divCita.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
-                <div style="background: #f1f5f9; padding: 6px 10px; border-radius: 8px; text-align: center; min-width: 55px; flex-shrink: 0;">
-                    <span style="font-weight: 800; color: #1e293b; font-size: 0.82rem; letter-spacing: -0.3px;">${cita.hora_inicio_cita.substring(0, 5)}</span>
+
+        diasSemana.forEach((fechaStr, index) => {
+            const citasDelDia = (citas || []).filter(c => c.fecha === fechaStr);
+            const fechaObj = new Date(fechaStr + "T00:00:00");
+            const nombreDia = fechaObj.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
+            
+            const esHoy = index === 0;
+            
+            const columnaDia = document.createElement('div');
+            columnaDia.style.cssText = `
+                background: ${esHoy ? '#f0fdf4' : '#f8fafc'};
+                border: 1px solid ${esHoy ? '#bbf7d0' : '#e2e8f0'};
+                border-radius: 14px;
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                min-height: 450px;
+            `;
+
+            columnaDia.innerHTML = `
+                <div style="text-align: center; padding: 8px; background: ${esHoy ? '#dcfce7' : '#ffffff'}; border-radius: 10px; border: 1px solid ${esHoy ? '#86efac' : '#e2e8f0'}; font-weight: 900; font-size: 0.75rem; color: ${esHoy ? '#166534' : '#0f172a'}; letter-spacing: 0.5px; text-transform: uppercase;">
+                    ${esHoy ? '⭐ HOY - ' : '📅 '} ${nombreDia}
+                    <span style="display: block; font-size: 0.65rem; color: ${esHoy ? '#15803d' : '#64748b'}; font-weight: 600; margin-top: 2px;">${citasDelDia.length} citas</span>
                 </div>
-                
-                <div style="display: flex; flex-direction: column; text-align: left; gap: 2px; min-width: 0; flex: 1;">
-                    <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${nombreCompletoPaciente}">
-                        ${nombreCompletoPaciente}
-                    </span>
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                        <span style="font-size: 0.6rem; color: ${colorLateral}; background: ${fondoBadge}; padding: 2px 6px; border-radius: 4px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
-                            <i class="fas ${esConsultorio ? 'fa-building' : 'fa-house-user'}"></i> ${cita.modalidad}
-                        </span>
-                        <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">${etiquetaEdad}</span>
+                <div class="tarjetas-dia-container" style="display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
+            `;
+
+            const contenedorTarjetas = columnaDia.querySelector('.tarjetas-dia-container');
+
+            if (citasDelDia.length === 0) {
+                contenedorTarjetas.innerHTML = `
+                    <div style="text-align: center; padding: 30px 10px; color: #94a3b8; font-size: 0.75rem; font-weight: 600;">
+                        Sin citas
+                    </div>`;
+            } else {
+                citasDelDia.forEach(cita => {
+                    const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', apellido_materno: '', curp: '', id: '' };
+                    const nombreCompletoPaciente = `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim().toUpperCase();
+                    const etiquetaEdad = calcularEdadPorCurp(p.curp);
+                    const esConsultorio = cita.modalidad === 'CONSULTORIO';
+                    const estaPagado = cita.pago_status === 'PAGADO';
+
+                    // Lógica extendida para estados (Pendiente, Atendida, No asistió, Reagendada)
+                    let estadoTexto = "PENDIENTE";
+                    let estadoBg = "#fef3c7";
+                    let estadoColor = "#92400e";
+                    let estadoBorde = "#fde68a";
+
+                    if (cita.estado_cita === 'ATENDIDA') {
+                        estadoTexto = "ATENDIDA";
+                        estadoBg = "#d1fae5";
+                        estadoColor = "#065f46";
+                        estadoBorde = "#a7f3d0";
+                    } else if (cita.estado_cita === 'REAGENDADA') {
+                        estadoTexto = "REAGENDADA";
+                        estadoBg = "#ede9fe";
+                        estadoColor = "#5b21b6";
+                        estadoBorde = "#ddd6fe";
+                    } else if (cita.estado_cita === 'NO_ASISTIO' || cita.estado_cita === 'CANCELADA') {
+                        estadoTexto = "NO ASISTIÓ";
+                        estadoBg = "#fee2e2";
+                        estadoColor = "#991b1b";
+                        estadoBorde = "#fecaca";
+                    }
+
+                    const tarjeta = document.createElement('div');
+                    tarjeta.style.cssText = `
+                        background: #ffffff;
+                        border: 1px solid ${esConsultorio ? '#bbf7d0' : '#bfdbfe'};
+                        border-left: 5px solid ${esConsultorio ? '#10b981' : '#3b82f6'};
+                        border-radius: 10px;
+                        padding: 10px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+                        transition: all 0.2s ease;
+                    `;
+
+                    tarjeta.onmouseenter = () => { tarjeta.style.transform = 'translateY(-2px)'; tarjeta.style.boxShadow = '0 6px 12px rgba(0,0,0,0.06)'; };
+                    tarjeta.onmouseleave = () => { tarjeta.style.transform = 'translateY(0)'; tarjeta.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; };
+
+                    tarjeta.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="background: #f1f5f9; color: #0f172a; padding: 2px 6px; border-radius: 6px; font-size: 0.7rem; font-weight: 900;">
+                                ⏰ ${cita.hora_inicio_cita.substring(0, 5)}
+                            </span>
+                            <span style="font-size: 0.55rem; background: ${estadoBg}; color: ${estadoColor}; border: 1px solid ${estadoBorde}; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
+                                ${estadoTexto}
+                            </span>
+                        </div>
+                        
+                        <h5 style="margin: 0 0 2px 0; font-size: 0.8rem; font-weight: 900; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${nombreCompletoPaciente}">
+                            ${nombreCompletoPaciente}
+                        </h5>
+
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 0.65rem; color: #64748b; font-weight: 700;">
+                            <span>${etiquetaEdad ? `👤 ${etiquetaEdad}` : '👤 Edad no reg.'}</span>
+                            <span>•</span>
+                            <span style="color: ${estaPagado ? '#059669' : '#d97706'}; font-weight: 800;">${estaPagado ? '💳 Pagado' : '💳 Pendiente'}</span>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px solid #f1f5f9;">
+                            <span style="font-size: 0.6rem; color: #475569; font-weight: 800; background: #f8fafc; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                                ${cita.modalidad}
+                            </span>
+                            <button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;" onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a'" onmouseout="this.style.background='#f8fafc'; this.style.color='#475569'">→</button>
+                        </div>
+                    `;
+                    contenedorTarjetas.appendChild(tarjeta);
+                });
+            }
+
+            gridSemanal.appendChild(columnaDia);
+        });
+
+        lista.appendChild(gridSemanal);
+
+    } else {
+        // Vista de un solo día (Modo 'día')
+        if (!citas || citas.length === 0) {
+            lista.innerHTML = `<div style="text-align: center; padding: 40px; color: #64748b; font-weight: 600;">No hay citas para este día.</div>`;
+            return;
+        }
+
+        citas.forEach(cita => {
+            const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', apellido_materno: '', curp: '', id: '' };
+            const nombreCompletoPaciente = `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim().toUpperCase();
+            const etiquetaEdad = calcularEdadPorCurp(p.curp);
+            const esConsultorio = cita.modalidad === 'CONSULTORIO';
+            const fechaFormateada = formatearFechaCorta(cita.fecha);
+            const estaPagado = cita.pago_status === 'PAGADO';
+
+            let estadoTexto = "PENDIENTE";
+            let estadoBg = "#fef3c7";
+            let estadoColor = "#92400e";
+
+            if (cita.estado_cita === 'ATENDIDA') {
+                estadoTexto = "ATENDIDA";
+                estadoBg = "#d1fae5";
+                estadoColor = "#065f46";
+            } else if (cita.estado_cita === 'REAGENDADA') {
+                estadoTexto = "REAGENDADA";
+                estadoBg = "#ede9fe";
+                estadoColor = "#5b21b6";
+            } else if (cita.estado_cita === 'NO_ASISTIO' || cita.estado_cita === 'CANCELADA') {
+                estadoTexto = "NO ASISTIÓ";
+                estadoBg = "#fee2e2";
+                estadoColor = "#991b1b";
+            }
+
+            const divCita = document.createElement('div');
+            divCita.style.cssText = `
+                background: #ffffff; border: 1px solid #e2e8f0; border-left: 6px solid ${esConsultorio ? '#10b981' : '#3b82f6'};
+                border-radius: 12px; display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; margin-bottom: 10px; width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+            `;
+            divCita.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px;">
+                        <span style="display: block; font-weight: 900; font-size: 0.9rem; color: #0f172a;">${cita.hora_inicio_cita.substring(0, 5)}</span>
+                        <span style="display: block; font-size: 0.55rem; color: #64748b; font-weight: 700;">${fechaFormateada}</span>
+                    </div>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                            <span style="font-weight: 900; font-size: 0.92rem; color: #0f172a;">${nombreCompletoPaciente}</span>
+                            <span style="font-size: 0.55rem; background: ${estadoBg}; color: ${estadoColor}; padding: 2px 6px; border-radius: 4px; font-weight: 800;">${estadoTexto}</span>
+                        </div>
+                        <div style="font-size: 0.68rem; color: #64748b; font-weight: 700;">
+                            ${etiquetaEdad ? `${etiquetaEdad} • ` : ''}${cita.modalidad} • <span style="color: ${estaPagado ? '#059669' : '#d97706'}">${estaPagado ? 'Pagado' : 'Pendiente pago'}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 10px;">
-                ${esConsultorio ? `
-                <button class="btn-ingresar-box" onclick="prepararIngreso('${cita.id_cita}', '${p.id}', '${p.nombre}')" title="Asignar Camilla" 
-                        style="background: #ffffff; border: 1px solid #cbd5e1; color: #475569; cursor: pointer; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <i class="fas fa-bed" style="font-size: 0.8rem;"></i>
-                </button>` : ''}
-                
-                ${!citaYaPagada ? `
-                <button class="btn-cobrar-cita" onclick="dispararModalCobroAsistido('${cita.id_cita}', '${p.id}', '${nombreCompletoPaciente}', ${montoBaseCita}, '${conceptoCita}')" title="Registrar Cobro" 
-                        style="background: #fffbeb; border: 1px solid #fde68a; color: #d97706; cursor: pointer; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <i class="fas fa-cash-register" style="font-size: 0.8rem;"></i>
-                </button>
-                ` : ''}
-
-                <button class="btn-hub-ver" onclick="irAHistoria('${p.id}')" title="Ver Expediente"
-                        style="background: #f8fafc; border: 1px solid #e2e8f0; color: ${colorLateral}; cursor: pointer; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <i class="fas fa-chevron-right" style="font-size: 0.8rem; font-weight: 900;"></i>
-                </button>
-            </div>
-        `;
-        lista.appendChild(divCita);
-    });
+                <button onclick="irAHistoria('${p.id}')" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.75rem; color: #475569;">Ver Expediente →</button>
+            `;
+            lista.appendChild(divCita);
+        });
+    }
 }
 
 // ==========================================
@@ -737,6 +846,7 @@ let idAlianzaGlobal = null;
 async function abrirConfiguracionAlianza(idAlianza) {
     idAlianzaGlobal = idAlianza;
     const modal = document.getElementById('modalConfigAlianza');
+    const clinicaId = localStorage.getItem('id_clinica_activa'); // 🔒 Sede activa
     
     try {
         const [resAlianza, resConteo] = await Promise.all([
@@ -744,6 +854,7 @@ async function abrirConfiguracionAlianza(idAlianza) {
             fisioNet.from('vinculos_clinicos')
                 .select('*', { count: 'exact', head: true })
                 .eq('id_alianza_referido', idAlianza)
+                .eq('id_clinica', clinicaId) // 🔒 Aislamiento estricto por sede activa
         ]);
 
         if (resAlianza.error) throw resAlianza.error;
@@ -923,23 +1034,19 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     if (modo === 'dia') {
         if (tituloElemento) tituloElemento.innerText = `CITAS DEL ${formatearFechaCorta(fechaInput).toUpperCase()}`;
         query = query.eq('fecha', fechaInput);
-    } else {
-        const diaSemana = fechaBase.getDay();
-        const diferenciaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-        const lunes = new Date(fechaBase);
-        lunes.setDate(fechaBase.getDate() + diferenciaLunes);
-        const domingo = new Date(lunes);
-        domingo.setDate(lunes.getDate() + 6);
+   } else {
+        // 🔄 RANGO DE 6 DÍAS HACIA ADELANTE (Alineado con el grid visual)
+        const fechaFin = new Date(fechaBase);
+        fechaFin.setDate(fechaBase.getDate() + 5); 
 
-        const f1 = lunes.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-        const f2 = domingo.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-        if (tituloElemento) tituloElemento.innerText = `SEMANA: ${f1.toUpperCase()} AL ${f2.toUpperCase()}`;
+        const f1 = fechaBase.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+        const f2 = fechaFin.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+        if (tituloElemento) tituloElemento.innerText = `PRÓXIMOS DÍAS: ${f1.toUpperCase()} AL ${f2.toUpperCase()}`;
 
         query = query
-            .gte('fecha', lunes.toISOString().split('T')[0])
-            .lte('fecha', domingo.toISOString().split('T')[0]);
+            .gte('fecha', fechaBase.toISOString().split('T')[0])
+            .lte('fecha', fechaFin.toISOString().split('T')[0]);
     }
-
     const { data: citas, error } = await query
         .order('fecha')
         .order('hora_inicio_cita');
@@ -2021,7 +2128,6 @@ async function cargarSolicitudesRecibidas() {
 
         const clinicaId = localStorage.getItem('id_clinica_activa');
         const miEspecialidad = (localStorage.getItem('especialidadUsuario') || '').toUpperCase();
-        // Leemos el rol operativo actual guardado en localStorage
         const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
 
         let htmlFinal = "";
@@ -2038,10 +2144,11 @@ async function cargarSolicitudesRecibidas() {
                 .select('*')
                 .eq('estado_dictamen', 'PENDIENTE')
                 .eq('doctor_emisor_id', user.id) 
+                .eq('id_clinica', clinicaId) // 🔒 Filtro de sede activa añadido
                 .order('fecha_registro', { ascending: false });
 
             if (errorRad) console.error("Error cargando estudios:", errorRad);
-
+            
             if (pendientes && pendientes.length > 0) {
                 totalAlertasTotal += pendientes.length;
                 pendientes.forEach(est => {
@@ -2318,7 +2425,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!user) { window.location.href = 'login.html'; return; }
 
      iniciarCanalSalaEspera();
-     
+
     // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO (AHORA INCLUYE LA INSIGNIA)
     const { data: perfilProf } = await fisioNet
         .from('perfiles_profesionales')
