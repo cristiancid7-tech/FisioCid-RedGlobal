@@ -412,59 +412,100 @@
 </section>
 
 <div id="modalCita" class="modal-overlay" style="display: none;">
-    <div class="modal-content" style="max-width: 450px; border-radius: 20px; padding: 25px;">
+    <div class="modal-content" style="max-width: 750px; border-radius: 20px; padding: 25px;">
         <h3 style="margin-top: 0; color: var(--primary); text-align: center;">📅 Nueva Cita</h3>
         
         <form id="formNuevaCita">
-            <div class="form-group" style="position: relative;"> 
-                <label style="font-weight: bold; font-size: 0.85rem;">Paciente</label>
-                <input type="text" id="buscarPacienteInput" class="form-control" placeholder="Escribe nombre completo..." autocomplete="off" required>
-                <div id="sugerenciasPacientes" class="sugerencias-dropdown"></div>
-                <input type="hidden" id="idPacienteSeleccionado">
-            </div>
+            <!-- INICIO DEL CONTENEDOR A DOS COLUMNAS -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; margin-top: 20px;">
+                
+                <!-- ========================================== -->
+<!-- COLUMNA IZQUIERDA: Paciente y Modalidad    -->
+<!-- ========================================== -->
+<div style="display: flex; flex-direction: column; gap: 15px;">
+    
+    <!-- 1. Buscador (Nombre) -->
+    <div class="form-group" style="position: relative; margin: 0;"> 
+        <label style="font-weight: bold; font-size: 0.85rem; color: #1e293b;">👤 Nombre del Paciente</label>
+        <input type="text" id="buscarPacienteInput" class="form-control" placeholder="Ej. Mónica Rodríguez..." autocomplete="off" required>
+        
+        <!-- Lista de sugerencias -->
+        <div id="sugerenciasPacientes" class="sugerencias-dropdown" style="max-height: 200px; overflow-y: auto; z-index: 50;"></div>
+        
+        <input type="hidden" id="idPacienteSeleccionado">
+    </div>
 
-            <div class="form-group" style="margin-top: 15px;">
-                <label for="fechaCita" style="font-weight: bold; font-size: 0.85rem;"><i class="fas fa-calendar-day"></i> Fecha de la Cita:</label>
-                <input type="date" id="fechaCita" name="fechaCita" class="form-control" required>
-            </div>
+    <!-- 2. Teléfono (Siempre a la vista) -->
+    <div class="form-group" id="divTelefonoContenedor" style="margin: 0; background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0;">
+        <label style="font-weight: bold; font-size: 0.85rem; color: #1e293b; margin-bottom: 5px; display: block;">📞 Número de Teléfono</label>
+        <input type="tel" id="telefonoExpress" placeholder="10 dígitos..." maxlength="10" class="form-control" style="background: white;">
+        <small id="hintTelefono" style="color: #64748b; font-size: 0.65rem; font-weight: 700; display: block; margin-top: 6px;">
+            Si es paciente nuevo, se guardará en Sala de Espera.
+        </small>
+    </div>
 
-            <div class="form-group" style="margin-top: 20px; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                <label style="font-weight: 800; color: #1e293b; font-size: 0.85rem;">
-                    <i class="fas fa-clock" style="color: #10b981;"></i> Horarios Disponibles:
-                </label>
-                <div id="gridHorariosDisponibles" class="grid-horarios-fisiocid"></div>
-                <input type="hidden" id="horaCita" name="horaCita" required>
-            </div>
+    
+                    <!-- 3. Modalidad -->
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-weight: bold; font-size: 0.85rem; color: #1e293b;">🏥 Modalidad de Atención</label>
+                        <select id="modalidadCita" class="form-control">
+                            <option value="CONSULTORIO">En Consultorio</option>
+                            <option value="DOMICILIO">A Domicilio</option>
+                        </select>
+                    </div>
 
-            <div class="form-group" style="margin-top: 15px;">
-                <label style="font-weight: bold; font-size: 0.85rem;">Modalidad de Atención</label>
-                <select id="modalidadCita" class="form-control">
-                    <option value="CONSULTORIO">En Consultorio</option>
-                    <option value="DOMICILIO">A Domicilio</option>
-                </select>
-            </div>
+                    <!-- 4. Convenio -->
+                    <div style="border-top: 1px dashed #e2e8f0; padding-top: 10px;">
+                        <a href="#" id="linkMostrarConvenio" style="font-size: 0.75rem; color: var(--primary); font-weight: bold; text-decoration: none;">
+                            + ¿Aplicar convenio o empresa?
+                        </a>
+                    </div>
+                    <div id="contenedorSelectorConvenio" style="display: none; background: #f0fdf4; padding: 10px; border-radius: 8px; border: 1px solid #dcfce7;">
+                        <label style="font-size: 0.7rem; font-weight: 800; color: #166534; display: block; margin-bottom: 5px;">CONVENIO DISPONIBLE</label>
+                        <select id="selectConvenioPaciente" class="form-control" style="font-size: 0.8rem; border-color: #86efac;">
+                            <option value="">-- Selecciona un aliado --</option>
+                        </select>
+                    </div>
 
-            <div style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 10px;">
-                <a href="#" id="linkMostrarConvenio" style="font-size: 0.75rem; color: var(--primary); font-weight: bold; text-decoration: none;">
-                    + ¿Aplicar convenio o empresa?
-                </a>
-            </div>
+                </div>
 
-            <div id="contenedorSelectorConvenio" style="display: none; margin-top: 10px; background: #f0fdf4; padding: 10px; border-radius: 8px; border: 1px solid #dcfce7;">
-                <label style="font-size: 0.7rem; font-weight: 800; color: #166534; display: block; margin-bottom: 5px;">CONVENIO DISPONIBLE</label>
-                <select id="selectConvenioPaciente" class="form-control" style="font-size: 0.8rem; border-color: #86efac;">
-                    <option value="">-- Selecciona un aliado --</option>
-                </select>
-            </div>
+                <!-- ========================================== -->
+                <!-- COLUMNA DERECHA: Fecha, Horarios y Cobro   -->
+                <!-- ========================================== -->
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    
+                    <!-- 5. Fecha -->
+                    <div class="form-group" style="margin: 0;">
+                        <label for="fechaCita" style="font-weight: bold; font-size: 0.85rem; color: #1e293b;">
+                            <i class="fas fa-calendar-day"></i> Fecha de la Cita:
+                        </label>
+                        <input type="date" id="fechaCita" name="fechaCita" class="form-control" required>
+                    </div>
 
-            <div id="vistaPreviaPago" style="display: none; margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
-                <span style="font-size: 0.75rem; color: #64748b; font-weight: bold; display: block; text-transform: uppercase;">Monto a Cobrar</span>
-                <span id="textoMontoFinal" style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">$0.00</span>
-            </div>
+                    <!-- 6. Horarios -->
+                    <div class="form-group" style="margin: 0; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; flex-grow: 1;">
+                        <label style="font-weight: 800; color: #1e293b; font-size: 0.85rem; display: block; margin-bottom: 10px;">
+                            <i class="fas fa-clock" style="color: #10b981;"></i> Horarios Disponibles:
+                        </label>
+                        <!-- Le agregué un max-height para que haga scroll interno si hay muchas horas -->
+                        <div id="gridHorariosDisponibles" class="grid-horarios-fisiocid" style="max-height: 140px; overflow-y: auto; padding-right: 5px;"></div>
+                        <input type="hidden" id="horaCita" name="horaCita" required>
+                    </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 25px;">
-                <button type="submit" style="flex: 2; background: var(--primary); color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);">
-                    Confirmar Cita
+                    <!-- 7. Vista Previa Pago -->
+                    <div id="vistaPreviaPago" style="display: none; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <span style="font-size: 0.75rem; color: #64748b; font-weight: bold; display: block; text-transform: uppercase;">Monto Estimado</span>
+                        <span id="textoMontoFinal" style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">$0.00</span>
+                    </div>
+
+                </div>
+            </div>
+            <!-- FIN DEL CONTENEDOR A DOS COLUMNAS -->
+
+            <!-- Botones (Footer) -->
+            <div style="display: flex; gap: 10px; margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                <button type="submit" id="btnConfirmarCita" style="flex: 2; background: var(--primary); color: white; border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);">
+                    Confirmar Cita / Solicitud
                 </button>
                 <button type="button" class="cerrar-modal" style="flex: 1; background: #f1f5f9; color: #64748b; border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer;">
                     Cancelar

@@ -1068,16 +1068,26 @@ window.cargarAgenda = cargarAgenda;
 
 const inputBusqueda = document.getElementById('buscarPacienteInput');
 const listaSugerencias = document.getElementById('sugerenciasPacientes');
+const inputTel = document.getElementById('telefonoExpress'); // Referencia al nuevo campo de teléfono
 
 inputBusqueda?.addEventListener('input', async (e) => {
     e.target.value = e.target.value.toUpperCase();
     const texto = e.target.value.trim();
+    
+    // Si borran el texto, limpiamos el ID seleccionado para evitar errores
+    document.getElementById('idPacienteSeleccionado').value = '';
+    
     if (texto.length < 2) { listaSugerencias.innerHTML = ''; return; }
 
     const { data: { user } } = await fisioNet.auth.getUser();
     const clinicaId = localStorage.getItem('id_clinica_activa');
 
-    const { data: pacientes } = await fisioNet.from('pacientes_maestros').select('id, nombre, apellido_paterno, apellido_materno').or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%`).eq('id_clinica', clinicaId).limit(5);
+    // 🚀 BÚSQUEDA HÍBRIDA: Ahora busca por nombre, apellidos O teléfono
+    const { data: pacientes } = await fisioNet.from('pacientes_maestros')
+        .select('id, nombre, apellido_paterno, apellido_materno, telefono')
+        .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%,telefono.ilike.%${texto}%`)
+        .eq('id_clinica', clinicaId)
+        .limit(5);
 
     listaSugerencias.innerHTML = '';
     
@@ -1085,10 +1095,21 @@ inputBusqueda?.addEventListener('input', async (e) => {
         pacientes.forEach(p => {
             const div = document.createElement('div');
             div.className = 'sugerencia-item';
-            div.innerText = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
+            // Le agregamos un iconito de teléfono para que identifiques rápido
+            const telInfo = p.telefono ? ` <span style="color:#64748b; font-size:0.75rem;">(📞 ${p.telefono})</span>` : '';
+            div.innerHTML = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''} ${telInfo}`.trim();
+            
             div.onclick = () => {
-                inputBusqueda.value = div.innerText;
+                // CASO A: Paciente Existente
+                inputBusqueda.value = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
                 document.getElementById('idPacienteSeleccionado').value = p.id;
+                
+                // Autocompletamos el teléfono y le ponemos un fondito gris para que sepa que ya existe
+                if(inputTel) {
+                    inputTel.value = p.telefono || '';
+                    inputTel.style.background = '#e2e8f0';
+                }
+                
                 listaSugerencias.innerHTML = '';
             };
             listaSugerencias.appendChild(div);
@@ -1097,38 +1118,20 @@ inputBusqueda?.addEventListener('input', async (e) => {
         const divNuevo = document.createElement('div');
         divNuevo.className = 'sugerencia-item';
         divNuevo.style.background = '#f0fdf4';
-        divNuevo.innerHTML = `<strong>+ Registrar nuevo: "${texto}"</strong>`;
+        divNuevo.innerHTML = `<strong>+ Preparar prospecto: "${texto}"</strong>`;
 
-        divNuevo.onclick = async () => {
-            const clinicaId = localStorage.getItem('id_clinica_activa');
-            const idSocio = document.getElementById('selectConvenioPaciente')?.value || null;
-
-            const resultado = procesarNombreMexicano(texto); 
-
-            const { data: nuevo, error: errorReg } = await fisioNet.from('pacientes_maestros').insert({ 
-                nombre: resultado.nombre, 
-                apellido_paterno: resultado.paterno, 
-                apellido_materno: resultado.materno, 
-                creado_por: user.id,
-                id_clinica: clinicaId,
-                id_clinica_origen: clinicaId,
-                id_convenio: idSocio
-            }).select().single();
+        divNuevo.onclick = () => {
+            // CASO B: Paciente Nuevo (Prospecto)
+            // YA NO insertamos en base de datos aquí. Solo preparamos el modal.
+            inputBusqueda.value = texto;
+            document.getElementById('idPacienteSeleccionado').value = 'NUEVO_EXPRESS';
+            listaSugerencias.innerHTML = '';
             
-            if (nuevo) {
-                if (typeof window.crearVinculoInicial === 'function') {
-                    await window.crearVinculoInicial(nuevo.id, user.id, clinicaId);
-                }
-                inputBusqueda.value = `${nuevo.nombre} ${nuevo.apellido_paterno} ${nuevo.apellido_materno || ''}`.trim();
-                document.getElementById('idPacienteSeleccionado').value = nuevo.id;
-                listaSugerencias.innerHTML = '';
-                
-                const msgConvenio = idSocio ? "VINCULADO AL CONVENIO 🤝" : "COMO PARTICULAR 👤";
-                alert(`¡${nuevo.nombre} REGISTRADO ${msgConvenio}! ⚡`);
-                
-            } else {
-                console.error("Error registrando:", errorReg);
-                alert("No se pudo registrar al paciente: " + errorReg.message);
+            // Le damos el foco al teléfono automáticamente
+            if(inputTel) {
+                inputTel.value = '';
+                inputTel.style.background = '#ffffff';
+                inputTel.focus(); 
             }
         };
         listaSugerencias.appendChild(divNuevo);
@@ -1141,11 +1144,15 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
     
     const clinicaId = localStorage.getItem('id_clinica_activa');
     const idPaciente = document.getElementById('idPacienteSeleccionado').value;
+    const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
+    const telefonoInput = document.getElementById('telefonoExpress').value.trim();
+    
     const modalidad = document.getElementById('modalidadCita').value;
     const horaElegida = document.getElementById('horaCita').value; 
     const fechaElegida = document.getElementById('fechaCita').value;
 
-    if (!idPaciente) { alert("Selecciona un paciente."); return; }
+    if (!nombreInput) { alert("Escribe el nombre del paciente."); return; }
+    if (!horaElegida) { alert("Selecciona un horario disponible."); return; }
     if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
 
     const { data: perfil } = await fisioNet
@@ -1154,10 +1161,10 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         .eq('id', user.id)
         .single();
 
-    // Validar horario laborable...
+    // Validar horario laborable (tu código original)
     if (perfil?.horario_atencion) {
         const horarios = JSON.parse(perfil.horario_atencion);
-        const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 60; 
+        const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 30; 
         
         const fechaObj = new Date(fechaElegida + "T12:00:00");
         const diaSemana = fechaObj.getDay();
@@ -1183,7 +1190,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         }
     }
 
-    // MANEJO SEGURO DE CONVENIOS (Evita errores FK si idConvenio está vacío)
+    // Calcular convenios y precios (tu código original)
     const selectorConvenio = document.getElementById('selectConvenioPaciente');
     let idConvenio = null;
     let porcentaje = 0;
@@ -1195,7 +1202,6 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         }
     }
 
-    // TARIFA INDEPENDIENTE (Sin sumar base + domicilio)
     const costoConsultorio = perfil?.costo_consulta_base || 800;
     const costoDomicilio = perfil?.costo_domicilio_base || 1200;
     const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
@@ -1203,32 +1209,77 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
     const descuentoCalculado = (precioBase * porcentaje) / 100;
     const precioFinal = precioBase - descuentoCalculado;
 
-    const { error } = await fisioNet.from('agenda_maestra').insert({
-        id_paciente: idPaciente, 
-        id_profesional: user.id, 
-        id_clinica: clinicaId, 
-        fecha: fechaElegida, 
-        hora_inicio_cita: horaElegida,
-        modalidad: modalidad, 
-        id_convenio_aplicado: idConvenio, // Pasa como null si es particular
-        descuento_aplicado: descuentoCalculado, 
-        monto_base: precioBase,
-        monto_total: precioFinal, 
-        estatus: 'PENDIENTE', 
-        pago_status: 'PENDIENTE', 
-        estado: 'ACTIVO'
-    });
-
-    if (!error) {
-        alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID! 📅✨");
-        document.getElementById('modalCita').style.display = 'none';
-        document.getElementById('formNuevaCita').reset();
+    // =========================================================
+    // 🔀 LA BIFURCACIÓN: ¿AGENDA DIRECTA O SALA DE ESPERA?
+    // =========================================================
+    
+    if (!idPaciente || idPaciente === 'NUEVO_EXPRESS') {
+        // --- CASO B: PACIENTE NUEVO -> A SALA DE ESPERA ---
         
-        if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
-        if (typeof cargarEstadisticas === 'function') await cargarEstadisticas();
+        if (!telefonoInput) {
+            alert("⚠️ Al ser un paciente nuevo, es OBLIGATORIO pedirle su número de teléfono para guardarlo en la Sala de Espera.");
+            document.getElementById('telefonoExpress').focus();
+            return;
+        }
+
+        const resultado = procesarNombreMexicano(nombreInput); 
+
+        // Insertamos en solicitudes_citas
+        const { error: errSol } = await fisioNet.from('solicitudes_citas').insert({
+            nombre: resultado.nombre,
+            apellido_p: resultado.paterno,
+            apellido_m: resultado.materno,
+            telefono: telefonoInput,
+            fecha_cita: fechaElegida,
+            hora_cita: horaElegida,
+            estado: 'PENDIENTE',
+            // Estos dos IDs son clave para que aparezcan en tu panel de "Sala de Espera" según tu código:
+            id_clinica_solicitada: clinicaId,
+            id_profesional_solicitado: user.id
+        });
+
+        if (errSol) {
+            alert("Error al enviar a Sala de Espera: " + errSol.message);
+            return;
+        }
+        
+        alert("¡SOLICITUD EXPRÉS CREADA! 📝 El paciente está en la Sala de Espera.");
+
     } else {
-        alert("Error al agendar: " + error.message);
+        // --- CASO A: PACIENTE EXISTENTE -> AGENDA DIRECTA ---
+        
+        const { error } = await fisioNet.from('agenda_maestra').insert({
+            id_paciente: idPaciente, 
+            id_profesional: user.id, 
+            id_clinica: clinicaId, 
+            fecha: fechaElegida, 
+            hora_inicio_cita: horaElegida,
+            modalidad: modalidad, 
+            id_convenio_aplicado: idConvenio, 
+            descuento_aplicado: descuentoCalculado, 
+            monto_base: precioBase,
+            monto_total: precioFinal, 
+            estatus: 'PENDIENTE', 
+            pago_status: 'PENDIENTE', 
+            estado: 'ACTIVO'
+        });
+
+        if (error) {
+            alert("Error al agendar cita: " + error.message);
+            return;
+        }
+        alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID! 📅✨");
     }
+
+    // Limpieza de Modal sin importar el caso
+    document.getElementById('modalCita').style.display = 'none';
+    document.getElementById('formNuevaCita').reset();
+    document.getElementById('idPacienteSeleccionado').value = '';
+    
+    // Refrescamos ambos paneles por si acaso
+    if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+    if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
+    if (typeof cargarEstadisticas === 'function') await cargarEstadisticas();
 });
 
 document.getElementById('fechaCita')?.addEventListener('change', () => {
@@ -1575,15 +1626,15 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
     const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
     const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
 
-    const raizN = nomS.substring(0, 4);
+const raizN = nomS.substring(0, 4);
     const raizA = apePS.substring(0, 4);
     const raizMaterno = sol.apellido_m ? sol.apellido_m.toUpperCase().trim().substring(0, 4) : '';
 
-    let filtrosOr = `telefono.eq.${sol.telefono}, and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%)`;
+    // 🚀 MEJORA: Buscamos el apellido en el PATERNO o en el MATERNO
+    let filtrosOr = `telefono.eq.${sol.telefono},and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%),and(nombre.ilike.%${raizN}%,apellido_materno.ilike.%${raizA}%)`;
     if (curpS) filtrosOr += `,curp.eq.${curpS}`;
 
     let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
-
     let idPacienteFinal = null;
 
     if (coincidencias && coincidencias.length > 0) {
@@ -1598,10 +1649,12 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
                 const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
                 
                 const checkPaterno = apPDB.includes(raizA);
+                // También verificamos si el apellido que nos dieron por teléfono coincide con su materno real
+                const coincideConMaterno = apMDB.includes(raizA); 
                 const checkNombre = nomDB.includes(raizN);
-                const checkMaterno = raizMaterno && apMDB ? apMDB.includes(raizMaterno) : true; 
 
-                return checkPaterno && checkMaterno && checkNombre;
+                // Si el nombre coincide, y el apellido dado coincide ya sea con el paterno o el materno
+                return checkNombre && (checkPaterno || coincideConMaterno);
             });
         }
 
