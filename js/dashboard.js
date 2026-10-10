@@ -353,142 +353,90 @@ function renderizarCitas(citas, modo) {
             } else {
                 citasDelDia.forEach(cita => {
                     const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', apellido_materno: '', curp: '', id: '' };
-                    const nombreCompletoPaciente = `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim().toUpperCase();
-                    const etiquetaEdad = calcularEdadPorCurp(p.curp);
-                    const esConsultorio = cita.modalidad === 'CONSULTORIO';
-                    const estaPagado = cita.pago_status === 'PAGADO';
+                    const nombrePaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
+                    const edadInfo = calcularEdadPorCurp(p.curp);
 
-                    // Lógica extendida para estados (Pendiente, Atendida, No asistió, Reagendada)
-                    let estadoTexto = "PENDIENTE";
-                    let estadoBg = "#fef3c7";
-                    let estadoColor = "#92400e";
-                    let estadoBorde = "#fde68a";
+                    // AQUÍ QUEDÓ INTEGRADO EL BOTÓN DINÁMICO
+                    const botonAccion = cita.es_prospecto 
+                        ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`
+                        : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;">→</button>`;
 
-                    if (cita.estado_cita === 'ATENDIDA') {
-                        estadoTexto = "ATENDIDA";
-                        estadoBg = "#d1fae5";
-                        estadoColor = "#065f46";
-                        estadoBorde = "#a7f3d0";
-                    } else if (cita.estado_cita === 'REAGENDADA') {
-                        estadoTexto = "REAGENDADA";
-                        estadoBg = "#ede9fe";
-                        estadoColor = "#5b21b6";
-                        estadoBorde = "#ddd6fe";
-                    } else if (cita.estado_cita === 'NO_ASISTIO' || cita.estado_cita === 'CANCELADA') {
-                        estadoTexto = "NO ASISTIÓ";
-                        estadoBg = "#fee2e2";
-                        estadoColor = "#991b1b";
-                        estadoBorde = "#fecaca";
-                    }
+                    const bgColor = cita.es_prospecto ? '#fefce8' : '#ffffff';
+                    const borderColor = cita.es_prospecto ? '#fde047' : '#e2e8f0';
 
                     const tarjeta = document.createElement('div');
                     tarjeta.style.cssText = `
-                        background: #ffffff;
-                        border: 1px solid ${esConsultorio ? '#bbf7d0' : '#bfdbfe'};
-                        border-left: 5px solid ${esConsultorio ? '#10b981' : '#3b82f6'};
-                        border-radius: 10px;
+                        background: ${bgColor};
+                        border: 1px solid ${borderColor};
+                        border-radius: 8px;
                         padding: 10px;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-                        transition: all 0.2s ease;
+                        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                        display: flex;
+                        flex-direction: column;
+                        gap: 5px;
                     `;
 
-                    tarjeta.onmouseenter = () => { tarjeta.style.transform = 'translateY(-2px)'; tarjeta.style.boxShadow = '0 6px 12px rgba(0,0,0,0.06)'; };
-                    tarjeta.onmouseleave = () => { tarjeta.style.transform = 'translateY(0)'; tarjeta.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; };
-
                     tarjeta.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <span style="background: #f1f5f9; color: #0f172a; padding: 2px 6px; border-radius: 6px; font-size: 0.7rem; font-weight: 900;">
-                                ⏰ ${cita.hora_inicio_cita.substring(0, 5)}
-                            </span>
-                            <span style="font-size: 0.55rem; background: ${estadoBg}; color: ${estadoColor}; border: 1px solid ${estadoBorde}; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
-                                ${estadoTexto}
-                            </span>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="font-size: 0.75rem; font-weight: 800; color: #1e293b; line-height: 1.2;">
+                                ${nombrePaciente}
+                                ${edadInfo ? `<span style="display: block; font-size: 0.65rem; color: #64748b; font-weight: 600; margin-top: 2px;">${edadInfo}</span>` : ''}
+                            </div>
+                            ${botonAccion}
                         </div>
-                        
-                        <h5 style="margin: 0 0 2px 0; font-size: 0.8rem; font-weight: 900; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${nombreCompletoPaciente}">
-                            ${nombreCompletoPaciente}
-                        </h5>
-
-                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 0.65rem; color: #64748b; font-weight: 700;">
-                            <span>${etiquetaEdad ? `👤 ${etiquetaEdad}` : '👤 Edad no reg.'}</span>
-                            <span>•</span>
-                            <span style="color: ${estaPagado ? '#059669' : '#d97706'}; font-weight: 800;">${estaPagado ? '💳 Pagado' : '💳 Pendiente'}</span>
-                        </div>
-
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px solid #f1f5f9;">
-                            <span style="font-size: 0.6rem; color: #475569; font-weight: 800; background: #f8fafc; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
-                                ${cita.modalidad}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
+                                ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
                             </span>
-                            <button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;" onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a'" onmouseout="this.style.background='#f8fafc'; this.style.color='#475569'">→</button>
+                            <span style="font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: #e2e8f0; color: #475569;">
+                                ${cita.estatus || 'PENDIENTE'}
+                            </span>
                         </div>
                     `;
                     contenedorTarjetas.appendChild(tarjeta);
                 });
             }
-
             gridSemanal.appendChild(columnaDia);
         });
-
         lista.appendChild(gridSemanal);
-
-    } else {
-        // Vista de un solo día (Modo 'día')
-        if (!citas || citas.length === 0) {
-            lista.innerHTML = `<div style="text-align: center; padding: 40px; color: #64748b; font-weight: 600;">No hay citas para este día.</div>`;
+        
+    } else if (modo === 'dia') {
+        const fechaInput = document.getElementById('filtroFechaAgenda')?.value || new Date().toISOString().split('T')[0];
+        const citasDelDia = (citas || []).filter(c => c.fecha === fechaInput);
+        
+        if (citasDelDia.length === 0) {
+            lista.innerHTML = '<div style="text-align: center; padding: 30px; color: #94a3b8; font-weight: 600;">Sin citas para este día.</div>';
             return;
         }
 
-        citas.forEach(cita => {
+        const contenedorDia = document.createElement('div');
+        contenedorDia.style.cssText = "display: flex; flex-direction: column; gap: 10px;";
+
+        citasDelDia.forEach(cita => {
             const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', apellido_materno: '', curp: '', id: '' };
-            const nombreCompletoPaciente = `${p.nombre || ''} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim().toUpperCase();
-            const etiquetaEdad = calcularEdadPorCurp(p.curp);
-            const esConsultorio = cita.modalidad === 'CONSULTORIO';
-            const fechaFormateada = formatearFechaCorta(cita.fecha);
-            const estaPagado = cita.pago_status === 'PAGADO';
-
-            let estadoTexto = "PENDIENTE";
-            let estadoBg = "#fef3c7";
-            let estadoColor = "#92400e";
-
-            if (cita.estado_cita === 'ATENDIDA') {
-                estadoTexto = "ATENDIDA";
-                estadoBg = "#d1fae5";
-                estadoColor = "#065f46";
-            } else if (cita.estado_cita === 'REAGENDADA') {
-                estadoTexto = "REAGENDADA";
-                estadoBg = "#ede9fe";
-                estadoColor = "#5b21b6";
-            } else if (cita.estado_cita === 'NO_ASISTIO' || cita.estado_cita === 'CANCELADA') {
-                estadoTexto = "NO ASISTIÓ";
-                estadoBg = "#fee2e2";
-                estadoColor = "#991b1b";
-            }
+            const nombrePaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
+            
+            const botonAccionDia = cita.es_prospecto 
+                ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: 900;">✍️ REGISTRAR</button>`
+                : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: var(--primary); color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">Abrir Expediente →</button>`;
 
             const divCita = document.createElement('div');
             divCita.style.cssText = `
-                background: #ffffff; border: 1px solid #e2e8f0; border-left: 6px solid ${esConsultorio ? '#10b981' : '#3b82f6'};
-                border-radius: 12px; display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; margin-bottom: 10px; width: 100%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+                background: ${cita.es_prospecto ? '#fefce8' : '#ffffff'};
+                border: 1px solid ${cita.es_prospecto ? '#fde047' : '#e2e8f0'};
+                padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             `;
+
             divCita.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <div style="text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px;">
-                        <span style="display: block; font-weight: 900; font-size: 0.9rem; color: #0f172a;">${cita.hora_inicio_cita.substring(0, 5)}</span>
-                        <span style="display: block; font-size: 0.55rem; color: #64748b; font-weight: 700;">${fechaFormateada}</span>
-                    </div>
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                            <span style="font-weight: 900; font-size: 0.92rem; color: #0f172a;">${nombreCompletoPaciente}</span>
-                            <span style="font-size: 0.55rem; background: ${estadoBg}; color: ${estadoColor}; padding: 2px 6px; border-radius: 4px; font-weight: 800;">${estadoTexto}</span>
-                        </div>
-                        <div style="font-size: 0.68rem; color: #64748b; font-weight: 700;">
-                            ${etiquetaEdad ? `${etiquetaEdad} • ` : ''}${cita.modalidad} • <span style="color: ${estaPagado ? '#059669' : '#d97706'}">${estaPagado ? 'Pagado' : 'Pendiente pago'}</span>
-                        </div>
-                    </div>
+                <div>
+                    <div style="font-weight: 800; font-size: 0.9rem; color: #1e293b;">${nombrePaciente}</div>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : ''} | Modalidad: ${cita.modalidad}</div>
                 </div>
-                <button onclick="irAHistoria('${p.id}')" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.75rem; color: #475569;">Ver Expediente →</button>
+                <div>${botonAccionDia}</div>
             `;
-            lista.appendChild(divCita);
+            contenedorDia.appendChild(divCita);
         });
+        lista.appendChild(contenedorDia);
     }
 }
 
@@ -1016,7 +964,8 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
        
     if (!user) return; 
 
-    let query = fisioNet
+    // --- 1. PREPARAMOS CONSULTA DE CITAS OFICIALES ---
+    let queryCitas = fisioNet
         .from('agenda_maestra')
         .select(`
             id_cita, 
@@ -1031,11 +980,21 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         .eq('id_profesional', user.id)
         .eq('id_clinica', clinicaId);
 
+    // --- 2. PREPARAMOS CONSULTA DEL "LIMBO" (PROSPECTOS EXPRÉS) ---
+    let querySol = fisioNet
+        .from('solicitudes_citas')
+        .select('*')
+        .eq('estado', 'CONFIRMADO')
+        .eq('id_clinica_solicitada', clinicaId)
+        .eq('id_profesional_solicitado', user.id);
+
+    // --- 3. APLICAMOS FILTROS DE FECHAS A AMBAS ---
     if (modo === 'dia') {
         if (tituloElemento) tituloElemento.innerText = `CITAS DEL ${formatearFechaCorta(fechaInput).toUpperCase()}`;
-        query = query.eq('fecha', fechaInput);
+        queryCitas = queryCitas.eq('fecha', fechaInput);
+        querySol = querySol.eq('fecha_cita', fechaInput);
    } else {
-        // 🔄 RANGO DE 6 DÍAS HACIA ADELANTE (Alineado con el grid visual)
+        // RANGO DE 6 DÍAS HACIA ADELANTE
         const fechaFin = new Date(fechaBase);
         fechaFin.setDate(fechaBase.getDate() + 5); 
 
@@ -1043,20 +1002,52 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         const f2 = fechaFin.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
         if (tituloElemento) tituloElemento.innerText = `PRÓXIMOS DÍAS: ${f1.toUpperCase()} AL ${f2.toUpperCase()}`;
 
-        query = query
-            .gte('fecha', fechaBase.toISOString().split('T')[0])
-            .lte('fecha', fechaFin.toISOString().split('T')[0]);
-    }
-    const { data: citas, error } = await query
-        .order('fecha')
-        .order('hora_inicio_cita');
+        const fechaInicioStr = fechaBase.toISOString().split('T')[0];
+        const fechaFinStr = fechaFin.toISOString().split('T')[0];
 
-    if (error) {
-        console.error("❌ Error al cargar agenda:", error.message);
+        queryCitas = queryCitas.gte('fecha', fechaInicioStr).lte('fecha', fechaFinStr);
+        querySol = querySol.gte('fecha_cita', fechaInicioStr).lte('fecha_cita', fechaFinStr);
+    }
+
+    // --- 4. EJECUTAMOS AMBAS AL MISMO TIEMPO ---
+    const [resCitas, resSol] = await Promise.all([queryCitas, querySol]);
+
+    if (resCitas.error) {
+        console.error("❌ Error al cargar agenda oficial:", resCitas.error.message);
         return;
     }
 
-    renderizarCitas(citas, modo);
+    // --- 5. DISFRAZAMOS A LOS PROSPECTOS PARA QUE ENTREN A LA AGENDA ---
+    const citasProspectos = (resSol.data || []).map(sol => ({
+        id_cita: sol.id, // El ID de la solicitud (para abrir el modal de limpieza)
+        es_prospecto: true, // 🚩 Bandera para pintarlos de amarillo en renderizarCitas
+        fecha: sol.fecha_cita,
+        hora_inicio_cita: sol.hora_cita || '00:00:00',
+        modalidad: 'SALA DE ESPERA',
+        estatus: 'PENDIENTE',
+        estado_cita: 'PROSPECTO',
+        pago_status: 'PENDIENTE',
+        pacientes_maestros: {
+            id: 'LIMBO',
+            nombre: sol.nombre,
+            apellido_paterno: sol.apellido_p,
+            apellido_materno: '(EXPRÉS)',
+            curp: null
+        }
+    }));
+
+    // --- 6. UNIMOS Y ORDENAMOS TODO JUNTO ---
+    let agendaCompleta = [...(resCitas.data || []), ...citasProspectos];
+    
+    agendaCompleta.sort((a, b) => {
+        if (a.fecha === b.fecha) {
+            return (a.hora_inicio_cita || '').localeCompare(b.hora_inicio_cita || '');
+        }
+        return (a.fecha || '').localeCompare(b.fecha || '');
+    });
+
+    // --- 7. MANDAMOS A PINTAR ---
+    renderizarCitas(agendaCompleta, modo);
 }
 
 window.irAHistoria = (idPaciente) => {
@@ -1162,30 +1153,48 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         .single();
 
     // Validar horario laborable (tu código original)
+    // Validar horario laborable (CORREGIDO PARA MULTI-TURNO)
     if (perfil?.horario_atencion) {
         const horarios = JSON.parse(perfil.horario_atencion);
         const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 30; 
         
         const fechaObj = new Date(fechaElegida + "T12:00:00");
         const diaSemana = fechaObj.getDay();
-        const horarioHoy = horarios.find(h => Number(h.dia) === diaSemana);
+        
+        // 🚀 Usamos FILTER en vez de FIND para atrapar el turno de la mañana Y el de la tarde
+        const turnosHoy = horarios.filter(h => Number(h.dia) === diaSemana);
 
-        if (!horarioHoy) {
+        if (!turnosHoy || turnosHoy.length === 0) {
             alert(`❌ DÍA NO LABORABLE: No tienes configurado horario de trabajo para este día.`);
             return; 
         }
 
-        const hIni = horarioHoy.inicio; 
-        const hFin = horarioHoy.fin;
-
         const [hE, mE] = horaElegida.split(':').map(Number);
-        const [hF, mF] = hFin.split(':').map(Number);
-        
         const minElegidos = (hE * 60) + mE;
-        const minCierre = (hF * 60) + mF;
+        
+        let esHorarioValido = false;
+        let ultimaHoraSalida = "00:00";
 
-        if (horaElegida < hIni || (minElegidos + intervalo) > minCierre) {
-            alert(`❌ HORARIO NO DISPONIBLE: Tu hora límite de salida es a las ${hFin}.`);
+        // Iteramos sobre todos los turnos del día para ver si cabe en alguno
+        for (let turno of turnosHoy) {
+            const [hI, mI] = turno.inicio.split(':').map(Number);
+            const [hF, mF] = turno.fin.split(':').map(Number);
+            const minApertura = (hI * 60) + mI;
+            const minCierre = (hF * 60) + mF;
+
+            // Guardamos la hora de cierre más alta para el mensaje de error
+            if (minCierre > (ultimaHoraSalida.split(':')[0] * 60 + ultimaHoraSalida.split(':')[1] * 1)) {
+                ultimaHoraSalida = turno.fin;
+            }
+
+            if (minElegidos >= minApertura && (minElegidos + intervalo) <= minCierre) {
+                esHorarioValido = true;
+                break; // Encontramos un turno válido, salimos del ciclo
+            }
+        }
+
+        if (!esHorarioValido) {
+            alert(`❌ HORARIO NO DISPONIBLE: La hora seleccionada está fuera de tus turnos de trabajo. (Última hora de salida hoy: ${ultimaHoraSalida}).`);
             return; 
         }
     }
@@ -1232,7 +1241,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             telefono: telefonoInput,
             fecha_cita: fechaElegida,
             hora_cita: horaElegida,
-            estado: 'PENDIENTE',
+            estado: 'CONFIRMADO',
             // Estos dos IDs son clave para que aparezcan en tu panel de "Sala de Espera" según tu código:
             id_clinica_solicitada: clinicaId,
             id_profesional_solicitado: user.id
@@ -1573,7 +1582,7 @@ async function cargarSalaEspera() {
                         <small style="color: #64748b;">📅 ${sol.fecha_cita} - ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
                     </div>
                     <div style="display: flex; gap: 5px;">
-                        <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Aprobar">✅</button>
+                     <button onclick="confirmarHorarioEnSala('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅ Aprobar</button>
                         <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Rechazar">🗑️</button>
                     </div>
                 </div>
@@ -1872,6 +1881,15 @@ async function verificarDisponibilidadReal() {
 
         let espaciosDisponibles = [];
 
+        // 🕒 Lógica para detectar la hora local y ocultar lo pasado
+        const ahora = new Date();
+        const año = ahora.getFullYear();
+        const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+        const diaLocal = String(ahora.getDate()).padStart(2, '0');
+        const fechaLocalHoy = `${año}-${mes}-${diaLocal}`;
+        const esHoy = (fechaElegida === fechaLocalHoy);
+        const minActuales = (ahora.getHours() * 60) + ahora.getMinutes();
+
         bloquesHoy.forEach(bloque => {
             let inicio = aMin(bloque.inicio);
             let fin = aMin(bloque.fin);
@@ -1880,7 +1898,10 @@ async function verificarDisponibilidadReal() {
                 const horaGen = minToH(inicio);
                 const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita.startsWith(horaGen));
                 
-                if (!estaOcupada) {
+                // 🚀 Filtro: Si es hoy y la hora ya pasó, no se inyecta en el arreglo
+                if (esHoy && inicio <= minActuales) {
+                    // Hora expirada, se ignora
+                } else if (!estaOcupada) {
                     espaciosDisponibles.push(horaGen);
                 }
                 inicio += intervalo; 
@@ -1890,7 +1911,7 @@ async function verificarDisponibilidadReal() {
         contenedor.innerHTML = ''; 
 
         if (espaciosDisponibles.length === 0) {
-            contenedor.innerHTML = '<p style="color:#64748b; text-align:center; width:100%;">Sin citas para este día.</p>';
+            contenedor.innerHTML = '<p style="color:#64748b; text-align:center; width:100%;">Sin disponibilidad para este día.</p>';
             return;
         }
 
@@ -2267,10 +2288,10 @@ async function cargarSolicitudesRecibidas() {
                             <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-top: 5px;">${nombreFull}</strong>
                             <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
                         </div>
-                        <div style="display: flex; gap: 5px;">
-                            <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
-                            <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
-                        </div>
+                      <div style="display: flex; gap: 5px;">
+    <button onclick="confirmarHorarioEnSala('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
+    <button onclick="confirmarHorarioEnSala('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
+</div>
                     </div>
                     <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold; text-align: left;">
                         📞 TEL: ${sol.telefono} 
@@ -2967,3 +2988,57 @@ function iniciarCanalSalaEspera() {
         )
         .subscribe();
 }
+
+window.abrirFiltroLimpieza = async (idSolicitud) => {
+    // 1. Traemos la basura que guardamos por teléfono ("DOÑA JOSE")
+    const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
+    if(!sol) return;
+
+    // 2. Llenamos el modal para que la recepcionista lo borre y corrija
+    document.getElementById('limpiezaIdSolicitud').value = sol.id;
+    document.getElementById('limpiezaNombre').value = sol.nombre || '';
+    document.getElementById('limpiezaPaterno').value = sol.apellido_p || '';
+    document.getElementById('limpiezaMaterno').value = sol.apellido_m || '';
+
+    // Abrimos la aduana
+    document.getElementById('modalLimpieza').style.display = 'flex';
+};
+
+window.confirmarLimpiezaYProcesar = async () => {
+    const id = document.getElementById('limpiezaIdSolicitud').value;
+    const nom = document.getElementById('limpiezaNombre').value.trim().toUpperCase();
+    const pat = document.getElementById('limpiezaPaterno').value.trim().toUpperCase();
+    const mat = document.getElementById('limpiezaMaterno').value.trim().toUpperCase();
+
+    if(!nom || !pat) {
+        alert("⚠️ El Nombre y Apellido Paterno son obligatorios para el expediente real.");
+        return;
+    }
+
+    // 1. Actualizamos el registro temporal con los datos YA LIMPIOS
+    await fisioNet.from('solicitudes_citas').update({
+        nombre: nom,
+        apellido_p: pat,
+        apellido_m: mat
+    }).eq('id', id);
+
+    document.getElementById('modalLimpieza').style.display = 'none';
+
+    // 2. ¡LA MAGIA! Ahora mandamos llamar a tu función original. 
+    // Como los datos ya están limpios, tu buscador de duplicados funcionará perfecto.
+    procesarSolicitud(id, 'APROBAR');
+};
+
+window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
+    const nuevoEstado = accion === 'APROBAR' ? 'CONFIRMADO' : 'RECHAZADO';
+    
+    if (accion === 'RECHAZAR' && !confirm("¿Estás seguro de rechazar esta solicitud?")) return;
+    
+    // Solo actualizamos el estado, no tocamos los nombres aún
+    await fisioNet.from('solicitudes_citas').update({ estado: nuevoEstado }).eq('id', idSolicitud);
+    
+    // Recargamos los paneles
+    if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+    if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
+    if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+};
