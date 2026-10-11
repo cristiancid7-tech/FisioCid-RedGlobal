@@ -168,7 +168,7 @@ const cargarEstadisticas = async () => {
     const clinicaId = localStorage.getItem('id_clinica_activa'); 
     if (!clinicaId) return;
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaLocal();
     
     try {
         const { count: totalPacientes } = await fisioNet
@@ -321,7 +321,8 @@ function renderizarCitas(citas, modo) {
             const fechaObj = new Date(fechaStr + "T00:00:00");
             const nombreDia = fechaObj.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
             
-            const esHoy = index === 0;
+        const hoyReal = obtenerFechaLocal();
+            const esHoy = (fechaStr === hoyReal);
             
             const columnaDia = document.createElement('div');
             columnaDia.style.cssText = `
@@ -384,14 +385,23 @@ function renderizarCitas(citas, modo) {
                             </div>
                             ${botonAccion}
                         </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
-                                ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
-                            </span>
-                            <span style="font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: #e2e8f0; color: #475569;">
-                                ${cita.estatus || 'PENDIENTE'}
-                            </span>
-                        </div>
+                       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+    <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
+        ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
+    </span>
+    ${cita.es_prospecto ? 
+        `<span style="font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: #e2e8f0; color: #475569;">PENDIENTE</span>` 
+        : 
+        `<select onchange="cambiarEstatusCita('${cita.id_cita}', this.value)" style="font-size: 0.65rem; font-weight: 800; padding: 2px 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer;">
+            <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
+            <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
+            <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
+            <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
+            <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
+            <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
+        </select>`
+    }
+</div>
                     `;
                     contenedorTarjetas.appendChild(tarjeta);
                 });
@@ -420,6 +430,16 @@ function renderizarCitas(citas, modo) {
                 ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: 900;">✍️ REGISTRAR</button>`
                 : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: var(--primary); color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">Abrir Expediente →</button>`;
 
+                const selectorEstatus = cita.es_prospecto ? '' : `
+                <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value)" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
+                    <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
+                    <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
+                    <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
+                    <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
+                    <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
+                    <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
+                </select>
+            `;
             const divCita = document.createElement('div');
             divCita.style.cssText = `
                 background: ${cita.es_prospecto ? '#fefce8' : '#ffffff'};
@@ -427,12 +447,15 @@ function renderizarCitas(citas, modo) {
                 padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             `;
 
-            divCita.innerHTML = `
+          divCita.innerHTML = `
                 <div>
                     <div style="font-weight: 800; font-size: 0.9rem; color: #1e293b;">${nombrePaciente}</div>
                     <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : ''} | Modalidad: ${cita.modalidad}</div>
                 </div>
-                <div>${botonAccionDia}</div>
+                <div style="display: flex; align-items: center;">
+                    ${selectorEstatus}
+                    ${botonAccionDia}
+                </div>
             `;
             contenedorDia.appendChild(divCita);
         });
@@ -940,7 +963,7 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     let fechaInput = document.getElementById('filtroFechaAgenda')?.value;
     
     if (!fechaInput) {
-        fechaInput = new Date().toISOString().split('T')[0];
+        fechaInput = obtenerFechaLocal();
         if(document.getElementById('filtroFechaAgenda')) {
             document.getElementById('filtroFechaAgenda').value = fechaInput;
         }
@@ -981,16 +1004,17 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         .eq('id_clinica', clinicaId);
 
     // --- 2. PREPARAMOS CONSULTA DEL "LIMBO" (PROSPECTOS EXPRÉS) ---
+    // AHORA SOLO TRAEMOS A LOS QUE YA FUERON APROBADOS (CONFIRMADOS)
     let querySol = fisioNet
         .from('solicitudes_citas')
         .select('*')
-        .eq('estado', 'CONFIRMADO')
+        .eq('estado', 'CONFIRMADO') 
         .eq('id_clinica_solicitada', clinicaId)
         .eq('id_profesional_solicitado', user.id);
 
     // --- 3. APLICAMOS FILTROS DE FECHAS A AMBAS ---
     if (modo === 'dia') {
-        if (tituloElemento) tituloElemento.innerText = `CITAS DEL ${formatearFechaCorta(fechaInput).toUpperCase()}`;
+        // (El título lo armamos más abajo con los chochos)
         queryCitas = queryCitas.eq('fecha', fechaInput);
         querySol = querySol.eq('fecha_cita', fechaInput);
    } else {
@@ -1045,6 +1069,45 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         }
         return (a.fecha || '').localeCompare(b.fecha || '');
     });
+
+    // 🔥 METIÉNDOLE CHOCHOS: SÚPER RESUMEN DEL DÍA 🔥
+    if (modo === 'dia' && tituloElemento) {
+        const total = agendaCompleta.length;
+        
+        const atendidos = agendaCompleta.filter(c => c.estatus === 'COMPLETADO' || c.estatus === 'ATENDIENDO').length;
+        const pendientes = agendaCompleta.filter(c => c.estatus === 'PENDIENTE').length;
+        const cancelados = agendaCompleta.filter(c => c.estatus === 'CANCELADO').length;
+        const reagendados = agendaCompleta.filter(c => c.estatus === 'REAGENDADO').length;
+        const noLlegaron = agendaCompleta.filter(c => c.estatus === 'NO_ASISTIO' || c.estatus === 'FALTO').length;
+
+        const fechaObjParaTitulo = new Date(fechaInput + "T00:00:00");
+        const fechaBonita = fechaObjParaTitulo.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }).toUpperCase();
+
+        tituloElemento.innerHTML = `
+            <div style="margin-bottom: 12px; font-size: 1.2rem;">CITAS DEL ${fechaBonita}</div>
+            
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; font-weight: 800; font-family: sans-serif;">
+                <span style="background: #f1f5f9; color: #475569; padding: 5px 12px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    📊 TOTAL: ${total}
+                </span>
+                <span style="background: #dcfce7; color: #15803d; padding: 5px 12px; border-radius: 8px; border: 1px solid #bbf7d0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    ✅ ATENDIDOS: ${atendidos}
+                </span>
+                <span style="background: #fefce8; color: #a16207; padding: 5px 12px; border-radius: 8px; border: 1px solid #fef08a; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    ⏳ PENDIENTES: ${pendientes}
+                </span>
+                <span style="background: #ffedd5; color: #c2410c; padding: 5px 12px; border-radius: 8px; border: 1px solid #fed7aa; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    🔄 REAGENDAR: ${reagendados}
+                </span>
+                <span style="background: #fee2e2; color: #b91c1c; padding: 5px 12px; border-radius: 8px; border: 1px solid #fecaca; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    ❌ CANCELADOS: ${cancelados}
+                </span>
+                <span style="background: #f3f4f6; color: #6b7280; padding: 5px 12px; border-radius: 8px; border: 1px solid #d1d5db; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    👻 FALTARON: ${noLlegaron}
+                </span>
+            </div>
+        `;
+    }
 
     // --- 7. MANDAMOS A PINTAR ---
     renderizarCitas(agendaCompleta, modo);
@@ -2547,7 +2610,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const hoy = new Date();
     const inputFecha = document.getElementById('filtroFechaAgenda');
-    if (inputFecha) inputFecha.value = hoy.toISOString().split('T')[0];
+    if (inputFecha) inputFecha.value = obtenerFechaLocal();
 
     // Cargar los módulos secuenciales
     await cargarAgenda('semana');
@@ -3042,3 +3105,29 @@ window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
     if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
     if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
 };
+
+window.cambiarEstatusCita = async (idCita, nuevoEstatus) => {
+    if (!idCita || idCita === 'undefined') return;
+    try {
+        const { error } = await fisioNet.from('agenda_maestra')
+            .update({ estatus: nuevoEstatus })
+            .eq('id_cita', idCita);
+
+        if (error) throw error;
+
+        // Recargamos la agenda actual para que se actualicen los contadores del resumen
+        const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
+        await cargarAgenda(modoActual);
+    } catch (err) {
+        console.error("Error:", err);
+        alert("No se pudo cambiar el estatus: " + err.message);
+    }
+};
+
+function obtenerFechaLocal() {
+    const ahora = new Date();
+    const anio = ahora.getFullYear();
+    const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+    const dia = String(ahora.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+}
