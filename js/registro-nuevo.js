@@ -10,26 +10,27 @@ function sanitizarTexto(texto) {
         .replace(/['"`;-]/g, "");     // 4. Remueve comillas, puntos y comas o guiones de SQL
 }
 
-// Forzar minúsculas en tiempo real en el campo de correo
+
+// Forzar minúsculas en el correo y mayúsculas en el nombre sin errores de selección
 document.addEventListener('DOMContentLoaded', () => {
     const campoEmail = document.getElementById('regEmail');
     if (campoEmail) {
         campoEmail.addEventListener('input', (e) => {
-            const pos = e.target.selectionStart;
+            // Los inputs type="email" no soportan setSelectionRange, solo cambiamos el valor
             e.target.value = e.target.value.toLowerCase();
-            e.target.setSelectionRange(pos, pos);
         });
     }
-});
 
-// Forzar mayúsculas en tiempo real en el campo de nombre
-document.addEventListener('DOMContentLoaded', () => {
     const campoNombre = document.getElementById('regNombre');
     if (campoNombre) {
         campoNombre.addEventListener('input', (e) => {
-            const pos = e.target.selectionStart;
-            e.target.value = e.target.value.toUpperCase();
-            e.target.setSelectionRange(pos, pos);
+            try {
+                const pos = e.target.selectionStart;
+                e.target.value = e.target.value.toUpperCase();
+                e.target.setSelectionRange(pos, pos);
+            } catch (err) {
+                e.target.value = e.target.value.toUpperCase();
+            }
         });
     }
 });
