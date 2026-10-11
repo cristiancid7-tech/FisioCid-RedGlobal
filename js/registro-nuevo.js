@@ -58,6 +58,11 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     const pass = document.getElementById('regPass').value;
     const nombre = document.getElementById('regNombre').value.trim().toUpperCase();
     const telefono = document.getElementById('regTelefono').value.trim();
+    
+    // Captura estricta del tipo de perfil desde el input oculto
+    const rawTipoPerfil = document.getElementById('tipoPerfil')?.value || 'INDEPENDIENTE';
+    const tipoPerfilFinal = (rawTipoPerfil === 'DUEÑO' || rawTipoPerfil === 'DUENO_CLINICA') ? 'DUENO_CLINICA' : 'INDEPENDIENTE';
+    
     const especialidadCapturada = document.getElementById('regEspecialidad')?.value || 'FISIOTERAPEUTA';
 
     const regexCorreo = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -91,7 +96,7 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     btnSubmit.disabled = true;
 
     try {
-        // 2. REGISTRO EN AUTH (Envía los datos al Trigger mediante options.data)
+        // 2. REGISTRO EN AUTH (Enviando correctamente todos los metadatos al Trigger)
         const { data, error: authError } = await fisioNet.auth.signUp({ 
             email, 
             password: pass,
@@ -99,18 +104,19 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
                 data: { 
                     display_name: nombre, 
                     telefono_registro: telefono,
-                    nombre_clinica: nombreSede
+                    nombre_clinica: nombreSede,
+                    especialidad: especialidadCapturada,
+                    tipo_profesional: especialidadCapturada,
+                    tipo_perfil: tipoPerfilFinal
                 }
             }
         });
 
         if (authError) throw authError;
 
-        // 🎯 Nota: Como Supabase requiere confirmación por correo, informamos al usuario
         alert(`¡REGISTRO EXITOSO! 🚀\nHemos enviado un correo de confirmación a:\n${email}\n\nPor favor revísalo para activar tu cuenta y acceder a ${nombreSede}.`);
         
-        // Redirigir al login o pantalla de espera
-        window.location.href = 'index.html'; // O tu vista de inicio de sesión
+        window.location.href = 'login.html'; 
 
     } catch (error) {
         console.error("ERROR EN REGISTRO:", error);
