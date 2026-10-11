@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FisioCid - La Red para Fisioterapeutas</title>
     <!-- Google Fonts Inter para aspecto profesional -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400,500,600,700;800&display=swap" rel="stylesheet">
-    
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"> 
+    <!-- Tus otros estilos y metadatos actuales -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FisioCid">
+
     <style>
         :root {
             --primary: #0284c7;
@@ -328,6 +334,14 @@
     <script src="js/registro-nuevo.js"></script>
 
     <script>
+
+        if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
+            .catch(err => console.error('Error al registrar el Service Worker:', err));
+    });
+}
         function seleccionarPerfil(tipo) {
             document.getElementById('tipoPerfil').value = tipo;
             document.getElementById('paso1').style.display = 'none';
