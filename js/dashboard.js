@@ -3131,3 +3131,71 @@ function obtenerFechaLocal() {
     const dia = String(ahora.getDate()).padStart(2, '0');
     return `${anio}-${mes}-${dia}`;
 }
+
+// Ejecutar cuando cargue el dashboard
+document.addEventListener('DOMContentLoaded', () => {
+    verificarYPedirNotificaciones();
+});
+
+async function verificarYPedirNotificaciones() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    // Si el permiso aún no se ha pedido (es 'default'), podemos pedirlo o mostrar un aviso
+    if (Notification.permission === 'default') {
+        // Opcional: Puedes mostrar un botón o pedirlo directamente
+        const permiso = await Notification.requestPermission();
+        if (permiso === 'granted') {
+            console.log('¡Notificaciones activadas con éxito!');
+            registrarSuscripcionPushEnSupabase();
+        }
+    }
+}
+
+async function registrarSuscripcionPushEnSupabase() {
+    try {
+        const registro = await navigator.serviceWorker.ready;
+        
+        // 🔑 Tu Llave Pública VAPID 
+        // (Nota: Necesitas generar un par de llaves VAPID; puedes usar herramientas online gratuitas 
+        // o generarlas con Node.js, y poner aquí tu llave pública en formato Uint8Array)
+        const publicVapidKey = 'BIxTihYT48GMKpAUqmTUy56KemyUAjW-tPVgWh_cy_uhJjUDgirmnR7ymPFsOyUWEOk-6F7EPLjOIgTCsWBy_bs'; 
+        const convertedVapidKey = urlBase64ToUint8Array(publicVapidKey);
+
+        // Suscribimos al navegador al servidor push
+        const suscripcion = await registro.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedVapidKey
+        });
+
+        const usuarioId = localStorage.getItem('usuarioId');
+        const subJson = suscripcion.toJSON();
+
+  // Guardamos o actualizamos la suscripción en Supabase basada en el endpoint único del dispositivo
+        const { error } = await fisioNet
+            .from('push_subscriptions')
+            .upsert({
+                id_profesional: usuarioId,
+                endpoint: subJson.endpoint,
+                p256dh: subJson.keys.p256dh,
+                auth: subJson.keys.auth
+            }, { onConflict: 'endpoint' });
+
+        if (error) console.error("Error al guardar suscripción push en Supabase:", error);
+        else console.log("📱 Dispositivo registrado con éxito para recibir notificaciones push.");
+
+    } catch (err) {
+        console.error('Error en el proceso de suscripción push:', err);
+    }
+}
+
+// 🛠️ Función auxiliar obligatoria para traducir la llave VAPID
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
