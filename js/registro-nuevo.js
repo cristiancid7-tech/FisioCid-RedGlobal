@@ -157,3 +157,15 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         btnSubmit.disabled = false;
     }
 });
+
+// Forzar mayúsculas en tiempo real en el campo de nombre
+document.addEventListener('DOMContentLoaded', () => {
+    const campoNombre = document.getElementById('regNombre');
+    if (campoNombre) {
+        campoNombre.addEventListener('input', (e) => {
+            const pos = e.target.selectionStart;
+            e.target.value = e.target.value.toUpperCase();
+            e.target.setSelectionRange(pos, pos);
+        });
+    }
+});
