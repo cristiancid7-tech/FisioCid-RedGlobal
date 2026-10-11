@@ -228,7 +228,7 @@ async function aplicarIdentidadVisual() {
             .from('clinicas')
             .select('color_institucional, nombre_clinica, logo_url')
             .eq('id', clinicaId)
-            .single();
+            .maybeSingle();
 
         if (clinica) {
             colorClinica = clinica.color_institucional;
