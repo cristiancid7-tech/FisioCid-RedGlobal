@@ -11,28 +11,34 @@ function sanitizarTexto(texto) {
 }
 
 
-// Forzar minúsculas en el correo y mayúsculas en el nombre sin errores de selección
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Forzar minúsculas en el correo electrónico
     const campoEmail = document.getElementById('regEmail');
     if (campoEmail) {
         campoEmail.addEventListener('input', (e) => {
-            // Los inputs type="email" no soportan setSelectionRange, solo cambiamos el valor
             e.target.value = e.target.value.toLowerCase();
         });
     }
 
-    const campoNombre = document.getElementById('regNombre');
-    if (campoNombre) {
-        campoNombre.addEventListener('input', (e) => {
-            try {
-                const pos = e.target.selectionStart;
-                e.target.value = e.target.value.toUpperCase();
-                e.target.setSelectionRange(pos, pos);
-            } catch (err) {
-                e.target.value = e.target.value.toUpperCase();
-            }
-        });
-    }
+    // Función auxiliar para forzar mayúsculas de manera segura
+    const aplicarMayusculas = (idElemento) => {
+        const campo = document.getElementById(idElemento);
+        if (campo) {
+            campo.addEventListener('input', (e) => {
+                try {
+                    const pos = e.target.selectionStart;
+                    e.target.value = e.target.value.toUpperCase();
+                    e.target.setSelectionRange(pos, pos);
+                } catch (err) {
+                    e.target.value = e.target.value.toUpperCase();
+                }
+            });
+        }
+    };
+
+    // 2. Aplicar mayúsculas al Nombre Completo y al Nombre de la Clínica
+    aplicarMayusculas('regNombre');
+    aplicarMayusculas('regNombreClinica');
 });
 
 document.getElementById('formRegistroNuevo').addEventListener('submit', async (e) => {
