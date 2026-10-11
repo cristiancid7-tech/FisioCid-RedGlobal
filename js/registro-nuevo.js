@@ -77,20 +77,20 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
 
     try {
         // 2. REGISTRO EN AUTH
-        const { data, error: authError } = await fisioNet.auth.signUp({ 
-            email, 
-            password: pass,
-            options: {
-                data: { 
-                    display_name: nombre, 
-                    rol_registro: 'DOCTOR',
-                    telefono_registro: telefono
-                }
-            }
-        });
+       // const { data, error: authError } = await fisioNet.auth.signUp({ 
+        //    email, 
+         //   password: pass,
+          //  options: {
+           //     data: { 
+            //        display_name: nombre, 
+          //          rol_registro: 'DOCTOR',
+          //          telefono_registro: telefono
+          //      }
+         //   }
+        //});
 
-        if (authError) throw authError;
-        const userId = data.user.id;
+      //  if (authError) throw authError;
+      //  const userId = data.user.id;
 
         // 🎯 DEFINICIÓN DE VIGENCIA DE DEMO (5 años para controlar por límite de pacientes)
         const fechaExpiracionDemo = new Date();
@@ -117,15 +117,15 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         if (profileError) throw profileError;
 
         // 4. CREAR LA CLÍNICA
-        const { data: clinica, error: clinicaError } = await fisioNet.from('clinicas').insert([{
-            nombre_clinica: nombreSede,
-            id_dueno: userId,
-            telefono_contacto: telefono,
-            color_institucional: '#10B981',
-            estado: true
-        }]).select().single();
+   //     const { data: clinica, error: clinicaError } = await fisioNet.from('clinicas').insert([{
+   //         nombre_clinica: nombreSede,
+   //         id_dueno: userId,
+   //         telefono_contacto: telefono,
+  //          color_institucional: '#10B981',
+   //         estado: true
+   //     }]).select().single();
         
-        if (clinicaError) throw clinicaError;
+    //    if (clinicaError) throw clinicaError;
 
         // 5. VINCULAR COLABORADOR (🎯 Ahora asigna siempre ADMINISTRADOR y tipo_vinculo DUENO)
         const { error: colabError } = await fisioNet.from('colaboradores_clinica').insert([{

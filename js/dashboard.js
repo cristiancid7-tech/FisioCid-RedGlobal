@@ -11,7 +11,7 @@ async function verificarSesionSegura() {
         sessionStorage.clear();
         
         // Redirigir usando replace() para que no se guarde el dashboard en la pila del navegador
-        window.location.replace("index.html"); // Cambia por el nombre de tu archivo de Login
+        window.location.replace("login.html"); // Cambia por el nombre de tu archivo de Login
     }
 }
 
