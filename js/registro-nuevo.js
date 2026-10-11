@@ -22,9 +22,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Forzar mayúsculas en tiempo real en el campo de nombre
+document.addEventListener('DOMContentLoaded', () => {
+    const campoNombre = document.getElementById('regNombre');
+    if (campoNombre) {
+        campoNombre.addEventListener('input', (e) => {
+            const pos = e.target.selectionStart;
+            e.target.value = e.target.value.toUpperCase();
+            e.target.setSelectionRange(pos, pos);
+        });
+    }
+});
+
 document.getElementById('formRegistroNuevo').addEventListener('submit', async (e) => {
     e.preventDefault();
-   
 
     // 🛡️ VALIDACIÓN DE TÉRMINOS Y PRIVACIDAD DE PLATAFORMA
     const checkTerminos = document.getElementById('checkTerminosLegales')?.checked;
@@ -34,13 +45,12 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         alert("⚠️ Para continuar debes aceptar los Términos de Uso, el Aviso de Privacidad y la Declaración Jurada.");
         return;
     }
+
     // 1. CAPTURA DE DATOS
-   const email = document.getElementById('regEmail').value.trim().toLowerCase();
+    const email = document.getElementById('regEmail').value.trim().toLowerCase();
     const pass = document.getElementById('regPass').value;
     const nombre = document.getElementById('regNombre').value.trim().toUpperCase();
-    const categoriaRegistro = document.getElementById('tipoPerfil')?.value || 'DUEÑO'; 
     const telefono = document.getElementById('regTelefono').value.trim();
-
     const especialidadCapturada = document.getElementById('regEspecialidad')?.value || 'FISIOTERAPEUTA';
 
     const regexCorreo = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -62,8 +72,7 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         return;
     }
    
-    const nombreLimpio = sanitizarTexto(document.getElementById('regNombre').value.trim().toUpperCase());
-
+    const nombreLimpio = sanitizarTexto(nombre);
     let nombreSede = document.getElementById('regNombreClinica')?.value.trim().toUpperCase();
     if (!nombreSede) {
         nombreSede = `CONSULTORIO - ${nombreLimpio}`;
@@ -76,63 +85,42 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     btnSubmit.disabled = true;
 
     try {
-        // 2. REGISTRO EN AUTH
-       // const { data, error: authError } = await fisioNet.auth.signUp({ 
-        //    email, 
-         //   password: pass,
-          //  options: {
-           //     data: { 
-            //        display_name: nombre, 
-          //          rol_registro: 'DOCTOR',
-          //          telefono_registro: telefono
-          //      }
-         //   }
-        //});
+        // 2. REGISTRO EN AUTH (Activo para crear el usuario y pasar metadatos al Trigger)
+        const { data, error: authError } = await fisioNet.auth.signUp({ 
+            email, 
+            password: pass,
+            options: {
+                data: { 
+                    display_name: nombre, 
+                    rol_registro: 'DOCTOR',
+                    telefono_registro: telefono
+                }
+            }
+        });
 
-      //  if (authError) throw authError;
-      //  const userId = data.user.id;
+        if (authError) throw authError;
+        const userId = data.user.id;
 
-        // 🎯 DEFINICIÓN DE VIGENCIA DE DEMO (5 años para controlar por límite de pacientes)
-        const fechaExpiracionDemo = new Date();
-        fechaExpiracionDemo.setFullYear(fechaExpiracionDemo.getFullYear() + 5);
-        // 3. CREAR PERFIL PROFESIONAL (🎯 Ahora asigna cargo_clinico como ADMINISTRADOR)
-        const { error: profileError } = await fisioNet.from('perfiles_profesionales').insert([{
-            id: userId,
-            nombre_completo: nombre,
-            correo_institucional: email,
+        // 🎯 Nota: El perfil profesional ('perfiles_profesionales') ya NO se inserta aquí. 
+        // Lo crea automáticamente el Trigger de la base de datos de forma segura.
+
+        // 3. CREAR LA CLÍNICA
+        const { data: clinica, error: clinicaError } = await fisioNet.from('clinicas').insert([{
+            nombre_clinica: nombreSede,
+            id_dueno: userId,
             telefono_contacto: telefono,
-            rol: 'ADMIN_SISTEMA', 
-            cargo_clinico: 'ADMINISTRADOR', // 👈 Cargo jerárquico supremo
-            especialidad: especialidadCapturada,
-            nivel_suscripcion: 'GRATUITO',
-            suscripcion_activa: true,
-            demo_usado: true, // 👈 Se marca consumido para que no pueda pedir otra demo
-            fecha_expiracion: fechaExpiracionDemo.toISOString(), // 👈 Evita que el sistema lo marque vencido hoy mismo
-            // 🛡️ REGISTRO LEGAL DE PLATAFORMA (SEPARADO)
-             terminos_aceptados: true,
-            fecha_terminos: new Date().toISOString(),
-            version_legales: 'v1.0'
-
-        }]);
-        if (profileError) throw profileError;
-
-        // 4. CREAR LA CLÍNICA
-   //     const { data: clinica, error: clinicaError } = await fisioNet.from('clinicas').insert([{
-   //         nombre_clinica: nombreSede,
-   //         id_dueno: userId,
-   //         telefono_contacto: telefono,
-  //          color_institucional: '#10B981',
-   //         estado: true
-   //     }]).select().single();
+            color_institucional: '#10B981',
+            estado: true
+        }]).select().single();
         
-    //    if (clinicaError) throw clinicaError;
+        if (clinicaError) throw clinicaError;
 
-        // 5. VINCULAR COLABORADOR (🎯 Ahora asigna siempre ADMINISTRADOR y tipo_vinculo DUENO)
+        // 4. VINCULAR COLABORADOR
         const { error: colabError } = await fisioNet.from('colaboradores_clinica').insert([{
             id_clinica: clinica.id,
             id_profesional: userId,
             rol_sistema: 'ADMIN_SISTEMA',
-            cargo_clinico: 'ADMINISTRADOR', // 👈 Garantiza que quede hasta arriba de la lista
+            cargo_clinico: 'ADMINISTRADOR', 
             tipo_vinculo: 'DUENO',
             estado: 'ACTIVO'
         }]);
@@ -147,7 +135,6 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
         localStorage.setItem('clinica_activa_id', clinica.id);
 
         alert(`¡BIENVENIDO A FISIOCID! 🚀\nSe ha creado: ${nombreSede}`);
-        
         window.location.href = 'dashboard.html';
 
     } catch (error) {
@@ -158,14 +145,3 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     }
 });
 
-// Forzar mayúsculas en tiempo real en el campo de nombre
-document.addEventListener('DOMContentLoaded', () => {
-    const campoNombre = document.getElementById('regNombre');
-    if (campoNombre) {
-        campoNombre.addEventListener('input', (e) => {
-            const pos = e.target.selectionStart;
-            e.target.value = e.target.value.toUpperCase();
-            e.target.setSelectionRange(pos, pos);
-        });
-    }
-});
