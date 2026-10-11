@@ -16,12 +16,6 @@ async function cargarDatosUsuario() {
             document.getElementById('confEmail').value = user.email;
         }
 
-        // Si el usuario ya tiene teléfono registrado en Auth (en formato +52...)
-        if (user.phone) {
-            const numLimpio = user.phone.replace('+52', '').trim();
-            document.getElementById('smsTelefono').value = numLimpio;
-        }
-
         // Consultamos en la tabla correcta: perfiles_profesionales
         const { data: perfil, error } = await fisioNet
             .from('perfiles_profesionales')
@@ -34,11 +28,6 @@ async function cargarDatosUsuario() {
         if (perfil) {
             document.getElementById('confNombre').value = perfil.nombre_completo || '';
             document.getElementById('confTelefono').value = perfil.telefono_contacto || '';
-            
-            // Si no tiene teléfono en Auth, colocamos el de la base de datos
-            if (!document.getElementById('smsTelefono').value) {
-                document.getElementById('smsTelefono').value = perfil.telefono_contacto || '';
-            }
         }
     } catch (error) {
         console.error("Error al cargar perfil de cuenta:", error.message);
@@ -126,72 +115,5 @@ document.getElementById('formCredenciales').addEventListener('submit', async (e)
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-shield-lock"></i> ACTUALIZAR CREDENCIALES';
-    }
-});
-
-// --- 4. SOLICITAR VERIFICACIÓN SMS (FORMATO E.164 +52) ---
-document.getElementById('btnEnviarSMS').addEventListener('click', async () => {
-    const btn = document.getElementById('btnEnviarSMS');
-    const telefonoInput = document.getElementById('smsTelefono').value.trim();
-
-    if (telefonoInput.length !== 10 || isNaN(telefonoInput)) {
-        alert("⚠️ Por favor, ingresa un número celular válido de 10 dígitos.");
-        return;
-    }
-
-    // Convertir a formato internacional para México (+52)
-    const telefonoE164 = `+52${telefonoInput}`;
-
-    try {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ENVIANDO SMS...';
-
-        // Petición nativa a Supabase Auth para ligar el celular
-        const { error } = await fisioNet.auth.updateUser({ phone: telefonoE164 });
-        if (error) throw error;
-
-        alert(`📱 Código de verificación enviado al número +52 ${telefonoInput}. Revisa tus mensajes de texto.`);
-        document.getElementById('bloqueVerificacion').classList.remove('hidden');
-    } catch (error) {
-        alert("⚠️ Error al solicitar SMS: " + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-send-fill"></i> REENVIAR CÓDIGO SMS';
-    }
-});
-
-// --- 5. VERIFICAR EL CÓDIGO SMS RECIBIDO ---
-document.getElementById('btnVerificarCodigo').addEventListener('click', async () => {
-    const btn = document.getElementById('btnVerificarCodigo');
-    const telefonoInput = document.getElementById('smsTelefono').value.trim();
-    const token = document.getElementById('smsToken').value.trim();
-
-    if (token.length !== 6) {
-        alert("⚠️ El código debe constar de 6 dígitos.");
-        return;
-    }
-
-    const telefonoE164 = `+52${telefonoInput}`;
-
-    try {
-        btn.disabled = true;
-        btn.innerHTML = 'VERIFICANDO...';
-
-        const { data, error } = await fisioNet.auth.verifyOtp({
-            phone: telefonoE164,
-            token: token,
-            type: 'phone_change'
-        });
-
-        if (error) throw error;
-
-        alert("🎉 ¡Teléfono verificado al 100%! Tu número ha quedado registrado como medio oficial de recuperación de cuenta.");
-        document.getElementById('bloqueVerificacion').classList.add('hidden');
-        location.reload();
-    } catch (error) {
-        alert("❌ Código inválido o expirado. Verifica el número e intenta nuevamente: " + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'VERIFICAR';
     }
 });
