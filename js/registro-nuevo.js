@@ -63,7 +63,6 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     const regexCorreo = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     const regexTelefono = /^[0-9]{10}$/; 
 
-    // --- VALIDACIONES DE SEGURIDAD ---
     if (!regexCorreo.test(email)) {
         alert("Por favor, ingresa un correo electrónico válido.");
         return;
@@ -92,57 +91,26 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     btnSubmit.disabled = true;
 
     try {
-        // 2. REGISTRO EN AUTH (Activo para crear el usuario y pasar metadatos al Trigger)
+        // 2. REGISTRO EN AUTH (Envía los datos al Trigger mediante options.data)
         const { data, error: authError } = await fisioNet.auth.signUp({ 
             email, 
             password: pass,
             options: {
                 data: { 
                     display_name: nombre, 
-                    rol_registro: 'DOCTOR',
-                    telefono_registro: telefono
+                    telefono_registro: telefono,
+                    nombre_clinica: nombreSede
                 }
             }
         });
 
         if (authError) throw authError;
-        const userId = data.user.id;
 
-        // 🎯 Nota: El perfil profesional ('perfiles_profesionales') ya NO se inserta aquí. 
-        // Lo crea automáticamente el Trigger de la base de datos de forma segura.
-
-        // 3. CREAR LA CLÍNICA
-        const { data: clinica, error: clinicaError } = await fisioNet.from('clinicas').insert([{
-            nombre_clinica: nombreSede,
-            id_dueno: userId,
-            telefono_contacto: telefono,
-            color_institucional: '#10B981',
-            estado: true
-        }]).select().single();
+        // 🎯 Nota: Como Supabase requiere confirmación por correo, informamos al usuario
+        alert(`¡REGISTRO EXITOSO! 🚀\nHemos enviado un correo de confirmación a:\n${email}\n\nPor favor revísalo para activar tu cuenta y acceder a ${nombreSede}.`);
         
-        if (clinicaError) throw clinicaError;
-
-        // 4. VINCULAR COLABORADOR
-        const { error: colabError } = await fisioNet.from('colaboradores_clinica').insert([{
-            id_clinica: clinica.id,
-            id_profesional: userId,
-            rol_sistema: 'ADMIN_SISTEMA',
-            cargo_clinico: 'ADMINISTRADOR', 
-            tipo_vinculo: 'DUENO',
-            estado: 'ACTIVO'
-        }]);
-        if (colabError) throw colabError;
-
-        // Guardar variables locales para la sesión activa
-        localStorage.setItem('especialidad_usuario', especialidadCapturada);
-        localStorage.setItem('id_clinica_activa', clinica.id); 
-        localStorage.setItem('nombre_clinica', nombreSede);
-        localStorage.setItem('clinica_color', '#10B981');
-        localStorage.setItem('nombre_completo', nombre);
-        localStorage.setItem('clinica_activa_id', clinica.id);
-
-        alert(`¡BIENVENIDO A FISIOCID! 🚀\nSe ha creado: ${nombreSede}`);
-        window.location.href = 'dashboard.html';
+        // Redirigir al login o pantalla de espera
+        window.location.href = 'index.html'; // O tu vista de inicio de sesión
 
     } catch (error) {
         console.error("ERROR EN REGISTRO:", error);
