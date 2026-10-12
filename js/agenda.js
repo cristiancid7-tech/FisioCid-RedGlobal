@@ -1,9 +1,10 @@
+import { renderizarCitas } from './dashboard.js';
 import { obtenerFechaLocal, formatearFechaCorta } from './utils.js';
 
 // ============================================================================
 // 🔄 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR / iPHONE
 // ============================================================================
-async function sincronizarConGoogleCalendar(cita, nombrePaciente) {
+window.sincronizarConGoogleCalendar = async (cita, nombrePaciente) => {
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
         
@@ -50,7 +51,7 @@ async function sincronizarConGoogleCalendar(cita, nombrePaciente) {
 // ==========================================
 // 📅 GESTIÓN DE AGENDA MAESTRA
 // ==========================================
-async function cargarAgenda(modo = 'semana', botonPresionado = null) {
+window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
     const tituloElemento = document.getElementById('tituloAgenda');
     let fechaInput = document.getElementById('filtroFechaAgenda')?.value;
     
