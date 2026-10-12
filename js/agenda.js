@@ -1,4 +1,4 @@
-import { obtenerFechaLocal, formatearFechaCorta } from '.js/utils.js';
+import { obtenerFechaLocal, formatearFechaCorta } from './utils.js';
 
 // ============================================================================
 // 🔄 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR / iPHONE
