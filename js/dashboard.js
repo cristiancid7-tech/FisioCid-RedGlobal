@@ -1,3 +1,4 @@
+import './agenda.js';
 // Verificar estado de sesión al cargar la página
 async function verificarSesionSegura() {
     // 1. Verificar sesión activa con Supabase
@@ -243,7 +244,7 @@ async function aplicarIdentidadVisual() {
     }
 }
 
-function renderizarCitas(citas, modo) {
+export function renderizarCitas(citas, modo) {
     const lista = document.getElementById('listaAgenda');
     if (!lista) return;
     lista.innerHTML = '';

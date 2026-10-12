@@ -138,7 +138,7 @@ async function verificarPerfilCompleto() {
 // Ejecutar automáticamente al cargar cualquier página
 document.addEventListener('DOMContentLoaded', verificarPerfilCompleto);
 
-function procesarNombreMexicano(textoCompleto) {
+export function procesarNombreMexicano(textoCompleto) {
     const conectores = ["DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"];
     let palabras = textoCompleto.toUpperCase().trim().split(/\s+/);
     let piezas = [];
@@ -159,14 +159,20 @@ function procesarNombreMexicano(textoCompleto) {
     return { nombre, paterno, materno };
 }
 
-function formatearFechaCorta(fechaStr) {
+export function formatearFechaCorta(fechaStr) {
     return new Date(fechaStr + "T00:00:00").toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
 }
 
-function obtenerFechaLocal() {
+export function obtenerFechaLocal() {
     const ahora = new Date();
     const anio = ahora.getFullYear();
     const mes = String(ahora.getMonth() + 1).padStart(2, '0');
     const dia = String(ahora.getDate()).padStart(2, '0');
     return `${anio}-${mes}-${dia}`;
 }
+
+
+window.obtenerFechaLocal = obtenerFechaLocal;
+window.formatearFechaCorta = formatearFechaCorta;
+window.procesarNombreMexicano = procesarNombreMexicano
+

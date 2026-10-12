@@ -1,6 +1,7 @@
 import { renderizarCitas } from './dashboard.js';
 import { obtenerFechaLocal, formatearFechaCorta } from './utils.js';
 
+
 // ============================================================================
 // 🔄 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR / iPHONE
 // ============================================================================
@@ -205,3 +206,6 @@ window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
     // --- 7. MANDAMOS A PINTAR ---
     renderizarCitas(agendaCompleta, modo);
 }
+
+window.cargarAgenda = cargarAgenda;
+window.sincronizarConGoogleCalendar = sincronizarConGoogleCalendar;
