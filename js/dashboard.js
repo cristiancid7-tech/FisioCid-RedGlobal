@@ -1017,166 +1017,204 @@ inputBusqueda?.addEventListener('input', async (e) => {
     }
 });
 
+
+// Variable global o de ámbito superior para bloquear doble clic
+let guardandoCita = false;
+
 document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { data: { user } } = await fisioNet.auth.getUser();
-    
-    const clinicaId = localStorage.getItem('id_clinica_activa');
-    const idPaciente = document.getElementById('idPacienteSeleccionado').value;
-    const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
-    const telefonoInput = document.getElementById('telefonoExpress').value.trim();
-    
-    const modalidad = document.getElementById('modalidadCita').value;
-    const horaElegida = document.getElementById('horaCita').value; 
-    const fechaElegida = document.getElementById('fechaCita').value;
 
-    if (!nombreInput) { alert("Escribe el nombre del paciente."); return; }
-    if (!horaElegida) { alert("Selecciona un horario disponible."); return; }
-    if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
+    // 🔒 CANDADO: Si ya se está guardando, ignoramos clics extra
+    if (guardandoCita) return;
+    guardandoCita = true;
 
-    const { data: perfil } = await fisioNet
-        .from('perfiles_profesionales')
-        .select('costo_consulta_base, costo_domicilio_base, horario_atencion')
-        .eq('id', user.id)
-        .single();
+    // Deshabilitar botón visualmente si lo deseas (opcional pero recomendado)
+    const btnSubmit = e.target.querySelector('button[type="submit"]') || document.getElementById('btnGuardarCita');
+    if (btnSubmit) btnSubmit.disabled = true;
 
-    // Validar horario laborable (tu código original)
-    // Validar horario laborable (CORREGIDO PARA MULTI-TURNO)
-    if (perfil?.horario_atencion) {
-        const horarios = JSON.parse(perfil.horario_atencion);
-        const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 30; 
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
         
-        const fechaObj = new Date(fechaElegida + "T12:00:00");
-        const diaSemana = fechaObj.getDay();
+        const clinicaId = localStorage.getItem('id_clinica_activa');
+        const idPaciente = document.getElementById('idPacienteSeleccionado').value;
+        const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
+        const telefonoInput = document.getElementById('telefonoExpress').value.trim();
         
-        // 🚀 Usamos FILTER en vez de FIND para atrapar el turno de la mañana Y el de la tarde
-        const turnosHoy = horarios.filter(h => Number(h.dia) === diaSemana);
+        const modalidad = document.getElementById('modalidadCita').value;
+        const horaElegida = document.getElementById('horaCita').value; 
+        const fechaElegida = document.getElementById('fechaCita').value;
 
-        if (!turnosHoy || turnosHoy.length === 0) {
-            alert(`❌ DÍA NO LABORABLE: No tienes configurado horario de trabajo para este día.`);
-            return; 
-        }
+        if (!nombreInput) { alert("Escribe el nombre del paciente."); return; }
+        if (!horaElegida) { alert("Selecciona un horario disponible."); return; }
+        if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
 
-        const [hE, mE] = horaElegida.split(':').map(Number);
-        const minElegidos = (hE * 60) + mE;
-        
-        let esHorarioValido = false;
-        let ultimaHoraSalida = "00:00";
+        const { data: perfil } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('costo_consulta_base, costo_domicilio_base, horario_atencion')
+            .eq('id', user.id)
+            .single();
 
-        // Iteramos sobre todos los turnos del día para ver si cabe en alguno
-        for (let turno of turnosHoy) {
-            const [hI, mI] = turno.inicio.split(':').map(Number);
-            const [hF, mF] = turno.fin.split(':').map(Number);
-            const minApertura = (hI * 60) + mI;
-            const minCierre = (hF * 60) + mF;
+        // Validar horario laborable (MULTI-TURNO)
+        if (perfil?.horario_atencion) {
+            const horarios = JSON.parse(perfil.horario_atencion);
+            const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 30; 
+            
+            const fechaObj = new Date(fechaElegida + "T12:00:00");
+            const diaSemana = fechaObj.getDay();
+            
+            const turnosHoy = horarios.filter(h => Number(h.dia) === diaSemana);
 
-            // Guardamos la hora de cierre más alta para el mensaje de error
-            if (minCierre > (ultimaHoraSalida.split(':')[0] * 60 + ultimaHoraSalida.split(':')[1] * 1)) {
-                ultimaHoraSalida = turno.fin;
+            if (!turnosHoy || turnosHoy.length === 0) {
+                alert(`❌ DÍA NO LABORABLE: No tienes configurado horario de trabajo para este día.`);
+                return; 
             }
 
-            if (minElegidos >= minApertura && (minElegidos + intervalo) <= minCierre) {
-                esHorarioValido = true;
-                break; // Encontramos un turno válido, salimos del ciclo
+            const [hE, mE] = horaElegida.split(':').map(Number);
+            const minElegidos = (hE * 60) + mE;
+            
+            let esHorarioValido = false;
+            let ultimaHoraSalida = "00:00";
+
+            for (let turno of turnosHoy) {
+                const [hI, mI] = turno.inicio.split(':').map(Number);
+                const [hF, mF] = turno.fin.split(':').map(Number);
+                const minApertura = (hI * 60) + mI;
+                const minCierre = (hF * 60) + mF;
+
+                if (minCierre > (ultimaHoraSalida.split(':')[0] * 60 + ultimaHoraSalida.split(':')[1] * 1)) {
+                    ultimaHoraSalida = turno.fin;
+                }
+
+                if (minElegidos >= minApertura && (minElegidos + intervalo) <= minCierre) {
+                    esHorarioValido = true;
+                    break; 
+                }
+            }
+
+            if (!esHorarioValido) {
+                alert(`❌ HORARIO NO DISPONIBLE: La hora seleccionada está fuera de tus turnos de trabajo. (Última hora de salida hoy: ${ultimaHoraSalida}).`);
+                return; 
             }
         }
 
-        if (!esHorarioValido) {
-            alert(`❌ HORARIO NO DISPONIBLE: La hora seleccionada está fuera de tus turnos de trabajo. (Última hora de salida hoy: ${ultimaHoraSalida}).`);
-            return; 
+        const selectorConvenio = document.getElementById('selectConvenioPaciente');
+        let idConvenio = null;
+        let porcentaje = 0;
+
+        if (selectorConvenio && selectorConvenio.value && selectorConvenio.value !== "") {
+            idConvenio = selectorConvenio.value;
+            if (selectorConvenio.selectedIndex >= 0) {
+                porcentaje = parseFloat(selectorConvenio.options[selectorConvenio.selectedIndex].dataset.descuento) || 0;
+            }
         }
-    }
 
-    // Calcular convenios y precios (tu código original)
-    const selectorConvenio = document.getElementById('selectConvenioPaciente');
-    let idConvenio = null;
-    let porcentaje = 0;
-
-    if (selectorConvenio && selectorConvenio.value && selectorConvenio.value !== "") {
-        idConvenio = selectorConvenio.value;
-        if (selectorConvenio.selectedIndex >= 0) {
-            porcentaje = parseFloat(selectorConvenio.options[selectorConvenio.selectedIndex].dataset.descuento) || 0;
-        }
-    }
-
-    const costoConsultorio = perfil?.costo_consulta_base || 800;
-    const costoDomicilio = perfil?.costo_domicilio_base || 1200;
-    const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
-    
-    const descuentoCalculado = (precioBase * porcentaje) / 100;
-    const precioFinal = precioBase - descuentoCalculado;
-
-    // =========================================================
-    // 🔀 LA BIFURCACIÓN: ¿AGENDA DIRECTA O SALA DE ESPERA?
-    // =========================================================
-    
-    if (!idPaciente || idPaciente === 'NUEVO_EXPRESS') {
-        // --- CASO B: PACIENTE NUEVO -> A SALA DE ESPERA ---
+        const costoConsultorio = perfil?.costo_consulta_base || 800;
+        const costoDomicilio = perfil?.costo_domicilio_base || 1200;
+        const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
         
-        if (!telefonoInput) {
-            alert("⚠️ Al ser un paciente nuevo, es OBLIGATORIO pedirle su número de teléfono para guardarlo en la Sala de Espera.");
-            document.getElementById('telefonoExpress').focus();
-            return;
-        }
+        const descuentoCalculado = (precioBase * porcentaje) / 100;
+        const precioFinal = precioBase - descuentoCalculado;
 
-        const resultado = procesarNombreMexicano(nombreInput); 
-
-        // Insertamos en solicitudes_citas
-        const { error: errSol } = await fisioNet.from('solicitudes_citas').insert({
-            nombre: resultado.nombre,
-            apellido_p: resultado.paterno,
-            apellido_m: resultado.materno,
-            telefono: telefonoInput,
-            fecha_cita: fechaElegida,
-            hora_cita: horaElegida,
-            estado: 'CONFIRMADO',
-            // Estos dos IDs son clave para que aparezcan en tu panel de "Sala de Espera" según tu código:
-            id_clinica_solicitada: clinicaId,
-            id_profesional_solicitado: user.id
-        });
-
-        if (errSol) {
-            alert("Error al enviar a Sala de Espera: " + errSol.message);
-            return;
-        }
+        // =========================================================
+        // 🔀 LA BIFURCACIÓN: ¿AGENDA DIRECTA O SALA DE ESPERA?
+        // =========================================================
         
-        alert("¡SOLICITUD EXPRÉS CREADA! 📝 El paciente está en la Sala de Espera.");
+        if (!idPaciente || idPaciente === 'NUEVO_EXPRESS') {
+            // --- CASO B: PACIENTE NUEVO -> A SALA DE ESPERA ---
+            if (!telefonoInput) {
+                alert("⚠️ Al ser un paciente nuevo, es OBLIGATORIO pedirle su número de teléfono para guardarlo en la Sala de Espera.");
+                document.getElementById('telefonoExpress').focus();
+                return;
+            }
 
-    } else {
-        // --- CASO A: PACIENTE EXISTENTE -> AGENDA DIRECTA ---
-        
-        const { error } = await fisioNet.from('agenda_maestra').insert({
-            id_paciente: idPaciente, 
-            id_profesional: user.id, 
-            id_clinica: clinicaId, 
-            fecha: fechaElegida, 
-            hora_inicio_cita: horaElegida,
-            modalidad: modalidad, 
-            id_convenio_aplicado: idConvenio, 
-            descuento_aplicado: descuentoCalculado, 
-            monto_base: precioBase,
-            monto_total: precioFinal, 
-            estatus: 'PENDIENTE', 
-            pago_status: 'PENDIENTE', 
-            estado: 'ACTIVO'
-        });
+            const resultado = procesarNombreMexicano(nombreInput); 
 
-        if (error) {
-            alert("Error al agendar cita: " + error.message);
-            return;
+            const { error: errSol } = await fisioNet.from('solicitudes_citas').insert({
+                nombre: resultado.nombre,
+                apellido_p: resultado.paterno,
+                apellido_m: resultado.materno,
+                telefono: telefonoInput,
+                fecha_cita: fechaElegida,
+                hora_cita: horaElegida,
+                estado: 'CONFIRMADO',
+                id_clinica_solicitada: clinicaId,
+                id_profesional_solicitado: user.id
+            });
+
+            if (errSol) {
+                alert("Error al enviar a Sala de Espera: " + errSol.message);
+                return;
+            }
+
+            // 🚀 Sincronización protegida (si falla Google, no rompe el guardado en FisioCid)
+            try {
+                const citaExpressDisfrazada = {
+                    fecha: fechaElegida,
+                    hora_inicio_cita: horaElegida,
+                    modalidad: 'SALA DE ESPERA (EXPRÉS)'
+                };
+                const nombreCompletoExpress = `${resultado.nombre} ${resultado.paterno} ${resultado.materno || ''}`;
+                await sincronizarConGoogleCalendar(citaExpressDisfrazada, nombreCompletoExpress.trim());
+            } catch (syncErr) {
+                console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
+            }
+
+            alert("¡SOLICITUD EXPRÉS CREADA Y SINCRONIZADA! 📝✨");
+
+        } else {
+            // --- CASO A: PACIENTE EXISTENTE -> AGENDA DIRECTA ---
+            const { data: datosCita, error } = await fisioNet.from('agenda_maestra').insert({
+                id_paciente: idPaciente, 
+                id_profesional: user.id, 
+                id_clinica: clinicaId, 
+                fecha: fechaElegida, 
+                hora_inicio_cita: horaElegida,
+                modalidad: modalidad, 
+                id_convenio_aplicado: idConvenio, 
+                descuento_aplicado: descuentoCalculado, 
+                monto_base: precioBase,
+                monto_total: precioFinal, 
+                estatus: 'PENDIENTE', 
+                pago_status: 'PENDIENTE', 
+                estado: 'ACTIVO'
+            }).select(`*, pacientes_maestros (nombre, apellido_paterno, apellido_materno)`).single();
+
+            if (error) {
+                alert("Error al agendar cita: " + error.message);
+                return;
+            }
+
+            // 🚀 Sincronización protegida
+            try {
+                if (datosCita && datosCita.pacientes_maestros) {
+                    const nombreCompleto = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno} ${datosCita.pacientes_maestros.apellido_materno || ''}`;
+                    await sincronizarConGoogleCalendar(datosCita, nombreCompleto.trim());
+                }
+            } catch (syncErr) {
+                console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
+            }
+
+            alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID Y SINCRONIZADA! 📅✨");
         }
-        alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID! 📅✨");
+
+        // Limpieza de Modal sin importar el caso
+        document.getElementById('modalCita').style.display = 'none';
+        document.getElementById('formNuevaCita').reset();
+        document.getElementById('idPacienteSeleccionado').value = '';
+        
+        // Refrescamos paneles
+        if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+        if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
+        if (typeof cargarEstadisticas === 'function') await cargarEstadisticas();
+
+    } catch (errGeneral) {
+        console.error("❌ Error crítico procesando cita:", errGeneral);
+        alert("Ocurrió un error inesperado al guardar la cita.");
+    } finally {
+        // 🔓 LIBERAMOS EL CANDADO Y EL BOTÓN PASE LO QUE PASE
+        guardandoCita = false;
+        if (btnSubmit) btnSubmit.disabled = false;
     }
-
-    // Limpieza de Modal sin importar el caso
-    document.getElementById('modalCita').style.display = 'none';
-    document.getElementById('formNuevaCita').reset();
-    document.getElementById('idPacienteSeleccionado').value = '';
-    
-    // Refrescamos ambos paneles por si acaso
-    if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
-    if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
-    if (typeof cargarEstadisticas === 'function') await cargarEstadisticas();
 });
 
 document.getElementById('fechaCita')?.addEventListener('change', () => {
@@ -1615,7 +1653,8 @@ const raizN = nomS.substring(0, 4);
         }
     }
 
-    const { error: eAg } = await fisioNet.from('agenda_maestra').insert({
+    // 🚀 1. Insertamos en agenda maestra y pedimos de vuelta el registro creado (.select().single())
+    const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
         id_paciente: idPacienteFinal,
         id_profesional: user.id,
         id_clinica: clinicaId,
@@ -1624,15 +1663,25 @@ const raizN = nomS.substring(0, 4);
         modalidad: 'CONSULTORIO',
         estatus: 'PENDIENTE',
         estado: 'ACTIVO'
-    });
+    }).select().single();
 
-    if (!eAg) {
+    if (!eAg && nuevaCita) {
+        // Actualizamos la solicitud a APROBADO en la sala de espera
         await fisioNet.from('solicitudes_citas').update({ estado: 'APROBADO' }).eq('id', idSolicitud);
-        alert("✅ PROCESO COMPLETADO EXITOSAMENTE");
+        
+        // 🚀 2. Sincronización automática con Google Calendar / iPhone
+        try {
+            const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
+            await sincronizarConGoogleCalendar(nuevaCita, nombreCompleto.trim());
+        } catch (syncErr) {
+            console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
+        }
+
+        alert("✅ PROCESO COMPLETADO EXITOSAMENTE Y SINCRONIZADO");
         cargarSalaEspera();
         if (typeof cargarAgenda === 'function') cargarAgenda('semana');
     } else {
-        alert("Error al insertar en agenda: " + eAg.message);
+        alert("Error al insertar en agenda: " + (eAg?.message || 'Error desconocido'));
     }
 };
 
@@ -1746,12 +1795,20 @@ async function verificarDisponibilidadReal() {
     inputHoraOculto.value = ""; 
 
     try {
-        const [ocupadasRes, perfilRes] = await Promise.all([
+        // 🚀 CONSULTAMOS 3 FUENTES EN PARALELO PARA BLINDAR EL HORARIO:
+        // 1. Citas oficiales en la agenda
+        // 2. Solicitudes PENDIENTES en la Sala de Espera (Escenario 1)
+        // 3. Solicitudes CONFIRMADAS/APROBADAS (Escenario 2)
+        const [ocupadasRes, pendientesRes, confirmadasRes, perfilRes] = await Promise.all([
             fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
+            fisioNet.from('solicitudes_citas').select('hora_cita').eq('fecha_cita', fechaElegida).eq('id_clinica_solicitada', clinicaId).eq('id_profesional_solicitado', user.id).eq('estado', 'PENDIENTE'),
+            fisioNet.from('solicitudes_citas').select('hora_cita').eq('fecha_cita', fechaElegida).eq('id_clinica_solicitada', clinicaId).eq('id_profesional_solicitado', user.id).eq('estado', 'CONFIRMADO'),
             fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita').eq('id', user.id).single()
         ]);
 
-        const ocupadas = ocupadasRes.data;
+        const ocupadasCitas = ocupadasRes.data || [];
+        const ocupadasPendientes = pendientesRes.data || [];
+        const ocupadasConfirmadas = confirmadasRes.data || [];
         const perfil = perfilRes.data;
 
         if (!perfil?.horario_atencion) {
@@ -1784,9 +1841,15 @@ async function verificarDisponibilidadReal() {
 
             while (inicio + intervalo <= fin) {
                 const horaGen = minToH(inicio);
-                const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita.startsWith(horaGen));
                 
-                // 🚀 Filtro: Si es hoy y la hora ya pasó, no se inyecta en el arreglo
+                // 🔍 Validamos si la hora está ocupada en CUALQUIERA de las 3 tablas/estados
+                const estaEnAgenda = ocupadasCitas.some(o => o.hora_inicio_cita.startsWith(horaGen));
+                const estaPendiente = ocupadasPendientes.some(s => s.hora_cita.startsWith(horaGen));
+                const estaConfirmada = ocupadasConfirmadas.some(s => s.hora_cita.startsWith(horaGen));
+                
+                const estaOcupada = estaEnAgenda || estaPendiente || estaConfirmada;
+                
+                // 🚀 Filtro: Si es hoy y la hora ya pasó, o si ya está ocupada por solicitud o cita
                 if (esHoy && inicio <= minActuales) {
                     // Hora expirada, se ignora
                 } else if (!estaOcupada) {

@@ -1,33 +1,100 @@
 import { renderizarCitas } from './dashboard.js';
 import { obtenerFechaLocal, formatearFechaCorta } from './utils.js';
 
+// ==========================================
+// 🔗 VINCULACIÓN CON GOOGLE CALENDAR
+// ==========================================
+async function vincularGoogleCalendar() {
+    try {
+        const { error } = await fisioNet.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.href,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent'
+                },
+                scopes: 'https://www.googleapis.com/auth/calendar.events'
+            }
+        });
+
+        if (error) {
+            console.error("❌ Error al iniciar vinculación con Google:", error.message);
+            alert("No se pudo iniciar sesión con Google. Inténtalo de nuevo.");
+        }
+    } catch (err) {
+        console.error("❌ Error inesperado:", err);
+    }
+}
+
+async function verificarEstadoGoogle() {
+    const { data: { session } } = await fisioNet.auth.getSession();
+    const btnTexto = document.getElementById('textoVinculacion');
+    const btnVincular = document.getElementById('btnVincularGoogle');
+
+    // Respaldamos el token en localStorage si viene en la sesión
+    if (session && session.provider_token) {
+        localStorage.setItem('google_provider_token', session.provider_token);
+    }
+
+    const tokenActivo = session?.provider_token || localStorage.getItem('google_provider_token');
+
+    if (tokenActivo) {
+        if (btnTexto) btnTexto.innerText = "Calendar Vinculado ✅";
+        if (btnVincular) {
+            btnVincular.style.borderColor = "#34A853";
+            btnVincular.style.background = "#f0fdf4";
+        }
+    }
+}
+
+// Ejecutar verificación al cargar la ventana
+window.addEventListener('DOMContentLoaded', () => {
+    verificarEstadoGoogle();
+});
 
 // ============================================================================
 // 🔄 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR / iPHONE
 // ============================================================================
-window.sincronizarConGoogleCalendar = async (cita, nombrePaciente) => {
+async function sincronizarConGoogleCalendar(cita, nombrePaciente) {
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
         
-        if (!session || !session.provider_token) {
-            console.warn("⚠️ No hay token de Google Calendar activo. La cita se guardó en FisioCid pero no se sincronizó externamente.");
+        let token = session?.provider_token || localStorage.getItem('google_provider_token');
+        
+        if (!token) {
+            console.warn("⚠️ No hay token de Google Calendar activo.");
+            alert("⚠️ Tu cuenta de Google Calendar no está vinculada. Haz clic en 'Vincular Calendar' para activarla.");
             return;
         }
 
-        const token = session.provider_token;
-        const fechaHoraInicio = `${cita.fecha}T${cita.hora_inicio_cita}:00`;
+        // Aseguramos formato limpio de hora (ej: 12:00:00)
+        let horaInicio = cita.hora_inicio_cita;
+        if (horaInicio.length === 5) horaInicio += ":00"; // Si viene como "12:00", lo pasamos a "12:00:00"
+
+        const fechaHoraInicioStr = `${cita.fecha}T${horaInicio}`;
         
-        const fechaFinObj = new Date(`${cita.fecha}T${cita.hora_inicio_cita}:00`);
+        // Calculamos la hora de fin sumando 30 minutos
+        const fechaFinObj = new Date(`${cita.fecha}T${horaInicio}`);
         fechaFinObj.setMinutes(fechaFinObj.getMinutes() + 30);
+        
         const horaFinStr = `${String(fechaFinObj.getHours()).padStart(2, '0')}:${String(fechaFinObj.getMinutes()).padStart(2, '0')}:00`;
-        const fechaHoraFin = `${cita.fecha}T${horaFinStr}`;
+        const fechaHoraFinStr = `${cita.fecha}T${horaFinStr}`;
 
         const eventoGoogle = {
             summary: `🩺 Cita FisioCid: ${nombrePaciente}`,
             description: `Modalidad: ${cita.modalidad}\nPaciente: ${nombrePaciente}\nGestionado desde la plataforma clínica FisioCid.`,
-            start: { dateTime: fechaHoraInicio, timeZone: 'America/Mexico_City' },
-            end: { dateTime: fechaHoraFin, timeZone: 'America/Mexico_City' }
+            start: { 
+                dateTime: fechaHoraInicioStr, 
+                timeZone: 'America/Mexico_City' 
+            },
+            end: { 
+                dateTime: fechaHoraFinStr, 
+                timeZone: 'America/Mexico_City' 
+            }
         };
+
+        console.log("📤 Enviando evento a Google Calendar:", eventoGoogle);
 
         const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
@@ -40,19 +107,22 @@ window.sincronizarConGoogleCalendar = async (cita, nombrePaciente) => {
 
         if (!response.ok) {
             const errData = await response.json();
-            console.error("❌ Error al sincronizar con Google Calendar:", errData);
+            console.error("❌ Error detallado de Google Calendar:", errData);
+            const mensajeGoogle = errData.error?.message || JSON.stringify(errData);
+            alert(`⚠️ La cita se guardó en FisioCid, pero Google rechazó el evento (Bad Request):\n\n${mensajeGoogle}`);
         } else {
             console.log("✨ ¡Cita sincronizada en tiempo real con Google Calendar y tu iPhone!");
         }
     } catch (error) {
         console.error("❌ Error de red al conectar con Google Calendar:", error);
+        alert("❌ Error de red al intentar conectar con Google Calendar.");
     }
 }
 
 // ==========================================
 // 📅 GESTIÓN DE AGENDA MAESTRA
 // ==========================================
-window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
+async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     const tituloElemento = document.getElementById('tituloAgenda');
     let fechaInput = document.getElementById('filtroFechaAgenda')?.value;
     
@@ -78,7 +148,7 @@ window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
         window.location.href = 'login.html'; 
         return; 
     }
-       
+        
     if (!user) return; 
 
     // --- 1. PREPARAMOS CONSULTA DE CITAS OFICIALES ---
@@ -98,7 +168,6 @@ window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
         .eq('id_clinica', clinicaId);
 
     // --- 2. PREPARAMOS CONSULTA DEL "LIMBO" (PROSPECTOS EXPRÉS) ---
-    // AHORA SOLO TRAEMOS A LOS QUE YA FUERON APROBADOS (CONFIRMADOS)
     let querySol = fisioNet
         .from('solicitudes_citas')
         .select('*')
@@ -108,11 +177,9 @@ window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
 
     // --- 3. APLICAMOS FILTROS DE FECHAS A AMBAS ---
     if (modo === 'dia') {
-        // (El título lo armamos más abajo con los chochos)
         queryCitas = queryCitas.eq('fecha', fechaInput);
         querySol = querySol.eq('fecha_cita', fechaInput);
    } else {
-        // RANGO DE 6 DÍAS HACIA ADELANTE
         const fechaFin = new Date(fechaBase);
         fechaFin.setDate(fechaBase.getDate() + 5); 
 
@@ -137,8 +204,8 @@ window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
 
     // --- 5. DISFRAZAMOS A LOS PROSPECTOS PARA QUE ENTREN A LA AGENDA ---
     const citasProspectos = (resSol.data || []).map(sol => ({
-        id_cita: sol.id, // El ID de la solicitud (para abrir el modal de limpieza)
-        es_prospecto: true, // 🚩 Bandera para pintarlos de amarillo en renderizarCitas
+        id_cita: sol.id,
+        es_prospecto: true,
         fecha: sol.fecha_cita,
         hora_inicio_cita: sol.hora_cita || '00:00:00',
         modalidad: 'SALA DE ESPERA',
@@ -207,5 +274,9 @@ window.cargarAgenda = async (modo = 'semana', botonPresionado = null) => {
     renderizarCitas(agendaCompleta, modo);
 }
 
-window.cargarAgenda = cargarAgenda;
+// ==========================================
+// 🚀 EXPOSICIÓN GLOBAL (AL FINAL DEL ARCHIVO)
+// ==========================================
+window.vincularGoogleCalendar = vincularGoogleCalendar;
 window.sincronizarConGoogleCalendar = sincronizarConGoogleCalendar;
+window.cargarAgenda = cargarAgenda;
