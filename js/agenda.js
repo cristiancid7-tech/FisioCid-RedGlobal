@@ -56,45 +56,33 @@ window.addEventListener('DOMContentLoaded', () => {
 // ============================================================================
 // 🔄 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR / iPHONE
 // ============================================================================
-async function sincronizarConGoogleCalendar(cita, nombrePaciente) {
+window.sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
-        
         let token = session?.provider_token || localStorage.getItem('google_provider_token');
         
         if (!token) {
             console.warn("⚠️ No hay token de Google Calendar activo.");
-            alert("⚠️ Tu cuenta de Google Calendar no está vinculada. Haz clic en 'Vincular Calendar' para activarla.");
             return;
         }
 
-        // Aseguramos formato limpio de hora (ej: 12:00:00)
-        let horaInicio = cita.hora_inicio_cita;
-        if (horaInicio.length === 5) horaInicio += ":00"; // Si viene como "12:00", lo pasamos a "12:00:00"
+        let horaInicio = cita.hora_inicio_cita || cita.hora_cita;
+        if (horaInicio.length === 5) horaInicio += ":00";
 
-        const fechaHoraInicioStr = `${cita.fecha}T${horaInicio}`;
+        const fechaStr = cita.fecha || cita.fecha_cita;
+        const fechaHoraInicioStr = `${fechaStr}T${horaInicio}`;
         
-        // Calculamos la hora de fin sumando 30 minutos
-        const fechaFinObj = new Date(`${cita.fecha}T${horaInicio}`);
+        const fechaFinObj = new Date(`${fechaStr}T${horaInicio}`);
         fechaFinObj.setMinutes(fechaFinObj.getMinutes() + 30);
-        
         const horaFinStr = `${String(fechaFinObj.getHours()).padStart(2, '0')}:${String(fechaFinObj.getMinutes()).padStart(2, '0')}:00`;
-        const fechaHoraFinStr = `${cita.fecha}T${horaFinStr}`;
+        const fechaHoraFinStr = `${fechaStr}T${horaFinStr}`;
 
         const eventoGoogle = {
             summary: `🩺 Cita FisioCid: ${nombrePaciente}`,
-            description: `Modalidad: ${cita.modalidad}\nPaciente: ${nombrePaciente}\nGestionado desde la plataforma clínica FisioCid.`,
-            start: { 
-                dateTime: fechaHoraInicioStr, 
-                timeZone: 'America/Mexico_City' 
-            },
-            end: { 
-                dateTime: fechaHoraFinStr, 
-                timeZone: 'America/Mexico_City' 
-            }
+            description: `Modalidad: ${cita.modalidad || 'CONSULTORIO'}\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid.`,
+            start: { dateTime: fechaHoraInicioStr, timeZone: 'America/Mexico_City' },
+            end: { dateTime: fechaHoraFinStr, timeZone: 'America/Mexico_City' }
         };
-
-        console.log("📤 Enviando evento a Google Calendar:", eventoGoogle);
 
         const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
@@ -107,18 +95,26 @@ async function sincronizarConGoogleCalendar(cita, nombrePaciente) {
 
         if (!response.ok) {
             const errData = await response.json();
-            console.error("❌ Error detallado de Google Calendar:", errData);
-            const mensajeGoogle = errData.error?.message || JSON.stringify(errData);
-            alert(`⚠️ La cita se guardó en FisioCid, pero Google rechazó el evento (Bad Request):\n\n${mensajeGoogle}`);
+            console.error("❌ Error al sincronizar con Google Calendar:", errData);
         } else {
-            console.log("✨ ¡Cita sincronizada en tiempo real con Google Calendar y tu iPhone!");
+            const dataGoogle = await response.json();
+            
+            // 🔑 Guardamos el ID de Google en la tabla correspondiente
+            if (dataGoogle.id) {
+                const idRegistro = cita.id_cita || cita.id;
+                const tablaDestino = esSolicitud ? 'solicitudes_citas' : 'agenda_maestra';
+                const columnaId = esSolicitud ? 'id' : 'id_cita';
+
+                await fisioNet.from(tablaDestino)
+                    .update({ google_event_id: dataGoogle.id })
+                    .eq(columnaId, idRegistro);
+            }
+            console.log("✨ ¡Cita sincronizada y ID de Google almacenado con éxito!");
         }
     } catch (error) {
-        console.error("❌ Error de red al conectar con Google Calendar:", error);
-        alert("❌ Error de red al intentar conectar con Google Calendar.");
+        console.error("❌ Error de red con Google Calendar:", error);
     }
-}
-
+};
 // ==========================================
 // 📅 GESTIÓN DE AGENDA MAESTRA
 // ==========================================
@@ -274,9 +270,70 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     renderizarCitas(agendaCompleta, modo);
 }
 
+
+window.sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
+    try {
+        const { data: { session } } = await fisioNet.auth.getSession();
+        let token = session?.provider_token || localStorage.getItem('google_provider_token');
+        
+        if (!token) {
+            console.warn("⚠️ No hay token de Google Calendar activo.");
+            return;
+        }
+
+        let horaInicio = cita.hora_inicio_cita || cita.hora_cita;
+        if (horaInicio.length === 5) horaInicio += ":00";
+
+        const fechaStr = cita.fecha || cita.fecha_cita;
+        const fechaHoraInicioStr = `${fechaStr}T${horaInicio}`;
+        
+        const fechaFinObj = new Date(`${fechaStr}T${horaInicio}`);
+        fechaFinObj.setMinutes(fechaFinObj.getMinutes() + 30);
+        const horaFinStr = `${String(fechaFinObj.getHours()).padStart(2, '0')}:${String(fechaFinObj.getMinutes()).padStart(2, '0')}:00`;
+        const fechaHoraFinStr = `${fechaStr}T${horaFinStr}`;
+
+        const eventoGoogle = {
+            summary: `🩺 Cita FisioCid: ${nombrePaciente}`,
+            description: `Modalidad: ${cita.modalidad || 'CONSULTORIO'}\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid.`,
+            start: { dateTime: fechaHoraInicioStr, timeZone: 'America/Mexico_City' },
+            end: { dateTime: fechaHoraFinStr, timeZone: 'America/Mexico_City' }
+        };
+
+        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(eventoGoogle)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            console.error("❌ Error al sincronizar con Google Calendar:", errData);
+        } else {
+            const dataGoogle = await response.json();
+            
+            // 🔑 Guardamos el ID de Google en la tabla correspondiente
+            if (dataGoogle.id) {
+                const idRegistro = cita.id_cita || cita.id;
+                const tablaDestino = esSolicitud ? 'solicitudes_citas' : 'agenda_maestra';
+                const columnaId = esSolicitud ? 'id' : 'id_cita';
+
+                await fisioNet.from(tablaDestino)
+                    .update({ google_event_id: dataGoogle.id })
+                    .eq(columnaId, idRegistro);
+            }
+            console.log("✨ ¡Cita sincronizada y ID de Google almacenado con éxito!");
+        }
+    } catch (error) {
+        console.error("❌ Error de red con Google Calendar:", error);
+    }
+};
 // ==========================================
 // 🚀 EXPOSICIÓN GLOBAL (AL FINAL DEL ARCHIVO)
 // ==========================================
+window.actualizarAgenda = cargarAgenda; 
 window.vincularGoogleCalendar = vincularGoogleCalendar;
 window.sincronizarConGoogleCalendar = sincronizarConGoogleCalendar;
 window.cargarAgenda = cargarAgenda;

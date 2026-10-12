@@ -299,7 +299,7 @@ export function renderizarCitas(citas, modo) {
             const fechaObj = new Date(fechaStr + "T00:00:00");
             const nombreDia = fechaObj.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
             
-        const hoyReal = obtenerFechaLocal();
+            const hoyReal = obtenerFechaLocal();
             const esHoy = (fechaStr === hoyReal);
             
             const columnaDia = document.createElement('div');
@@ -335,7 +335,6 @@ export function renderizarCitas(citas, modo) {
                     const nombrePaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
                     const edadInfo = calcularEdadPorCurp(p.curp);
 
-                    // AQUÍ QUEDÓ INTEGRADO EL BOTÓN DINÁMICO
                     const botonAccion = cita.es_prospecto 
                         ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`
                         : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;">→</button>`;
@@ -363,23 +362,19 @@ export function renderizarCitas(citas, modo) {
                             </div>
                             ${botonAccion}
                         </div>
-                       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-    <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
-        ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
-    </span>
-    ${cita.es_prospecto ? 
-        `<span style="font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: #e2e8f0; color: #475569;">PENDIENTE</span>` 
-        : 
-        `<select onchange="cambiarEstatusCita('${cita.id_cita}', this.value)" style="font-size: 0.65rem; font-weight: 800; padding: 2px 4px; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer;">
-            <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
-            <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
-            <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
-            <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
-            <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
-            <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
-        </select>`
-    }
-</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
+                                ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
+                            </span>
+                            <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${cita.es_prospecto ? true : false})" style="...">
+    <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
+    <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
+    <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
+    <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
+    <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
+    <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
+</select>
+                        </div>
                     `;
                     contenedorTarjetas.appendChild(tarjeta);
                 });
@@ -408,7 +403,7 @@ export function renderizarCitas(citas, modo) {
                 ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: 900;">✍️ REGISTRAR</button>`
                 : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: var(--primary); color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">Abrir Expediente →</button>`;
 
-                const selectorEstatus = cita.es_prospecto ? '' : `
+            const selectorEstatus = `
                 <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value)" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
                     <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
                     <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
@@ -418,6 +413,7 @@ export function renderizarCitas(citas, modo) {
                     <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
                 </select>
             `;
+
             const divCita = document.createElement('div');
             divCita.style.cssText = `
                 background: ${cita.es_prospecto ? '#fefce8' : '#ffffff'};
@@ -425,7 +421,7 @@ export function renderizarCitas(citas, modo) {
                 padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             `;
 
-          divCita.innerHTML = `
+            divCita.innerHTML = `
                 <div>
                     <div style="font-weight: 800; font-size: 0.9rem; color: #1e293b;">${nombrePaciente}</div>
                     <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : ''} | Modalidad: ${cita.modalidad}</div>
@@ -441,6 +437,173 @@ export function renderizarCitas(citas, modo) {
     }
 }
 
+window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) => {
+    if (!idCita || idCita === 'undefined') return;
+
+    try {
+        if (nuevoEstatus === 'REAGENDADO') {
+            // 1. Crear el modal flotante
+            let modalReagendar = document.getElementById('modalReagendarCita');
+            if (!modalReagendar) {
+                modalReagendar = document.createElement('div');
+                modalReagendar.id = 'modalReagendarCita';
+                modalReagendar.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+                    align-items: center; z-index: 9999; backdrop-filter: blur(2px);
+                `;
+                document.body.appendChild(modalReagendar);
+            }
+
+            const fechaHoy = new Date().toISOString().split('T')[0];
+
+            modalReagendar.innerHTML = `
+                <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
+                    <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Reagendar Cita</h3>
+                    
+                    <label style="font-size: 0.75rem; font-weight: 700; color: #475569;">SELECCIONA LA NUEVA FECHA:</label>
+                    <input type="date" id="inputNuevaFechaCita" value="${fechaHoy}" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+                    
+                    <button id="btnConsultarDispoModal" style="background: #0f172a; color: white; border: none; padding: 9px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">🔍 Consultar Horarios Disponibles</button>
+                    
+                    <div id="contenedorHorariosLibresModal" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 5px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; text-align: center;">Elige una fecha y presiona consultar.</span>
+                    </div>
+
+                    <button onclick="document.getElementById('modalReagendarCita').remove(); cargarAgenda(document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia');" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
+                </div>
+            `;
+
+            // 2. Lógica interna idéntica a tu función de disponibilidad real
+            document.getElementById('btnConsultarDispoModal').onclick = async () => {
+                const fechaElegida = document.getElementById('inputNuevaFechaCita').value;
+                const contenedor = document.getElementById('contenedorHorariosLibresModal');
+                const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+                const { data: { user } } = await fisioNet.auth.getUser();
+
+                if (!fechaElegida || !clinicaId || !user) {
+                    alert("Faltan datos de clínica o sesión de usuario.");
+                    return;
+                }
+
+                contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#10b981; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
+
+                try {
+                    const [ocupadasRes, perfilRes] = await Promise.all([
+                        fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
+                        fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita').eq('id', user.id).single()
+                    ]);
+
+                    const ocupadas = ocupadasRes.data;
+                    const perfil = perfilRes.data;
+
+                    if (!perfil?.horario_atencion) {
+                        contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
+                        return;
+                    }
+
+                    const config = JSON.parse(perfil.horario_atencion);
+                    const intervalo = parseInt(perfil.intervalo_cita) || 30;
+                    const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+                    const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
+
+                    const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
+                    const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
+
+                    let espaciosDisponibles = [];
+
+                    bloquesHoy.forEach(bloque => {
+                        let inicio = aMin(bloque.inicio);
+                        let fin = aMin(bloque.fin);
+
+                        while (inicio + intervalo <= fin) {
+                            const horaGen = minToH(inicio);
+                            const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
+                            
+                            if (!estaOcupada) {
+                                espaciosDisponibles.push(horaGen);
+                            }
+                            inicio += intervalo;
+                        }
+                    });
+
+                    if (espaciosDisponibles.length === 0) {
+                        contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
+                        return;
+                    }
+
+                    contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #166534;">Selecciona la nueva hora (${espaciosDisponibles.length} libres):</span>`;
+                    
+                    const gridHorarios = document.createElement('div');
+                    gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
+
+                    espaciosDisponibles.forEach(hora => {
+                        const btnHora = document.createElement('button');
+                        btnHora.innerText = hora;
+                        btnHora.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
+                        
+                        // Al hacer clic en la pastilla de hora, guardamos de inmediato en Supabase
+                        btnHora.onclick = async () => {
+                            modalReagendar.remove();
+
+                            if (esProspecto) {
+                                const { error } = await fisioNet.from('solicitudes_citas')
+                                    .update({ fecha_cita: fechaElegida, hora_cita: hora, estado: 'PENDIENTE' })
+                                    .eq('id', idCita);
+                                if (error) throw error;
+                            } else {
+                                const { error } = await fisioNet.from('agenda_maestra')
+                                    .update({ fecha: fechaElegida, hora_inicio_cita: hora, estatus: 'PENDIENTE' })
+                                    .eq('id_cita', idCita);
+                                if (error) throw error;
+
+                                if (typeof actualizarEventoGoogleCalendar === 'function') {
+                                    await actualizarEventoGoogleCalendar(idCita, fechaElegida, hora, "Paciente FisioCid");
+                                }
+                            }
+
+                            alert(`✅ Cita reagendada con éxito para el ${fechaElegida} a las ${hora}.`);
+                            
+                            const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
+                            if (typeof cargarAgenda === 'function') cargarAgenda(modoActual);
+                        };
+
+                        gridHorarios.appendChild(btnHora);
+                    });
+
+                    contenedor.appendChild(gridHorarios);
+
+                } catch (err) {
+                    console.error("Error consultando disponibilidad en modal:", err);
+                    contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Error al sincronizar horarios.</p>`;
+                }
+            };
+
+        } else {
+            // Cambio de estatus normal (Completado, Cancelado, etc.)
+            if (esProspecto) {
+                const { error } = await fisioNet.from('solicitudes_citas')
+                    .update({ estado: nuevoEstatus })
+                    .eq('id', idCita);
+                if (error) throw error;
+            } else {
+                const { error } = await fisioNet.from('agenda_maestra')
+                    .update({ estatus: nuevoEstatus })
+                    .eq('id_cita', idCita);
+                if (error) throw error;
+            }
+
+            const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
+            if (typeof cargarAgenda === 'function') {
+                await cargarAgenda(modoActual);
+            }
+        }
+
+    } catch (err) {
+        console.error("Error al cambiar estatus de cita:", err);
+        alert("No se pudo cambiar el estatus: " + err.message);
+    }
+};
 // ==========================================
 // RENDEREAR TABLA EQUIPO INTERNO
 // ==========================================
@@ -2994,23 +3157,7 @@ window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
     if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
 };
 
-window.cambiarEstatusCita = async (idCita, nuevoEstatus) => {
-    if (!idCita || idCita === 'undefined') return;
-    try {
-        const { error } = await fisioNet.from('agenda_maestra')
-            .update({ estatus: nuevoEstatus })
-            .eq('id_cita', idCita);
 
-        if (error) throw error;
-
-        // Recargamos la agenda actual para que se actualicen los contadores del resumen
-        const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
-        await cargarAgenda(modoActual);
-    } catch (err) {
-        console.error("Error:", err);
-        alert("No se pudo cambiar el estatus: " + err.message);
-    }
-};
 
 
 
