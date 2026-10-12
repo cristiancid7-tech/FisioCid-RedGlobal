@@ -137,3 +137,36 @@ async function verificarPerfilCompleto() {
 
 // Ejecutar automáticamente al cargar cualquier página
 document.addEventListener('DOMContentLoaded', verificarPerfilCompleto);
+
+function procesarNombreMexicano(textoCompleto) {
+    const conectores = ["DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"];
+    let palabras = textoCompleto.toUpperCase().trim().split(/\s+/);
+    let piezas = [];
+    for (let i = 0; i < palabras.length; i++) {
+        if (conectores.includes(palabras[i]) && i + 1 < palabras.length) {
+            piezas.push(palabras[i] + " " + palabras[i + 1]);
+            i++;
+        } else { piezas.push(palabras[i]); }
+    }
+    let nombre = "", paterno = "", materno = "";
+    const n = piezas.length;
+    if (n >= 3) {
+        materno = piezas[n - 1]; paterno = piezas[n - 2];
+        nombre = piezas.slice(0, n - 2).join(" ");
+    } else if (n === 2) {
+        nombre = piezas[0]; paterno = piezas[1];
+    } else { nombre = piezas[0] || ""; }
+    return { nombre, paterno, materno };
+}
+
+function formatearFechaCorta(fechaStr) {
+    return new Date(fechaStr + "T00:00:00").toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
+}
+
+function obtenerFechaLocal() {
+    const ahora = new Date();
+    const anio = ahora.getFullYear();
+    const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+    const dia = String(ahora.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+}
