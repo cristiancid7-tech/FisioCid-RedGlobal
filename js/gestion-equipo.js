@@ -301,7 +301,8 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
             options: { 
                 data: { 
                     display_name: nombre,
-                    phone: telefono 
+                    phone: telefono, 
+                    rol_sistema: rol  
                 } 
             }
         });
