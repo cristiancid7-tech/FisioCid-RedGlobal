@@ -1464,3 +1464,17 @@ async function autocompletarHomoclaveRenapo() {
         }, 4000);
     }
 }
+
+// ==========================================
+// 📜 CONTROL DEL MODAL DE PRIVACIDAD
+// ==========================================
+function abrirModalPrivacidad(e) {
+    if (e) e.preventDefault();
+    const modal = document.getElementById('modalPrivacidad');
+    if (modal) modal.style.display = 'flex';
+}
+
+function cerrarModalPrivacidad() {
+    const modal = document.getElementById('modalPrivacidad');
+    if (modal) modal.style.display = 'none';
+}
