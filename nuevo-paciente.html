@@ -112,10 +112,26 @@
                                     <label class="form-label small fw-bold text-primary">CURP Autogenerada</label>
                                     <input type="text" class="form-control bg-light text-primary fw-bold" id="curpAuto" readonly>
                                 </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-danger">Homoclave * <a href="#" id="btnAyudaCurp" class="ms-2 text-primary text-decoration-none">¿Ayuda?</a></label>
-                                    <input type="text" class="form-control border-danger" id="curpHomo" name="homoclave_curp" maxlength="2" required>
-                                </div>
+                                
+<div class="col-md-4">
+    <div class="d-flex justify-content-between align-items-end mb-1">
+        <label class="form-label small fw-bold text-danger mb-0">Homoclave *</label>
+        <span class="text-muted" style="font-size: 0.65rem;">(¿No la sabes?)</span>
+    </div>
+    
+    <!-- ESTILO PEGADO (Igual que el de convenios) -->
+    <div class="input-group">
+        <input type="text" class="form-control border-danger text-center text-uppercase fw-bold" 
+               id="curpHomo" name="homoclave_curp" maxlength="2" placeholder="00" required>
+        
+        <button class="btn btn-outline-danger fw-bold" type="button" 
+                onclick="autocompletarHomoclaveRenapo()" id="btnAutoHomo">
+            <i class="fas fa-bolt" id="iconoAutoHomo"></i> Auto
+        </button>
+    </div>
+    
+    <div id="msjHomoclaveAuto" class="fw-bold mt-1 text-center" style="font-size: 0.7rem;"></div>
+</div>
 
                                 <div class="col-md-6"><label class="form-label small fw-bold">Ocupación</label><input type="text" class="form-control" name="ocupacion" id="valOcupacion"></div>
                                 

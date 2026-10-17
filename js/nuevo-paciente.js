@@ -27,6 +27,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('idTutorSeleccionado').value = ""; // Limpiamos si borra
     }
 });
+// 🛡️ BLINDAJE DE FECHA: Evitar años ilógicos (1800 o el futuro)
+    const campoFecha = document.getElementById('valFecha');
+    if (campoFecha) {
+        const hoy = new Date();
+        // Fecha máxima: Hoy (Nadie nace mañana)
+        const fechaMax = hoy.toISOString().split('T')[0];
+        // Fecha mínima: Hace 110 años (1916 aprox)
+        const hace110Anios = new Date(hoy.setFullYear(hoy.getFullYear() - 110)).toISOString().split('T')[0];
+        
+        campoFecha.setAttribute('max', fechaMax);
+        campoFecha.setAttribute('min', hace110Anios);
+    }
 
     // 🔥 1. MAYÚSCULAS AUTOMÁTICAS (Menos en correo)
     document.addEventListener('input', (e) => {
@@ -62,13 +74,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🎯 EL GATILLO MAESTRO DE CRISTIAN: La Homoclave dispara la gestión del Folio
- document.getElementById('curpHomo')?.addEventListener('input', () => {
-        if (!pacienteExistenteId) {
-            //console.log("📝 Paciente nuevo absoluto. Generando folio consecutivo...");
-            gestionarFolioAutomatico(null);
+
+    
+// 🎯 EL GATILLO MAESTRO DE CRISTIAN: La Homoclave dispara la verificación y asignación de Folio
+document.getElementById('curpHomo')?.addEventListener('input', async (e) => {
+    const homo = e.target.value.trim().toUpperCase();
+
+    if (homo.length === 2) {
+        const parteBase = document.getElementById('curpAuto')?.value?.trim().toUpperCase() || '';
+        const curpCompleta = `${parteBase}${homo}`;
+
+        // Ocultar listas desplegables abiertas
+        const lista = document.getElementById('listaCitas');
+        if (lista) lista.style.display = 'none';
+
+        if (curpCompleta.length === 18) {
+            // Evaluamos en BD si la CURP ya existe
+            await verificarPacienteExistentePorCurp(curpCompleta);
+        } else if (!pacienteExistenteId) {
+            // Si la base no tenía los 16 caracteres completos pero pusieron homoclave, asegura folio
+            await gestionarFolioAutomatico(null);
         }
-    });
+    }
+});
 
     document.addEventListener('click', (e) => {
         const lista = document.getElementById('listaCitas');
@@ -76,7 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 🎯 3. ACTIVAR MODALES
-    document.getElementById('btnAyudaCurp')?.addEventListener('click', (e) => {
+    document.getElementById('btnAutoHomo.....')?.addEventListener('click', (e) => {
         e.preventDefault();
         document.getElementById('modalRenapo').style.display = 'flex';
     });
@@ -253,6 +281,68 @@ async function llenarFormularioCompleto(p) {
     }
 }
 
+// =====================================================================
+// 🔍 VERIFICADOR CENTRAL DE CURP EN RED FISIOCID
+// =====================================================================
+async function verificarPacienteExistentePorCurp(curpCompleta) {
+    if (!curpCompleta || curpCompleta.length !== 18) return;
+
+    const statusFolio = document.getElementById('statusFolio');
+    const msjAuto = document.getElementById('msjHomoclaveAuto');
+
+    if (statusFolio) {
+        statusFolio.innerHTML = '<i class="fas fa-spinner fa-spin text-primary"></i> Consultando expedientes en red...';
+    }
+
+    try {
+        // Consulta en la Ficha Maestra de Supabase
+        const { data: paciente, error } = await fisioNet
+            .from('pacientes_maestros')
+            .select('*')
+            .eq('curp', curpCompleta.toUpperCase())
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (paciente) {
+            // 🅰️ CASO 1: PACIENTE ENCONTRADO EN LA RED
+            pacienteExistenteId = paciente.id;
+            window.pacienteCargado = paciente;
+
+            await llenarFormularioCompleto(paciente);
+
+            if (statusFolio) {
+                statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> EXPEDIENTE LOCALIZADO EN RED';
+            }
+            if (msjAuto) {
+                msjAuto.innerHTML = "<span class='text-success'>✅ ¡Paciente localizado y datos cargados!</span>";
+            }
+        } else {
+            // 🅱️ CASO 2: PACIENTE NUEVO ABSOLUTO
+            pacienteExistenteId = null;
+            window.pacienteCargado = null;
+
+            if (statusFolio) {
+                statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
+            }
+            if (msjAuto) {
+                msjAuto.innerHTML = "<span class='text-success'>✅ CURP Verificada (Paciente Nuevo)</span>";
+            }
+
+            // Asigna el siguiente folio consecutivo para la sede activa
+            await gestionarFolioAutomatico(null);
+
+            // Pasa el foco al campo de teléfono para agilizar el registro
+            document.getElementById('valTelefono')?.focus();
+        }
+    } catch (err) {
+        console.error("❌ Error al verificar CURP en red:", err.message);
+        if (statusFolio) {
+            statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error de conexión con expedientes';
+        }
+    }
+}
+
 // ============================================================================
 // 🔒 GESTOR VISUAL DE BLOQUEO TOTAL (Identidad por ID y Antecedentes por Name)
 // ============================================================================
@@ -300,11 +390,21 @@ function congelarCamposIdentidad(bloquear) {
         }
     });
 
-    // 3. CANDADO EXTRA para botones
-    const btnAyudaCurp = document.getElementById('btnAyudaCurp');
-    if (btnAyudaCurp) {
-        btnAyudaCurp.style.pointerEvents = bloquear ? "none" : "auto";
-        btnAyudaCurp.style.opacity = bloquear ? "0.5" : "1";
+  
+
+    
+     const btnAuto = document.getElementById('btnAutoHomo');
+    if (btnAuto) {
+        btnAuto.disabled = bloquear;
+        if (bloquear) {
+            btnAuto.className = "btn btn-secondary fw-bold disabled";
+            btnAuto.style.width = "20%";
+            btnAuto.innerHTML = '<i class="fas fa-check-circle text-success"></i> Listo';
+        } else {
+            btnAuto.className = "btn btn-outline-danger fw-bold";
+            btnAuto.style.width = "20%";
+            btnAuto.innerHTML = '<i class="fas fa-bolt" id="iconoAutoHomo"></i> Auto';
+        }
     }
 }
 
@@ -1207,3 +1307,160 @@ async function validarCuotaPaciente(userId, nivelSuscripcion) {
 
 document.addEventListener('click', (e) => ocultarListaSiEsExterno(e.target));
 document.addEventListener('focusin', (e) => ocultarListaSiEsExterno(e.target));
+
+// =====================================================================
+// 🤖 AUTOCOMPLETADO DE HOMOCLAVE RENAPO + CANDADOS Y PARPADEO VISUAL
+// =====================================================================
+
+// 💡 Función auxiliar para hacer parpadear los campos de identidad
+function hacerParpadearCamposBase(ids) {
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const bgOriginal = el.style.backgroundColor;
+            const borderOriginal = el.style.borderColor;
+            
+            el.style.transition = 'all 0.3s ease';
+            
+            // Destello 1
+            el.style.backgroundColor = '#fff3cd'; // Amarillo advertencia
+            el.style.borderColor = '#ffc107';
+            
+            setTimeout(() => {
+                el.style.backgroundColor = bgOriginal;
+                el.style.borderColor = borderOriginal;
+            }, 500);
+
+            // Destello 2
+            setTimeout(() => {
+                el.style.backgroundColor = '#fff3cd';
+                el.style.borderColor = '#ffc107';
+            }, 1000);
+
+            setTimeout(() => {
+                el.style.backgroundColor = bgOriginal;
+                el.style.borderColor = borderOriginal;
+            }, 1500);
+        }
+    });
+}
+
+async function autocompletarHomoclaveRenapo() {
+    const btn = document.getElementById('btnAutoHomo');
+    const icono = document.getElementById('iconoAutoHomo');
+    const msj = document.getElementById('msjHomoclaveAuto');
+    const inputHomo = document.getElementById('curpHomo');
+
+    const listaCampos = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'valGenero', 'valEstado'];
+
+    // 1. Recolectar datos de pantalla
+    const nombres = document.getElementById('valNombre')?.value.trim().toUpperCase() || "";
+    const apellidoPaterno = document.getElementById('valPaterno')?.value.trim().toUpperCase() || "";
+    const apellidoMaterno = document.getElementById('valMaterno')?.value.trim().toUpperCase() || "";
+    const fechaNacimiento = document.getElementById('valFecha')?.value || ""; 
+    const generoFull = document.getElementById('valGenero')?.value || "";
+    const estadoSelect = document.getElementById('valEstado');
+    
+    const estadoTexto = (estadoSelect && estadoSelect.selectedIndex >= 0) 
+        ? estadoSelect.options[estadoSelect.selectedIndex].text.toUpperCase() 
+        : "";
+
+    // Parpadeo de validación visual
+    if (typeof hacerParpadearCamposBase === 'function') {
+        hacerParpadearCamposBase(listaCampos);
+    }
+
+    // Validar datos mínimos obligatorios
+    if (!nombres || !apellidoPaterno || !fechaNacimiento || !generoFull || !estadoSelect?.value) {
+        if (msj) msj.innerHTML = "<span class='text-danger'>⚠️ Llena los datos marcados arriba primero.</span>";
+        return;
+    }
+
+    // === 🛡️ CANDADOS DE SEGURIDAD ===
+    if (nombres.length < 2 || apellidoPaterno.length < 2) {
+        if (msj) msj.innerHTML = "<span class='text-danger'>❌ Error: Nombre y Paterno deben tener al menos 2 letras.</span>";
+        return;
+    }
+
+    if (nombres === 'XX' || apellidoPaterno === 'XX' || nombres === 'NN') {
+        if (msj) msj.innerHTML = "<span class='text-danger'>❌ Error: Escribe nombres reales.</span>";
+        return;
+    }
+
+    if (/\d/.test(nombres) || /\d/.test(apellidoPaterno) || /\d/.test(apellidoMaterno)) {
+        if (msj) msj.innerHTML = "<span class='text-danger'>❌ Error: Los nombres no deben llevar números.</span>";
+        return;
+    }
+
+    if (apellidoPaterno.length > 2 && nombres.includes(apellidoPaterno)) {
+        if (msj) msj.innerHTML = "<span class='text-danger'>❌ Error: Pusiste apellidos en el campo de Nombre.</span>";
+        document.getElementById('valNombre')?.focus();
+        return;
+    }
+
+    const anioNacimiento = parseInt(fechaNacimiento.split('-')[0], 10);
+    const anioActual = new Date().getFullYear();
+    if (isNaN(anioNacimiento) || anioNacimiento < 1916 || anioNacimiento > anioActual) {
+        if (msj) msj.innerHTML = "<span class='text-danger'>❌ Error: Año de nacimiento ilógico.</span>";
+        document.getElementById('valFecha')?.focus();
+        return;
+    }
+
+    const generoTlaloc = (generoFull === 'HOMBRE') ? 'H' : 'M';
+
+    // Estado de carga visual
+    if (btn) btn.disabled = true;
+    if (icono) icono.className = "fas fa-spinner fa-spin";
+    if (msj) msj.innerHTML = "<span class='text-primary'>🔍 Verificando en RENAPO...</span>";
+
+    try {
+        // Conexión segura a la instancia de Supabase (fisioNet)
+        const clienteSupabase = window.fisioNet || window.supabase;
+
+        if (!clienteSupabase) {
+            throw new Error("No se encontró la instancia de conexión con Supabase (fisioNet).");
+        }
+
+        const { data, error } = await clienteSupabase.functions.invoke('validar-curp', {
+            body: { 
+                nombres, 
+                apellidoPaterno, 
+                apellidoMaterno, 
+                fechaNacimiento, 
+                genero: generoTlaloc, 
+                estado: estadoTexto 
+            }
+        });
+
+        if (error) throw error;
+        
+        if (data.error || !data.curp) {
+            if (msj) msj.innerHTML = "<span class='text-danger'>❌ No se encontró la CURP. Verifica la ortografía.</span>";
+            return;
+        }
+
+        // 🎯 EXTRAER Y LLENAR ÚNICAMENTE LOS 2 DÍGITOS FINALES
+        const homoclaveExtraida = data.curp.substring(16, 18).toUpperCase(); 
+
+        if (inputHomo) {
+            inputHomo.value = homoclaveExtraida;
+        }
+
+        if (msj) msj.innerHTML = "<span class='text-success'>✅ ¡Homoclave asignada!</span>";
+
+        // 🔥 Disparar evento para que 'curpHomo' ejecute la consulta en la BD y gestione el folio
+        if (inputHomo) {
+            inputHomo.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+    } catch (err) {
+        console.error("❌ Error en consulta RENAPO:", err);
+        if (msj) msj.innerHTML = `<span class='text-danger'>⚠️ ${err.message || 'Error de conexión con el servidor.'}</span>`;
+    } finally {
+        if (btn) btn.disabled = false;
+        if (icono) icono.className = "fas fa-bolt";
+        setTimeout(() => { 
+            if (msj && msj.innerHTML.includes('asignada')) msj.innerHTML = ""; 
+        }, 4000);
+    }
+}

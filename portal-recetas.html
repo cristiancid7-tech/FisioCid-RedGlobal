@@ -89,21 +89,21 @@
                     </div>
                     <small id="statusFolio" class="fw-bold text-muted mt-1 d-block" style="font-size: 0.65rem; letter-spacing: 0.3px;"></small>
                 </div>
-                <div class="row g-2">
-                    <div class="col-md-6 position-relative">
-                        <label class="label-fisiocid">Nombre(s) <span class="text-primary">*</span></label>
-                        <input type="text" id="valNombre" class="form-control form-fisiocid" oninput="procesarCurp()" placeholder="Escribe para buscar...">
-                        <div id="sugerencias-gabinete" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1050; top: 100%;"></div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="label-fisiocid">Apellido Paterno</label>
-                        <input type="text" id="valPaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="label-fisiocid">Apellido Materno</label>
-                        <input type="text" id="valMaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
-                    </div>
+              <div class="row g-2">
+                <div class="col-md-4 position-relative">
+                    <label class="label-fisiocid">Nombre(s)</label>
+                    <input type="text" id="valNombre" class="form-control form-fisiocid" autocomplete="off">
+                    <div id="sugerencias-pacientes" class="list-group position-absolute w-100 shadow-sm d-none" style="z-index: 1000; top: 100%;"></div>
                 </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid">Apellido Paterno</label>
+                    <input type="text" id="valPaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                </div>
+                <div class="col-md-4">
+                    <label class="label-fisiocid">Apellido Materno</label>
+                    <input type="text" id="valMaterno" class="form-control form-fisiocid" oninput="procesarCurp()">
+                </div>
+            </div>
 
                 <div class="col-md-3">
                     <label class="label-fisiocid">Fecha Nac.</label>
@@ -142,17 +142,24 @@
                     </select>
                 </div>
 
-                <div class="col-12">
-                    <div class="label-fisiocid text-primary mb-1">CURP (Llave Maestra FisioCid)</div>
-                    <div class="input-group">
-                        <input type="text" id="curp-parte1" class="form-control fw-bold bg-light" style="width: 45%;" readonly>
-                        <input type="text" id="curp-estado" class="form-control fw-bold text-center border-primary" placeholder="--" maxlength="2" style="width: 15%; color: #0d6efd;" oninput="saltarAHomoclave(this)">
-                        <div class="input-group-text p-0" style="width: 40%;">
-                            <input type="text" id="curp-consonantes" class="form-control border-0 bg-light fw-bold" style="width: 60%;" readonly>
-                            <input type="text" id="curp-homo" class="form-control border-0 fw-bold text-center" placeholder="--" maxlength="2" style="width: 40%; color: #0d6efd;">
-                        </div>
-                    </div>
+                <!-- Llave Maestra CURP con Botón Auto RENAPO -->
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="label-fisiocid text-primary fw-bold">CURP (Llave Maestra FisioCid)</div>
+                    <span class="text-muted" style="font-size: 0.65rem;">(¿No sabes la homoclave?)</span>
                 </div>
+                <div class="input-group">
+                    <input type="text" id="curp-parte1" class="form-control fw-bold bg-light" style="width: 35%;" readonly placeholder="LLAVE BASE">
+                    <input type="text" id="curp-estado" class="form-control fw-bold text-center border-primary" placeholder="--" maxlength="2" style="width: 10%; color: #0d6efd;" oninput="saltarAHomoclave(this)">
+                    <input type="text" id="curp-consonantes" class="form-control border-0 bg-light fw-bold text-center" style="width: 20%;" readonly placeholder="CCC">
+                    <input type="text" id="curp-homo" class="form-control fw-bold text-center border-danger" placeholder="00" maxlength="2" style="width: 15%; color: #0d6efd;" required>
+                    
+                    <button class="btn btn-outline-danger fw-bold" type="button" id="btnAutoHomo" onclick="autocompletarHomoclaveRenapo()" style="width: 20%;">
+                        <i class="fas fa-bolt" id="iconoAutoHomo"></i> Auto
+                    </button>
+                </div>
+                <div id="msjHomoclaveAuto" class="fw-bold mt-1 text-center" style="font-size: 0.7rem;"></div>
+            </div>
             </div>
             
             <div class="row g-3 mt-2">

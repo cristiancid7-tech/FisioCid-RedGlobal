@@ -10,15 +10,12 @@ const especialidadActiva = localStorage.getItem('especialidad_usuario') || 'Labo
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-    //console.log("🚀 Portal Laboratorio Iniciando Motores...");
-    
+    // 1. Identidad y configuración visual
     const elSpanEspecialidad = document.getElementById('especialidad_usuario');
     if (elSpanEspecialidad) {
-        // Lo ponemos en Mayúscula Inicial o como prefieras
         elSpanEspecialidad.innerText = especialidadActiva.charAt(0).toUpperCase() + especialidadActiva.slice(1).toLowerCase();
     }
 
-    // 1. Identidad y configuración visual
     await mostrarNombreEspecialista();
     await aplicarIdentidadGabinete();
     await inicializarRolUsuario();
@@ -27,11 +24,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     configurarBuscadorDoctor();
     configurarBuscadorQuimico();
 
-    // 🔥 3. MAYÚSCULAS AUTOMÁTICAS GLOBALES (Menos en correos)
+    // 3. MAYÚSCULAS AUTOMÁTICAS GLOBALES (Menos en correos)
     document.addEventListener('input', (e) => {
         const el = e.target;
         if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && 
-             el.type !== 'email' && el.type !== 'password' && el.id !== 'valEmail' && el.id !== 'correo-tutor') {
+            el.type !== 'email' && el.type !== 'password' && el.id !== 'valEmail' && el.id !== 'correo-tutor') {
             el.value = el.value.toUpperCase();
         }
     });
@@ -49,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         inputArchivosModal.addEventListener('change', manejarSeleccionArchivos);
     }
 
-    // 🎯 5. CONFIGURACIÓN INDESTRUCTIBLE DE ESCUCHAS PARA CURP Y FOLIOS
+    // 5. CONFIGURACIÓN DE ESCUCHAS PARA CURP Y FOLIOS
     const inputsCurp = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'genero-manual', 'valEstado'];
     inputsCurp.forEach(id => {
         const el = document.getElementById(id);
@@ -63,29 +60,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🔥 6. INTERCEPTOR DE DASHBOARD (Auto-relleno de Paciente)
+    // 6. INTERCEPTOR DE DASHBOARD (Auto-relleno de Paciente)
     const pacientePrecargado = localStorage.getItem('paciente_precargado');
-    
     if (pacientePrecargado) {
         try {
-            // Convertimos el texto de vuelta a objeto
             const pacienteObj = JSON.parse(pacientePrecargado);
-            
-            // Ejecutamos tu función mágica
             autorrellenarCamposLaboratorio(pacienteObj);
-            
-            // Limpiamos el localStorage
             localStorage.removeItem('paciente_precargado');
-            
             console.log("✅ Paciente importado exitosamente desde el Dashboard");
         } catch(err) {
             console.error("❌ Error leyendo datos del paciente precargado:", err);
             localStorage.removeItem('paciente_precargado'); 
         }
     }
-}); // <-- Aquí termina el ÚNICO DOMContentLoaded
 
+    // 🧹 7. ESCUDO UNIFICADO ANTI-CAJITAS PASMADAS (Clic afuera, Escape, TAB y focusout)
+    document.addEventListener('click', (e) => {
+        const listasFlotantes = document.querySelectorAll('.list-group.position-absolute');
+        listasFlotantes.forEach(lista => {
+            const inputAsociado = lista.parentElement?.querySelector('input');
+            if (!lista.contains(e.target) && (!inputAsociado || !inputAsociado.contains(e.target))) {
+                lista.classList.add('d-none');
+            }
+        });
+    });
 
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' || e.key === 'Tab') {
+            document.querySelectorAll('.list-group.position-absolute').forEach(el => {
+                el.classList.add('d-none');
+            });
+        }
+    });
+
+    document.addEventListener('focusout', (e) => {
+        setTimeout(() => {
+            const elementoActivo = document.activeElement;
+            document.querySelectorAll('.list-group.position-absolute').forEach(lista => {
+                if (!lista.contains(elementoActivo)) {
+                    lista.classList.add('d-none');
+                }
+            });
+        }, 150);
+    });
+});
 
 // Lista de los que mandan en el laboratorio
 const especialidadesDictaminadoras = ['QUIMICO', 'BIOQUIMICO', 'PATOLOGO', 'GENETISTA'];
@@ -339,12 +357,9 @@ function saltarAHomoclave(input) {
     }
 }
 
- document.getElementById('curp-homo')?.addEventListener('input', () => {
-        if (!pacienteExistenteId) {
-            //console.log("📝 Paciente nuevo absoluto. Generando folio consecutivo...");
-            gestionarFolioAutomatico(null);
-        }
-    });
+
+
+
 
 
 function calcularEdad(fechaNacimiento) {
@@ -376,15 +391,14 @@ function actualizarInterfazEdad() {
 }
 
 // ============================================================================
-// 🔒 GESTOR VISUAL DE CANDADOS PREMIUM (CONGELACIÓN DE INPUTS EN GRIS)
+// 🔒 GESTOR VISUAL DE CANDADOS PREMIUM (CONGELACIÓN Y APAGADO DE BOTÓN AUTO)
 // ============================================================================
 function congelarCamposIdentidad(bloquear) {
-    //console.log(`🛡️ Ajustando candados del búnker analítico. Bloqueo: ${bloquear}`);
-    
     const idsCriticos = [
         'valNombre', 'valPaterno', 'valMaterno', 'valFecha', 
         'genero-manual', 'valEstado', 'curp-parte1', 'curp-estado', 
-        'curp-consonantes', 'curp-homo', 'tel-manual', 'valEmail', 'tutor-nombre', 'tutor-parentesco', 'tutor-tel'
+        'curp-consonantes', 'curp-homo', 'tel-manual', 'valEmail', 
+        'tutor-nombre', 'tutor-parentesco', 'tutor-tel'
     ];
 
     idsCriticos.forEach(id => {
@@ -393,12 +407,26 @@ function congelarCamposIdentidad(bloquear) {
             el.readOnly = bloquear;
             if (el.tagName === 'SELECT') el.disabled = bloquear;
             
-            // Estilos estéticos idénticos a nuevo-paciente
             el.style.backgroundColor = bloquear ? "#edf2f7" : "#ffffff";
             el.style.color = bloquear ? "#4a5568" : "#000000";
             el.style.cursor = bloquear ? "not-allowed" : "text";
         }
     });
+
+    // ⚡ APAGADO / ACTIVACIÓN ANTI-TONTOS DEL BOTÓN AUTO RENAPO
+    const btnAuto = document.getElementById('btnAutoHomo');
+    if (btnAuto) {
+        btnAuto.disabled = bloquear;
+        if (bloquear) {
+            btnAuto.className = "btn btn-secondary fw-bold disabled";
+            btnAuto.style.width = "20%";
+            btnAuto.innerHTML = '<i class="fas fa-check-circle text-success"></i> Listo';
+        } else {
+            btnAuto.className = "btn btn-outline-danger fw-bold";
+            btnAuto.style.width = "20%";
+            btnAuto.innerHTML = '<i class="fas fa-bolt" id="iconoAutoHomo"></i> Auto';
+        }
+    }
 }
 
 // ============================================================================
@@ -511,6 +539,12 @@ inputNombre?.addEventListener('input', async (e) => {
     }
 });
 
+document.addEventListener('click', (e) => {
+    if (!inputNombre?.contains(e.target) && !listaSugerencias?.contains(e.target)) {
+        listaSugerencias?.classList.add('d-none');
+    }
+});
+
 function autorrellenarCamposLaboratorio(p) {
     if (listaSugerencias) listaSugerencias.classList.add('d-none');
     pacienteExistenteId = p.id;
@@ -563,7 +597,115 @@ function autorrellenarCamposLaboratorio(p) {
     }
 }
 
+// ============================================================================
+// 🆕 REGISTRO DE PACIENTE NUEVO + VÍNCULO + EXPEDIENTE (PORTAL LABORATORIO)
+// ============================================================================
+async function registrarPacienteNuevo() {
+    const { data: { user } } = await fisioNet.auth.getUser();
+    if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
 
+    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    if (!clinicaId) throw new Error("No se detectó una clínica activa en la sesión.");
+
+    // Captura de datos de identidad desde el formulario de laboratorio
+    const nombreVal = document.getElementById('valNombre')?.value.trim() || '';
+    const paternoVal = document.getElementById('valPaterno')?.value.trim() || '';
+    const maternoVal = document.getElementById('valMaterno')?.value.trim() || '';
+    const fechaNacVal = document.getElementById('valFecha')?.value || null;
+    const generoVal = document.getElementById('genero-manual')?.value || null;
+    const estadoVal = document.getElementById('valEstado')?.value || null;
+    const telefonoVal = document.getElementById('tel-manual')?.value.trim() || null;
+    const emailVal = document.getElementById('valEmail')?.value.trim() || null;
+
+    // Reconstrucción de la CURP desde los 4 bloques
+    const p1 = document.getElementById('curp-parte1')?.value || '';
+    const p2 = document.getElementById('curp-estado')?.value || '';
+    const p3 = document.getElementById('curp-consonantes')?.value || '';
+    const p4 = document.getElementById('curp-homo')?.value || '';
+    const curpCompleta = `${p1}${p2}${p3}${p4}`.toUpperCase();
+
+    if (!nombreVal || !paternoVal) {
+        throw new Error("Por favor captura al menos el Nombre y el Apellido Paterno del paciente.");
+    }
+
+    // Evaluación si es menor de edad
+    let esMenor = false;
+    if (fechaNacVal) {
+        const fechaNac = new Date(fechaNacVal + "T00:00:00");
+        const hoy = new Date();
+        let edad = hoy.getFullYear() - fechaNac.getFullYear();
+        if (hoy.getMonth() < fechaNac.getMonth() || (hoy.getMonth() === fechaNac.getMonth() && hoy.getDate() < fechaNac.getDate())) edad--;
+        esMenor = edad < 18;
+    }
+
+    // 1️⃣ INSERTAR EN pacientes_maestros
+    const payloadPaciente = {
+        nombre: nombreVal.toUpperCase(),
+        apellido_paterno: paternoVal.toUpperCase(),
+        apellido_materno: maternoVal ? maternoVal.toUpperCase() : null,
+        fecha_nacimiento: fechaNacVal,
+        genero: (generoVal && generoVal !== 'SELECCION') ? generoVal : null,
+        estado_nacimiento: estadoVal,
+        curp: curpCompleta.length === 18 ? curpCompleta : null,
+        telefono: telefonoVal,
+        correo_electronico: emailVal,
+        creado_por: user.id,
+        id_clinica: clinicaId,
+        id_clinica_origen: clinicaId,
+        nombre_clinica: localStorage.getItem('nombre_clinica') || 'FisioCid',
+        fecha_registro: new Date().toISOString(),
+        es_menor_edad: esMenor,
+        nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
+        parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
+        telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
+        acceso_red_activo: true,
+        consentimiento_firmado: true,
+        fecha_firma_consentimiento: new Date().toISOString()
+    };
+
+    const { data: resPaciente, error: errPaciente } = await fisioNet
+        .from('pacientes_maestros')
+        .insert([payloadPaciente])
+        .select();
+
+    if (errPaciente) throw errPaciente;
+    if (!resPaciente || resPaciente.length === 0) throw new Error("No se pudo registrar el paciente en la Ficha Maestra.");
+
+    const nuevoPacienteId = resPaciente[0].id;
+
+    // 2️⃣ REGISTRAR EN vinculos_clinicos
+    const { error: errVinculo } = await fisioNet.from('vinculos_clinicos').insert([{
+        paciente_id: nuevoPacienteId,
+        profesional_id: user.id,
+        id_clinica: clinicaId,
+        rol_en_relacion: 'OPERATIVO',
+        estado_vinculo: 'ACTIVO'
+    }]);
+
+    if (errVinculo) console.warn("⚠️ Advertencia al crear vínculo clínico:", errVinculo.message);
+
+    // 3️⃣ GENERAR FOLIO E INSERTAR EN expedientes_clinicos
+    const resFolio = await gestionarFolioAutomatico(null);
+    const folioSede = resFolio?.folio || document.getElementById('inputFolioExpediente')?.value || null;
+    const partesFolio = (folioSede || "").split('-');
+    const consecutivoFinal = parseInt((partesFolio[partesFolio.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+
+    const { error: errExpediente } = await fisioNet.from('expedientes_clinicos').insert([{
+        id_paciente: nuevoPacienteId,
+        id_clinica: clinicaId,
+        folio_personalizado: folioSede,
+        numero_consecutivo: consecutivoFinal,
+        estado_expediente: 'ACTIVO'
+    }]);
+
+    if (errExpediente) console.warn("⚠️ Advertencia al crear expediente clínico:", errExpediente.message);
+
+    // Sincronizar variables globales de la sesión
+    pacienteExistenteId = nuevoPacienteId;
+    window.pacienteCargado = resPaciente[0];
+
+    return nuevoPacienteId;
+}
 async function guardarEstudioLaboratorio(event) {
     if (event) event.preventDefault();
     const btn = document.getElementById('btn-finalizar-laboratorio');
@@ -573,7 +715,7 @@ async function guardarEstudioLaboratorio(event) {
     const inputQuimicoTexto = document.getElementById('buscador-quimico')?.value.trim();
     const inputDoctorTexto = document.getElementById('buscador-doctor')?.value.trim();
 
-    // Validar que al menos se tenga texto o selección
+    // Validar selección de Químico y Doctor
     if (!inputQuimicoTexto) {
         alert("⚠️ ¡Error! Debes ingresar o seleccionar al Químico / Especialista asignado.");
         return;
@@ -601,14 +743,13 @@ async function guardarEstudioLaboratorio(event) {
 
         const idClinicaActiva = localStorage.getItem('id_clinica_activa');
 
-        // 2. Registrar o recuperar Paciente
+        // 2. Registrar o recuperar Paciente en la Ficha Maestra + Vínculo + Expediente
         let idPacienteActual = pacienteExistenteId; 
         if (!idPacienteActual) {
-            //console.log("🆕 Registrando paciente nuevo en la Ficha Maestra...");
             idPacienteActual = await registrarPacienteNuevo(); 
         }
 
-        // 3. Subida de archivos (PDFs/Estudios)
+        // 3. Subida de archivos (PDFs/Fotos)
         let rutasSubidas = [];
         try {
             const resultadosSubida = await subirArchivosASupabase(
@@ -630,44 +771,40 @@ async function guardarEstudioLaboratorio(event) {
         const otro = document.getElementById('otro-estudio')?.value?.trim();
         if (otro) etiquetas.push(otro.toUpperCase());
 
-        // 5. Construcción del Payload Seguro
+        // 5. Construcción de CURP completa y Folio
+        const p1 = document.getElementById('curp-parte1')?.value || '';
+        const p2 = document.getElementById('curp-estado')?.value || '';
+        const p3 = document.getElementById('curp-consonantes')?.value || '';
+        const p4 = document.getElementById('curp-homo')?.value || '';
+        const curpCompleta = `${p1}${p2}${p3}${p4}`.toUpperCase();
+        const folioSede = document.getElementById('inputFolioExpediente')?.value || null;
+
+        // 6. Payload Final para la tabla estudios_laboratorio
         const payload = {
-            id: crypto.randomUUID(),
             paciente_id: idPacienteActual,
             id_socio_emisor: idClinicaActiva,
-            paciente_nombre: document.getElementById('valNombre')?.value.toUpperCase() || '',
-            apellido_paterno: document.getElementById('valPaterno')?.value.toUpperCase() || '',
-            apellido_materno: document.getElementById('valMaterno')?.value.toUpperCase() || '',
-            paciente_curp: (document.getElementById('curp-parte1')?.value || '') + 
-                           (document.getElementById('curp-estado')?.value || '') + 
-                           (document.getElementById('curp-consonantes')?.value || '') + 
-                           (document.getElementById('curp-homo')?.value || ''),
+            creado_por: user.id,
+            doctor_emisor_id: elDoctorHidden?.value || null,
+            id_radiologo_firmante: elQuimicoHidden?.value || null,
+            medico_referente_nombre: inputDoctorTexto.toUpperCase(),
+            quimico_asignado_nombre: inputQuimicoTexto.toUpperCase(),
+            paciente_nombre: document.getElementById('valNombre')?.value.toUpperCase(),
+            apellido_paterno: document.getElementById('valPaterno')?.value.toUpperCase(),
+            apellido_materno: document.getElementById('valMaterno')?.value?.toUpperCase() || null,
+            paciente_curp: curpCompleta.length === 18 ? curpCompleta : null,
             fecha_nacimiento: document.getElementById('valFecha')?.value || null,
-            edad_actual: document.getElementById('valFecha')?.value ? calcularEdad(document.getElementById('valFecha').value).anos : null,
-            genero: document.getElementById('genero-manual')?.value || 'NO ESPECIFICADO',
-            telefono_paciente: document.getElementById('tel-manual')?.value || null,
-            correo_paciente: document.getElementById('valEmail')?.value || null,
-            nombre_tutor: document.getElementById('tutor-nombre')?.value.toUpperCase() || null,
-            parentesco_tutor: document.getElementById('tutor-parentesco')?.value.toUpperCase() || null,
-            numero_tutor: document.getElementById('tutor-tel')?.value || null,
             estudios_etiquetas: etiquetas,
-            archivo_pdf_url: rutasSubidas.length > 0 ? rutasSubidas.join(',') : null,
-            especialista_muestrista: user.id,
-            especialista_quimico: elQuimicoHidden?.value || null, // Si es UUID guardado
-            id_doctor_referente: elDoctorHidden?.value || null,   // Si es UUID guardado
-            doctor_referente_nombre: inputDoctorTexto.toUpperCase(), // Respaldo de nombre en texto legible
-            estado: 'PENDIENTE_ANALISIS',
-            fecha_captura: new Date().toISOString(),
-            observaciones: document.getElementById('observaciones-laboratorio')?.value?.trim() || null,
-            metodo_carga: 'MANUAL',
             id_estudio_catalogo: arrayNumeros,
-            created_at: new Date().toISOString()
+            archivo_pdf_url: rutasSubidas.length > 0 ? rutasSubidas.join(',') : null,
+            estado: 'PENDIENTE',
+            metodo_carga: 'CAPTURA',
+            folio_expediente: folioSede
         };
 
         const { error: errInsert } = await fisioNet.from('estudios_laboratorio').insert([payload]);
         if (errInsert) throw errInsert;
 
-        alert("✅ ESTUDIO ASIGNADO Y REGISTRADO CORRECTAMENTE.");
+        alert("✅ ESTUDIO DE LABORATORIO ASIGNADO Y EXPEDIENTE REGISTRADO EN RED.");
         window.location.reload();
 
     } catch (err) {
@@ -810,9 +947,6 @@ window.filtrarHistorial = () => {
 };
 
 
-// ============================================================================
-// 🔢 MOTOR DE EXPEDIENTES LOCALES (REPLICADO DE NUEVO-PACIENTE)
-// ============================================================================
 async function gestionarFolioAutomatico(idPacienteExistente = null) {
     //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
     const idClinica = localStorage.getItem('id_clinica_activa');
@@ -821,12 +955,11 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
 
     if (!idClinica) {
         console.error("❌ Error: id_clinica_activa no encontrado en localStorage");
-        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ERROR DE ENTORNO';
         return;
     }
 
     try {
-        // 1. SI EL PACIENTE YA EXISTE EN ESTA SEDE
+        // 1. SI EL PACIENTE YA EXISTE
         if (idPacienteExistente) {
             //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
@@ -838,38 +971,48 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
 
             if (exp) {
                 //console.log("✅ Folio encontrado:", exp.folio_personalizado);
-                inputFolio.value = exp.folio_personalizado;
-                if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> EXPEDIENTE LOCALIZADO';
+                if (inputFolio) inputFolio.value = exp.folio_personalizado;
+                if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle"></i> EXPEDIENTE LOCALIZADO';
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
             //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
-        // 2. GENERAR NUEVO CONSECUTIVO LOCAL
+        // 2. GENERAR NUEVO
         //console.log("🏗️ Generando nuevo folio...");
         
-        // Ejecutamos ambas consultas al mismo tiempo para ganar velocidad
-        const [confRes, countRes] = await Promise.all([
-            fisioNet.from('clinicas').select('folio_prefijo, folio_sede, folio_separador').eq('id', idClinica).single(),
-            fisioNet.from('expedientes_clinicos').select('*', { count: 'exact', head: true }).eq('id_clinica', idClinica)
-        ]);
+        // A) Obtenemos la configuración de folios de la clínica
+        const { data: conf, error: errConf } = await fisioNet
+            .from('clinicas')
+            .select('folio_prefijo, folio_sede, folio_separador')
+            .eq('id', idClinica)
+            .single();
 
-        if (confRes.error) throw confRes.error;
+        if (errConf) throw errConf;
 
-        const conf = confRes.data;
-        const count = countRes.count || 0;
+        // B) Obtenemos el conteo real de expedientes registrados en esta clínica
+        const { count, error: errCount } = await fisioNet
+            .from('expedientes_clinicos')
+            .select('id', { count: 'exact', head: true })
+            .eq('id_clinica', idClinica);
+
+        if (errCount) throw errCount;
+
+        // C) Formateo e incremento del consecutivo
+        const totalRegistrados = count !== null && count !== undefined ? count : 0;
+        const siguiente = totalRegistrados + 1;
 
         const prefijo = (conf.folio_prefijo || 'FC').toUpperCase();
         const sede = (conf.folio_sede || 'MIA').toUpperCase();
         const sep = conf.folio_separador || '-';
         const anio = new Date().getFullYear();
-        const siguiente = count + 1;
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        //console.log("✨ Folio generado con éxito:", nuevoFolio);
-        inputFolio.value = nuevoFolio;
-        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic text-primary"></i> NUEVO EXPEDIENTE POR ASIGNAR';
+        //console.log(`✨ Conteo actual: ${totalRegistrados} | Siguiente asignado: ${siguiente} | Folio: ${nuevoFolio}`);
+        
+        if (inputFolio) inputFolio.value = nuevoFolio;
+        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
         
         return { folio: nuevoFolio, numero_consecutivo: siguiente, nuevo: true };
 
@@ -878,7 +1021,6 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ERROR DE CONEXIÓN';
     }
 }
-
 
 async function renderizarCamposDinamicos(idsArray) {
     const contenedor = document.getElementById('contenedor-campos-dinamicos');
@@ -1625,3 +1767,231 @@ function cerrarVisorLaboratorio() {
     tomasLabActuales = [];
     indiceTomaLab = 0;
 }
+
+// =====================================================================
+// 🤖 AUTOCOMPLETADO DE HOMOCLAVE RENAPO PARA PORTAL LABORATORIO
+// =====================================================================
+
+// 💡 Parpadeo visual en amarillo para enfocar la vista del usuario
+function hacerParpadearCamposBase(ids) {
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            const bgOriginal = el.style.backgroundColor;
+            const borderOriginal = el.style.borderColor;
+            
+            el.style.transition = 'all 0.3s ease';
+            
+            // Destello 1
+            el.style.backgroundColor = '#fff3cd';
+            el.style.borderColor = '#ffc107';
+            
+            setTimeout(() => {
+                el.style.backgroundColor = bgOriginal;
+                el.style.borderColor = borderOriginal;
+            }, 500);
+
+            // Destello 2
+            setTimeout(() => {
+                el.style.backgroundColor = '#fff3cd';
+                el.style.borderColor = '#ffc107';
+            }, 1000);
+
+            setTimeout(() => {
+                el.style.backgroundColor = bgOriginal;
+                el.style.borderColor = borderOriginal;
+            }, 1500);
+        }
+    });
+}
+
+
+
+// =====================================================================
+// 🔍 1. FUNCIÓN CENTRAL: BÚSQUEDA EN BASE DE DATOS POR CURP COMPLETA
+// =====================================================================
+async function verificarPacienteExistentePorCurp(curpCompleta) {
+    if (!curpCompleta || curpCompleta.length !== 18) return;
+
+    const statusFolio = document.getElementById('statusFolio');
+    const msjAuto = document.getElementById('msjHomoclaveAuto');
+
+    if (statusFolio) {
+        statusFolio.innerHTML = '<i class="fas fa-spinner fa-spin text-primary"></i> Consultando base de datos...';
+    }
+
+    try {
+        const { data: paciente, error } = await fisioNet
+            .from('pacientes_maestros')
+            .select('*')
+            .eq('curp', curpCompleta.toUpperCase())
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (paciente) {
+            autorrellenarCamposLaboratorio(paciente);
+            
+            if (statusFolio) {
+                statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> PACIENTE REGISTRADO EN RED - EXPEDIENTE RECURSADO';
+            }
+            if (msjAuto) {
+                msjAuto.innerHTML = "<span class='text-success'>✅ ¡Paciente localizado y expediente cargado!</span>";
+            }
+        } else {
+            pacienteExistenteId = null;
+            
+            if (statusFolio) {
+                statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
+            }
+            if (msjAuto) {
+                msjAuto.innerHTML = "<span class='text-success'>✅ CURP Verificada (Paciente Nuevo)</span>";
+            }
+
+            if (typeof gestionarFolioAutomatico === 'function') {
+                gestionarFolioAutomatico(null);
+            }
+
+            // 🎯 Salta el cursor al teléfono
+            document.getElementById('tel-manual')?.focus();
+        }
+    } catch (err) {
+        console.error("❌ Error verificando CURP en DB:", err.message);
+        if (statusFolio) {
+            statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error de conexión con expedientes';
+        }
+    }
+}
+
+
+// =====================================================================
+// 🤖 2. BOTÓN AUTOCOMPLETAR HOMOCLAVE (RENAPO + CONSULTA BD)
+// =====================================================================
+async function autocompletarHomoclaveRenapo() {
+    const btn = document.getElementById('btnAutoHomo');
+    const icono = document.getElementById('iconoAutoHomo');
+    const msj = document.getElementById('msjHomoclaveAuto');
+    const inputHomo = document.getElementById('curp-homo');
+    const listaSugerencias = document.getElementById('sugerencias-laboratorio');
+
+    const listaCampos = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'genero-manual', 'valEstado'];
+
+    // Ocultar sugerencias flotantes
+    if (listaSugerencias) {
+        listaSugerencias.innerHTML = '';
+        listaSugerencias.classList.add('d-none');
+    }
+
+    // Recolectar datos de la interfaz
+    const nombres = document.getElementById('valNombre')?.value.trim().toUpperCase() || "";
+    const apellidoPaterno = document.getElementById('valPaterno')?.value.trim().toUpperCase() || "";
+    const apellidoMaterno = document.getElementById('valMaterno')?.value.trim().toUpperCase() || "";
+    const fechaNacimiento = document.getElementById('valFecha')?.value || ""; 
+    const generoFull = document.getElementById('genero-manual')?.value || "";
+    const estadoSelect = document.getElementById('valEstado');
+    const estadoTexto = estadoSelect?.options[estadoSelect.selectedIndex]?.text.toUpperCase() || "";
+
+    hacerParpadearCamposBase(listaCampos);
+
+    // Validaciones previas
+    if(!nombres || !apellidoPaterno || !fechaNacimiento || !generoFull || generoFull === 'SELECCION' || !estadoSelect?.value) {
+        msj.innerHTML = "<span class='text-danger'>⚠️ Llena los datos de identidad arriba primero.</span>";
+        return;
+    }
+
+    if (nombres.length < 2 || apellidoPaterno.length < 2) {
+        msj.innerHTML = "<span class='text-danger'>❌ Error: Nombre y Paterno deben tener al menos 2 letras.</span>";
+        return;
+    }
+
+    if (nombres === 'XX' || apellidoPaterno === 'XX' || nombres === 'NN') {
+        msj.innerHTML = "<span class='text-danger'>❌ Error: Escribe nombres reales.</span>";
+        return;
+    }
+
+    if (/\d/.test(nombres) || /\d/.test(apellidoPaterno) || /\d/.test(apellidoMaterno)) {
+        msj.innerHTML = "<span class='text-danger'>❌ Error: Los nombres no deben llevar números.</span>";
+        return;
+    }
+
+    const anioNacimiento = parseInt(fechaNacimiento.split('-')[0]);
+    const anioActual = new Date().getFullYear();
+    if (anioNacimiento < 1916 || anioNacimiento > anioActual) {
+        msj.innerHTML = "<span class='text-danger'>❌ Error: Año de nacimiento ilógico.</span>";
+        document.getElementById('valFecha').focus();
+        return;
+    }
+
+    const generoTlaloc = (generoFull === 'HOMBRE') ? 'H' : 'M';
+
+    btn.disabled = true;
+    icono.className = "fas fa-spinner fa-spin";
+    msj.innerHTML = "<span class='text-primary'>🔍 Verificando en RENAPO...</span>";
+
+    try {
+        const { data, error } = await fisioNet.functions.invoke('validar-curp', {
+            body: { 
+                nombres, 
+                apellidoPaterno, 
+                apellidoMaterno, 
+                fechaNacimiento, 
+                genero: generoTlaloc, 
+                estado: estadoTexto 
+            }
+        });
+
+        if (error) throw error;
+        
+        if (data.error || !data.curp) {
+             msj.innerHTML = "<span class='text-danger'>❌ No se encontró en RENAPO. Revisa la ortografía.</span>";
+             return;
+        }
+
+        const curpCompleta = data.curp.toUpperCase();
+        
+        // Rellenar las casillas visualmente
+        const p1 = document.getElementById('curp-parte1'); if (p1) p1.value = curpCompleta.substring(0, 11);
+        const p2 = document.getElementById('curp-estado'); if (p2) p2.value = curpCompleta.substring(11, 13);
+        const p3 = document.getElementById('curp-consonantes'); if (p3) p3.value = curpCompleta.substring(13, 16);
+        if (inputHomo) inputHomo.value = curpCompleta.substring(16, 18);
+
+        // 🎯 Lanza la búsqueda unificada en base de datos
+        await verificarPacienteExistentePorCurp(curpCompleta);
+
+    } catch (err) {
+        console.error("Error en consulta RENAPO:", err);
+        msj.innerHTML = "<span class='text-danger'>⚠️ Error de conexión.</span>";
+    } finally {
+        btn.disabled = false;
+        icono.className = "fas fa-bolt";
+        setTimeout(() => { 
+            if(msj.innerHTML.includes('Verificada') || msj.innerHTML.includes('localizado')) msj.innerHTML = ""; 
+        }, 4000);
+    }
+}
+
+
+// =====================================================================
+// 🎯 3. ESCUCHA DE HOMOCLAVE MANUAL (SI ESCRIBEN EL "01" A MANO)
+// =====================================================================
+document.getElementById('curp-homo')?.addEventListener('input', async (e) => {
+    const homo = e.target.value.trim().toUpperCase();
+
+    // En cuanto se completan los 2 caracteres de la homoclave:
+    if (homo.length === 2) {
+        const p1 = document.getElementById('curp-parte1')?.value || '';
+        const p2 = document.getElementById('curp-estado')?.value || '';
+        const p3 = document.getElementById('curp-consonantes')?.value || '';
+        
+        const curpCompleta = `${p1}${p2}${p3}${homo}`.toUpperCase();
+
+        if (curpCompleta.length === 18) {
+            // Ocultar sugerencias flotantes si estuvieran abiertas
+            const listaSugerencias = document.getElementById('sugerencias-laboratorio');
+            if (listaSugerencias) listaSugerencias.classList.add('d-none');
+
+            // Lanza la verificación en BD antes de asumir si es nuevo o viejo
+            await verificarPacienteExistentePorCurp(curpCompleta);
+        }
+    }
+});
