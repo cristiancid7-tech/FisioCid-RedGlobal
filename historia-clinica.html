@@ -222,6 +222,45 @@
     border-color: #d97706 !important;
     box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
 }
+
+/* =========================================================
+   📱 RESPONSIVO Y CORRECCIÓN DE DESBORDE MÓVIL
+   ========================================================= */
+
+/* Prevenir scroll horizontal en toda la página */
+html, body {
+    max-width: 100vw;
+    overflow-x: hidden;
+}
+
+/* Ajuste del Header Fijo del Paciente en pantallas pequeñas */
+@media (max-width: 576px) {
+    .header-paciente {
+        padding: 8px !important;
+    }
+
+    /* Hace que los botones de la cabecera se ajusten y no empujen la pantalla */
+    .header-paciente .d-flex {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+
+    .header-paciente button {
+        font-size: 0.6rem !important;
+        padding: 4px 6px !important;
+    }
+
+    /* Reducir tamaño del botón flotante "Solicitar Estudio" para no obstruir los botones principales */
+    #modalEstudioExpress + button, 
+    button[onclick="abrirModalEstudioExpress()"] {
+        bottom: 15px !important;
+        left: 15px !important;
+        padding: 8px 14px !important;
+        font-size: 0.72rem !important;
+        border-radius: 30px !important;
+        opacity: 0.9;
+    }
+}
     </style>
 
 </head>
@@ -578,7 +617,9 @@
                     <label class="fw-bold small text-purple mb-1" style="color: #6d28d9;">
                         📝 IMPRESIÓN DIAGNÓSTICA / JUICIO CLÍNICO
                     </label>
-                    <textarea id="diagnostico_funcional" class="form-control" rows="3" style="font-weight: 700; color: #6d28d9; border: 1px solid #ddd6fe; background: #fff;" placeholder="Ej: Limitación funcional de hombro derecho secundaria a..."></textarea>
+            <textarea id="diagnostico_funcional" class="form-control" rows="3" 
+          style="font-weight: 700; color: #6d28d9; border: 1px solid #ddd6fe; background: #fff;" 
+          placeholder="Escriba aquí el juicio clínico, impresión diagnóstica o resumen de evolución del paciente..."></textarea>
                 </div>
             </div>
 
@@ -614,13 +655,7 @@
                     <textarea id="plan_tratamiento" class="form-control" rows="3" style="border: 2px solid #e2e8f0; border-radius: 12px;" placeholder="Indicaciones terapéuticas, prescripción farmacológica, conducta o plan de manejo"></textarea>
                 </div>
 
-                <!-- Medicación Recetada -->
-                <div class="p-3 mb-3 rounded-3" style="background: #fffbeb; border: 1px solid #fde68a;">
-                    <label class="fw-bold small text-warning-d dark mb-1" style="color: #b45309;">
-                        💊 CAMBIOS / NUEVA MEDICACIÓN RECETADA
-                    </label>
-                    <textarea id="cambios_medicacion" class="form-control" rows="2" placeholder="Escriba aquí si recetó algo nuevo hoy..."></textarea>
-                </div>
+    
 
                 <!-- Pronóstico -->
                 <div class="row g-2 p-3 rounded-3 bg-light border">
