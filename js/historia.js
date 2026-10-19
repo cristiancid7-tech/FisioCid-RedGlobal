@@ -383,7 +383,6 @@ if (formHistoria) {
                 peso: parseFloat(document.getElementById('valPeso')?.value) || null,
                 talla: parseFloat(document.getElementById('valTalla')?.value) || null,
                 imc: parseFloat(document.getElementById('valIMC')?.value) || null,
-                hallazgos_dentales: document.getElementById('hallazgosDentales')?.value || '',
                 diagnostico_funcional: document.getElementById('diagnostico_funcional')?.value || '',
                 pronostico: `${document.getElementById('pronostico_select')?.value || ''}\n${document.getElementById('pronostico_detalle')?.value || ''}`,
                 fecha_nota: new Date().toISOString()
