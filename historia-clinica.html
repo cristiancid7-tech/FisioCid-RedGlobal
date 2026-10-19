@@ -261,6 +261,46 @@ html, body {
         opacity: 0.9;
     }
 }
+
+/* =========================================================
+   💊 ESTILOS SPEED DIAL MÚLTIPLE
+   ========================================================= */
+.btn-speed-option {
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 30px;
+    padding: 8px 16px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-speed-option:hover {
+    background: #1e293b;
+    transform: translateX(5px);
+}
+
+/* Ajuste fino para celulares */
+@media (max-width: 576px) {
+    #contenedor-speed-dial {
+        bottom: 15px !important;
+        left: 15px !important;
+    }
+    #btnMainSpeedDial {
+        padding: 10px 16px !important;
+        font-size: 0.75rem !important;
+    }
+    .btn-speed-option {
+        font-size: 0.72rem !important;
+        padding: 7px 12px !important;
+    }
+}
     </style>
 
 </head>
@@ -977,39 +1017,165 @@ function siguienteTabSOAP(idTab) {
     }
 </style>
 
-<button onclick="abrirModalEstudioExpress()" style="position: fixed; bottom: 30px; left: 30px; background: var(--primary); color: white; border: none; border-radius: 50px; padding: 12px 24px; font-weight: 800; box-shadow: 0 4px 15px rgba(0,0,0,0.3); cursor: pointer; z-index: 9999; display: inline-flex; width: fit-content; align-items: center; gap: 8px; transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-    <i class="fas fa-flask" style="color: white; margin: 0;"></i> Solicitar Estudio
-</button>
 
-<div id="modalEstudioExpress" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 10000; justify-content: center; align-items: center;">
-    <div class="animate__animated animate__zoomIn" style="background: white; padding: 25px; border-radius: 20px; width: 90%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; color: #1e293b; font-weight: 800; border: none;"><i class="fas fa-paper-plane" style="color: var(--primary);"></i> Enviar Solicitud</h3>
-            <button onclick="document.getElementById('modalEstudioExpress').style.display='none'" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; font-weight: bold;">✕</button>
-        </div>
+<!-- ========================================================= -->
+<!-- ⚡ SPEED DIAL PRO: BOTÓN FLOTANTE DISCRETO Y ELEGANTE -->
+<!-- ========================================================= -->
+<div id="contenedor-speed-dial" style="position: fixed; bottom: 20px; left: 20px; z-index: 10000; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px;">
+    
+    <!-- Botón Principal Disparador (Estilo Discreto Premium) -->
+    <button type="button" id="btnMainSpeedDial" onclick="toggleSpeedDial()" 
+            style="background: #0f172a; color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 30px; padding: 8px 16px; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3); backdrop-filter: blur(8px); transition: all 0.25s ease;">
+        <i class="fas fa-bolt text-warning" id="iconoSpeedDial" style="font-size: 0.85rem; transition: transform 0.3s ease;"></i>
+        <span style="letter-spacing: 0.3px;">Acciones Clínicas</span>
+    </button>
+
+    <!-- Menu Desplegable de Opciones -->
+    <div id="opcionesSpeedDial" style="display: none; flex-direction: column; gap: 6px; margin-left: 2px;">
         
-        <label style="font-size: 0.8rem; font-weight: 700; color: #475569;">¿Qué tipo de servicio es?</label>
-        <select id="tipoServicioExterno" style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #1e293b;">
-            <option value="LAB">🧪 Laboratorio Clínico (Sangre, Orina...)</option>
-            <option value="GAB">🩻 Gabinete (Rayos X, USG, RM...)</option>
-        </select>
-
-        <label style="font-size: 0.8rem; font-weight: 700; color: #475569;">¿Qué estudio necesitas exactamente?</label>
-        <input type="text" id="txtQueEstudio" placeholder="Ej. Biometría Hemática, Rx de Tórax..." style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit; text-transform: uppercase;">
-
-        <label style="font-size: 0.8rem; font-weight: 700; color: #475569;">¿A qué aliado de tu red lo enviamos?</label>
-        
-        <!-- ✨ BUSCADOR HÍBRIDO MEJORADO ✨ -->
-        <input type="text" id="inputLabDestino" list="listaLabs" placeholder="🔍 Buscar o elegir..." style="width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #1e293b; text-transform: uppercase; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
-        <datalist id="listaLabs">
-            <!-- Las opciones se inyectarán aquí con JavaScript -->
-        </datalist>
-
-        <button onclick="enviarSolicitudLab()" id="btnEnviarLab" style="width: 100%; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 800; cursor: pointer; transition: 0.2s;">
-            ENVIAR SOLICITUD 🚀
+        <!-- Opción 1: Subir Evidencia Fotográfica / Multimedia -->
+        <button type="button" onclick="abrirModalEvidenciaMultimedia()" class="btn-speed-option">
+            <i class="fas fa-camera text-info"></i>
+            <span>📸 Subir Foto / Evidencia Clínica</span>
         </button>
+
+        <!-- Opción 2: Solicitar Estudio a Aliado -->
+        <button type="button" onclick="abrirModalEstudioExpress()" class="btn-speed-option">
+            <i class="fas fa-flask text-warning"></i>
+            <span>🧪 Solicitar Estudio a Aliado</span>
+        </button>
+
     </div>
 </div>
+
+<!-- Estilos CSS del Speed Dial Discreto -->
+<style>
+.btn-speed-option {
+    background: rgba(15, 23, 42, 0.95);
+    color: #f1f5f9;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 0.73rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(6px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+
+.btn-speed-option:hover {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateX(4px);
+    color: #ffffff;
+}
+
+#btnMainSpeedDial:hover {
+    background: #1e293b;
+    border-color: var(--primary, #10b981);
+}
+
+/* Ajuste sutil para pantallas de teléfono */
+@media (max-width: 576px) {
+    #contenedor-speed-dial {
+        bottom: 12px !important;
+        left: 12px !important;
+    }
+    #btnMainSpeedDial {
+        padding: 7px 14px !important;
+        font-size: 0.72rem !important;
+    }
+    .btn-speed-option {
+        font-size: 0.7rem !important;
+        padding: 6px 12px !important;
+    }
+}
+</style>
+
+<!-- ========================================================= -->
+<!-- 📸 MODAL SUBIR EVIDENCIA CLÍNICA MULTIMEDIA MULTIDISCIPLINARIA -->
+<!-- ========================================================= -->
+<div id="modalEvidenciaMultimedia" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.75); backdrop-filter: blur(5px); z-index:10050; justify-content:center; align-items:center; padding: 15px;">
+    <div style="background:white; max-width:480px; width:100%; border-radius:18px; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);">
+        
+        <!-- Header -->
+        <div style="background: #0f172a; color: white; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+            <h5 class="fw-bold mb-0 d-flex align-items-center gap-2" style="font-size: 0.95rem;">
+                <i class="fas fa-camera text-info"></i> Subir Evidencia Clínica
+            </h5>
+            <button type="button" onclick="cerrarModalEvidenciaMultimedia()" style="background:transparent; border:none; color:#94a3b8; font-size:1.3rem; cursor:pointer;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">&times;</button>
+        </div>
+
+        <!-- Cuerpo del Modal -->
+        <div class="p-3 p-md-4" style="background: #f8fafc;">
+            <form id="formSubirEvidencia">
+                
+                <!-- Selector de Categoría Especializada -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-secondary">ÁREA O CATEGORÍA DE LA EVIDENCIA *</label>
+                    <select id="evidencia_categoria" class="form-select fw-bold" required style="border-radius: 10px; font-size: 0.85rem;">
+                        <option value="">-- SELECCIONAR CATEGORÍA --</option>
+                        
+                        <optgroup label="🩹 ENFERMERÍA Y CUIDADOS">
+                            <option value="ENF_UPP">🩹 Ulceras por Presión (UPP) / Cicatrización</option>
+                            <option value="ENF_ESTOMA">🩺 Control de Estoma / Heridas Complejas</option>
+                        </optgroup>
+
+                        <optgroup label="🦴 FISIOTERAPIA Y REHABILITACIÓN">
+                            <option value="FISIO_POSTURA">🧍 Evaluación Postural / Goniometría</option>
+                            <option value="FISIO_ECOGRAFIA">🩻 Ecografía Musculoesquelética (USG)</option>
+                            <option value="FISIO_EVOLUCION">📈 Evolución Funcional / Marcha</option>
+                        </optgroup>
+
+                        <optgroup label="🦷 ODONTOLOGÍA">
+                            <option value="ODONTO_INTRAORAL">🦷 Fotografía Intraoral / Arcada</option>
+                            <option value="ODONTO_RX">🩻 Radiografía Periapical / Panorámica</option>
+                            <option value="ODONTO_SONRISA">📸 Fotografía Extraoral / Diseño Sonrisa</option>
+                        </optgroup>
+
+                        <optgroup label="🩺 MEDICINA GENERAL Y ESPECIALIDADES">
+                            <option value="MED_IMAGEN">🩻 Estudio Imagen (Rx, RM, TAC)</option>
+                            <option value="MED_DERMA">🔬 Dermo / Lesión Cutánea</option>
+                            <option value="MED_LAB_PAPEL">🧪 Resultados de Laboratorio en Papel</option>
+                        </optgroup>
+
+                        <optgroup label="🥗 NUTRICIÓN Y 🧠 PSICOLOGÍA">
+                            <option value="NUTRI_ANTROPO">🥗 Antropometría / Composición Corporal</option>
+                            <option value="PSICO_TEST">🧠 Test Proyectivo / Dibujo / Documento</option>
+                        </optgroup>
+
+                        <option value="OTRO">📁 Otra Evidencia Clínica</option>
+                    </select>
+                </div>
+
+                <!-- Input File / Captura Directa -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-secondary">SELECCIONAR O TOMAR FOTO *</label>
+                    <input type="file" id="evidencia_archivo" accept="image/*" capture="environment" class="form-control" required style="border-radius: 10px; font-size: 0.82rem;">
+                    <div class="form-text micro">En celulares o tablets abrirá automáticamente la cámara.</div>
+                </div>
+
+                <!-- Descripción / Observación -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-secondary">NOTAS / OBSERVACIONES DE LA EVIDENCIA</label>
+                    <textarea id="evidencia_descripcion" class="form-control" rows="2" style="border-radius: 10px; font-size: 0.85rem;" placeholder="Ej: UPP Grado II en región sacra, midiendo 3x2 cm con tejido de granulación..."></textarea>
+                </div>
+
+                <!-- Botón Guardar -->
+                <button type="submit" id="btnGuardarEvidencia" class="btn btn-primary w-100 fw-bold rounded-pill py-2 shadow-sm" style="font-size: 0.85rem;">
+                    🚀 GUARDAR EVIDENCIA EN EXPEDIENTE
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+
 <!-- ========================================================= -->
 </body>
 </html>

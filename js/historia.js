@@ -1483,3 +1483,96 @@ async function cargarDatosDesdeRecetaPendiente() {
         console.error("❌ Error al procesar la receta pendiente:", err);
     }
 }
+
+// =========================================================
+// ⚡ CONTROL DEL SPEED DIAL FLOTANTE
+// =========================================================
+function toggleSpeedDial() {
+    const opciones = document.getElementById('opcionesSpeedDial');
+    const icono = document.getElementById('iconoSpeedDial');
+    
+    if (opciones.style.display === 'none' || opciones.style.display === '') {
+        opciones.style.display = 'flex';
+        if (icono) icono.style.transform = 'rotate(45deg)';
+    } else {
+        opciones.style.display = 'none';
+        if (icono) icono.style.transform = 'rotate(0deg)';
+    }
+}
+
+function abrirModalEvidenciaMultimedia() {
+    toggleSpeedDial(); // Cierra el menú desplegable
+    const modal = document.getElementById('modalEvidenciaMultimedia');
+    if (modal) modal.style.display = 'flex';
+}
+
+function cerrarModalEvidenciaMultimedia() {
+    const modal = document.getElementById('modalEvidenciaMultimedia');
+    if (modal) modal.style.display = 'none';
+}
+
+// =========================================================
+// 📤 SUBIR ARCHIVO A SUPABASE STORAGE Y GUARDAR EN BD
+// =========================================================
+document.getElementById('formSubirEvidencia')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const fileInput = document.getElementById('evidencia_archivo');
+    const categoria = document.getElementById('evidencia_categoria').value;
+    const descripcion = document.getElementById('evidencia_descripcion').value;
+    const btn = document.getElementById('btnGuardarEvidencia');
+
+    if (!fileInput.files.length) {
+        alert("Por favor selecciona o toma una fotografía.");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${window.pacienteCargado?.id || 'paciente'}_${Date.now()}.${fileExt}`;
+    const filePath = `evidencias_clinicas/${fileName}`;
+
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo imagen segura...';
+
+        // 1. Subir archivo al bucket de Supabase Storage
+        const clienteSupabase = window.fisioNet || window.supabase;
+        const { data: storageData, error: storageError } = await clienteSupabase.storage
+            .from('expedientes-multimedia')
+            .upload(filePath, file);
+
+        if (storageError) throw storageError;
+
+        // Obtener la URL pública o firmada
+        const { data: urlData } = clienteSupabase.storage
+            .from('expedientes-multimedia')
+            .getPublicUrl(filePath);
+
+        // 2. Insertar registro en la tabla de base de datos
+        const { error: dbError } = await clienteSupabase
+            .from('paciente_evidencia_multimedia')
+            .insert({
+                id_paciente: window.pacienteCargado?.id,
+                id_profesional: (await clienteSupabase.auth.getUser()).data.user?.id,
+                id_clinica: localStorage.getItem('id_clinica_activa'),
+                categoria_especialidad: categoria,
+                url_imagen: urlData.publicUrl,
+                descripcion: descripcion,
+                fecha_registro: new Date().toISOString()
+            });
+
+        if (dbError) throw dbError;
+
+        alert("✅ ¡Evidencia guardada exitosamente en el expediente!");
+        cerrarModalEvidenciaMultimedia();
+        document.getElementById('formSubirEvidencia').reset();
+
+    } catch (err) {
+        console.error("❌ Error al guardar evidencia:", err);
+        alert(`Error al guardar: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🚀 GUARDAR EVIDENCIA EN EXPEDIENTE';
+    }
+});
