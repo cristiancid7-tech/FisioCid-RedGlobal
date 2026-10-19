@@ -1484,8 +1484,9 @@ async function cargarDatosDesdeRecetaPendiente() {
     }
 }
 
+
 // =========================================================
-// ⚡ CONTROL DEL SPEED DIAL FLOTANTE
+// ⚡ CONTROL DEL SPEED DIAL FLOTANTE Y MODALES
 // =========================================================
 function toggleSpeedDial() {
     const opciones = document.getElementById('opcionesSpeedDial');
@@ -1511,8 +1512,25 @@ function cerrarModalEvidenciaMultimedia() {
     if (modal) modal.style.display = 'none';
 }
 
+// Saneador de nombres de archivo para Supabase Storage
+function sanearNombreArchivo(nombreOriginal) {
+    const extension = nombreOriginal.split('.').pop().toLowerCase();
+    const nombreSinExt = nombreOriginal.substring(0, nombreOriginal.lastIndexOf('.'));
+    
+    const nombreLimpio = nombreSinExt
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quita acentos
+        .replace(/[^a-zA-Z0-9_-]/g, "_")                  // Reemplaza símbolos por _
+        .replace(/_+/g, "_")                              // Evita guiones dobles __
+        .toLowerCase();
+
+    const timestamp = Date.now();
+    const hashRandom = Math.random().toString(36).substring(2, 7);
+
+    return `${timestamp}_${hashRandom}_${nombreLimpio}.${extension}`;
+}
+
 // =========================================================
-// 📤 SUBIR ARCHIVO A SUPABASE STORAGE Y GUARDAR EN BD
+// 📤 SUBIDA DE EVIDENCIA INTERNA PRIVADA POR CLÍNICA
 // =========================================================
 document.getElementById('formSubirEvidencia')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1528,51 +1546,205 @@ document.getElementById('formSubirEvidencia')?.addEventListener('submit', async 
     }
 
     const file = fileInput.files[0];
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${window.pacienteCargado?.id || 'paciente'}_${Date.now()}.${fileExt}`;
-    const filePath = `evidencias_clinicas/${fileName}`;
+    const nombreArchivoSaneado = sanearNombreArchivo(file.name);
+    const idClinicaActiva = typeof idClinica !== 'undefined' ? idClinica : (localStorage.getItem('id_clinica_activa') || 'sin_clinica');
+    const filePath = `${idPaciente}/${idClinicaActiva}/${categoria}/${nombreArchivoSaneado}`;
 
     try {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo imagen segura...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando evidencia interna...';
 
-        // 1. Subir archivo al bucket de Supabase Storage
-        const clienteSupabase = window.fisioNet || window.supabase;
-        const { data: storageData, error: storageError } = await clienteSupabase.storage
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        // 1. Subir al bucket 'expedientes-multimedia'
+        const { data: storageData, error: storageError } = await fisioNet.storage
             .from('expedientes-multimedia')
-            .upload(filePath, file);
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
 
         if (storageError) throw storageError;
 
-        // Obtener la URL pública o firmada
-        const { data: urlData } = clienteSupabase.storage
+        // 2. Obtener URL del archivo
+        const { data: urlData } = fisioNet.storage
             .from('expedientes-multimedia')
             .getPublicUrl(filePath);
 
-        // 2. Insertar registro en la tabla de base de datos
-        const { error: dbError } = await clienteSupabase
+        // 3. Insertar en BD
+        const { error: dbError } = await fisioNet
             .from('paciente_evidencia_multimedia')
             .insert({
-                id_paciente: window.pacienteCargado?.id,
-                id_profesional: (await clienteSupabase.auth.getUser()).data.user?.id,
-                id_clinica: localStorage.getItem('id_clinica_activa'),
+                id_paciente: idPaciente,
+                id_profesional: user?.id,
+                id_clinica: idClinicaActiva,
                 categoria_especialidad: categoria,
                 url_imagen: urlData.publicUrl,
+                ruta_storage: filePath,
                 descripcion: descripcion,
+                es_privado_clinica: true,
                 fecha_registro: new Date().toISOString()
             });
 
         if (dbError) throw dbError;
 
-        alert("✅ ¡Evidencia guardada exitosamente en el expediente!");
+        alert("✅ ¡Evidencia clínica guardada y organizada por expediente!");
         cerrarModalEvidenciaMultimedia();
         document.getElementById('formSubirEvidencia').reset();
 
     } catch (err) {
-        console.error("❌ Error al guardar evidencia:", err);
+        console.error("❌ Error al guardar evidencia jerárquica:", err);
         alert(`Error al guardar: ${err.message}`);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '🚀 GUARDAR EVIDENCIA EN EXPEDIENTE';
     }
 });
+
+// =========================================================
+// 📂 ABRIR / CERRAR MODAL HISTORIAL DE EVIDENCIAS
+// =========================================================
+let coleccionEvidenciasPaciente = [];
+
+function abrirModalHistorialEvidencias() {
+    toggleSpeedDial();
+    const modal = document.getElementById('modalHistorialEvidencias');
+    if (modal) {
+        modal.style.display = 'flex';
+        cargarHistorialEvidencias();
+    }
+}
+
+function cerrarModalHistorialEvidencias() {
+    const modal = document.getElementById('modalHistorialEvidencias');
+    if (modal) modal.style.display = 'none';
+}
+
+async function cargarHistorialEvidencias() {
+    const contenedor = document.getElementById('contenedor_lista_evidencias');
+    const idClinicaActiva = typeof idClinica !== 'undefined' ? idClinica : localStorage.getItem('id_clinica_activa');
+
+    if (!idPaciente) {
+        contenedor.innerHTML = `<div class="alert alert-warning text-center">No hay un paciente seleccionado actualmente.</div>`;
+        return;
+    }
+
+    try {
+        contenedor.innerHTML = `<p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando expediente multimedia...</p>`;
+
+        const { data, error } = await fisioNet
+            .from('paciente_evidencia_multimedia')
+            .select('*')
+            .eq('id_paciente', idPaciente)
+            .eq('id_clinica', idClinicaActiva)
+            .order('fecha_registro', { ascending: false });
+
+        if (error) throw error;
+
+        coleccionEvidenciasPaciente = data || [];
+        renderizarListaEvidencias(coleccionEvidenciasPaciente);
+
+    } catch (err) {
+        console.error("❌ Error al cargar historial de evidencias:", err);
+        contenedor.innerHTML = `<div class="alert alert-danger text-center">Error al cargar evidencias: ${err.message}</div>`;
+    }
+}
+
+function renderizarListaEvidencias(lista) {
+    const contenedor = document.getElementById('contenedor_lista_evidencias');
+
+    if (!lista || lista.length === 0) {
+        contenedor.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-folder-open fa-3x mb-3 text-slate-300"></i>
+                <h6>No hay evidencias registradas para este paciente en esta clínica.</h6>
+                <small>Usa la opción <b>📸 Subir Foto</b> para añadir imágenes o estudios.</small>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+
+    lista.forEach(item => {
+        const fechaObj = new Date(item.fecha_registro);
+        const fechaFormateada = fechaObj.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const esPDF = item.url_imagen?.toLowerCase().endsWith('.pdf');
+        const catNombre = item.categoria_especialidad || 'EVIDENCIA';
+        
+        html += `
+            <div class="tarjeta-evidencia-item" onclick="verEvidenciaPantallaCompleta('${item.url_imagen}', ${esPDF}, '${catNombre}', '${fechaFormateada}', '${(item.descripcion || '').replace(/'/g, "\\'")}')">
+                <div class="d-flex gap-3 align-items-center">
+                    <div style="width: 70px; height: 70px; border-radius: 10px; overflow: hidden; background: #0f172a; display: flex; justify-content: center; align-items: center; flex-shrink: 0;">
+                        ${esPDF 
+                            ? `<i class="fas fa-file-pdf text-danger fa-2x"></i>` 
+                            : `<img src="${item.url_imagen}" style="width: 100%; height: 100%; object-fit: cover;" alt="Evidencia">`
+                        }
+                    </div>
+                    <div style="flex: 1;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="badge bg-dark text-info font-monospace" style="font-size: 0.68rem;">${catNombre}</span>
+                            <small class="text-muted fw-bold" style="font-size: 0.7rem;"><i class="far fa-clock me-1"></i>${fechaFormateada}</small>
+                        </div>
+                        <p class="mb-0 fw-bold text-dark small" style="line-height: 1.3;">
+                            ${item.descripcion || 'Sin descripción adicional.'}
+                        </p>
+                    </div>
+                    <div class="text-secondary opacity-50">
+                        <i class="fas fa-expand-alt fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    contenedor.innerHTML = html;
+}
+
+function filtrarEvidenciasLocales() {
+    const fechaSeleccionada = document.getElementById('filtro_fecha_evidencia').value;
+    const catSeleccionada = document.getElementById('filtro_categoria_evidencia').value;
+
+    let resultado = [...coleccionEvidenciasPaciente];
+
+    if (fechaSeleccionada) {
+        resultado = resultado.filter(item => item.fecha_registro.split('T')[0] === fechaSeleccionada);
+    }
+
+    if (catSeleccionada && catSeleccionada !== 'TODAS') {
+        resultado = resultado.filter(item => item.categoria_especialidad?.startsWith(catSeleccionada));
+    }
+
+    renderizarListaEvidencias(resultado);
+}
+
+function resetFiltrosEvidencia() {
+    document.getElementById('filtro_fecha_evidencia').value = '';
+    document.getElementById('filtro_categoria_evidencia').value = 'TODAS';
+    renderizarListaEvidencias(coleccionEvidenciasPaciente);
+}
+
+function verEvidenciaPantallaCompleta(url, esPDF, categoria, fecha, descripcion) {
+    const modalFull = document.getElementById('modalVisorFullscreen');
+    const contenedorArchivo = document.getElementById('full_contenido_archivo');
+    
+    document.getElementById('full_titulo_evidencia').innerText = `Categoría: ${categoria}`;
+    document.getElementById('full_fecha_evidencia').innerText = `Fecha de Registro: ${fecha}`;
+    document.getElementById('full_descripcion_evidencia').innerText = descripcion ? `"${descripcion}"` : '';
+
+    if (esPDF) {
+        contenedorArchivo.innerHTML = `<iframe src="${url}" style="width: 100%; height: 100%; border: none; border-radius: 12px; background: white;"></iframe>`;
+    } else {
+        contenedorArchivo.innerHTML = `<img src="${url}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" alt="Evidencia Fullscreen">`;
+    }
+
+    modalFull.style.display = 'flex';
+}
+
+function cerrarVisorFullscreen() {
+    const modalFull = document.getElementById('modalVisorFullscreen');
+    if (modalFull) {
+        modalFull.style.display = 'none';
+        document.getElementById('full_contenido_archivo').innerHTML = '';
+    }
+}
