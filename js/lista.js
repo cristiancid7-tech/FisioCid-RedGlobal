@@ -66,6 +66,8 @@ consulta = consulta.or(`nombre.ilike.%${t}%,apellido_paterno.ilike.%${t}%,numero
     return pacientes;
 }
 
+
+
 function dibujarTabla(lista) {
     const tabla = document.getElementById('tablaPacientes');
     if (!tabla) return;
@@ -97,15 +99,14 @@ function dibujarTabla(lista) {
             }
         }
 
-        
-     // 🛡️ VERIFICACIÓN DE EXPEDIENTE COMPLETO
+        // 🛡️ VERIFICACIÓN DE EXPEDIENTE COMPLETO
         const esRegistroCompleto = p.curp && p.curp.length === 18 && !p.curp.includes('??');
 
         const fila = document.createElement('tr');
         let contenidoBotones = "";
 
         if (esRegistroCompleto) {
-            // 🎨 DISEÑO COMPACTO, ELEGANTE Y CON BOTÓN DE RECETA INTEGRADO
+            // 🎨 DISEÑO COMPACTO, ELEGANTE Y CON BOTONES CONECTADOS
             contenidoBotones = `
                 <button onclick="verFichaContacto('${idPaciente}')" title="Ficha de Contacto"
                     style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
@@ -115,11 +116,11 @@ function dibujarTabla(lista) {
                     style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
                     👁️ HISTORIAL
                 </button>
-                <button onclick="location.href='portal-recetas.html?id=${idPaciente}'" title="Crear Receta Rápida"
+                <button onclick="abrirReceta('${idPaciente}')" title="Crear Receta Rápida"
                     style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
                     💊 + RECETA
                 </button>
-                <button onclick="location.href='historia-clinica.html?id=${idPaciente}'" title="Nueva Nota"
+                <button onclick="abrirNuevaNota('${idPaciente}')" title="Nueva Nota"
                     style="background: var(--primary); color: white; border: none; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
                     📝 + NOTA
                 </button>
@@ -155,42 +156,45 @@ function dibujarTabla(lista) {
         tabla.appendChild(fila);
     });
 }
+
+
+// 🎯 FUNCIONES DE NAVEGACIÓN BLINDADAS (Envían el ID en la URL y guardan en localStorage por respaldo)
 window.verHistorial = (id) => {
+    localStorage.setItem('paciente_seleccionado_id', id);
     window.location.href = `historial-evolucion.html?id=${id}`;
 };
 
+window.abrirReceta = (id) => {
+    localStorage.setItem('paciente_seleccionado_id', id);
+    window.location.href = `portal-recetas.html?id=${id}`;
+};
+
+window.abrirNuevaNota = (id) => {
+    localStorage.setItem('paciente_seleccionado_id', id);
+    window.location.href = `historia-clinica.html?id=${id}`;
+};
+
+
+// 🔍 INICIALIZACIÓN Y BUSCADOR TRI-FACTOR (NOMBRE, CURP, FOLIO)
 document.addEventListener('DOMContentLoaded', async () => {
     await verificarAcceso();
     let todosLosPacientes = await obtenerPacientes();
     dibujarTabla(todosLosPacientes);
 
     const inputBusqueda = document.getElementById('buscador');
-    // --- DENTRO DEL DOMContentLoaded ---
-
-if (inputBusqueda) {
-    inputBusqueda.addEventListener('input', (e) => {
-        const termino = e.target.value.toUpperCase();
-        
-        const filtrados = todosLosPacientes.filter(p => {
-            const nom = (p.nombre_completo || `${p.nombre} ${p.apellido_paterno}`).toUpperCase();
-            const curp = (p.curp || '').toUpperCase();
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', (e) => {
+            const termino = e.target.value.toUpperCase().trim();
             
-            // 🎯 LA CLAVE: Agregar la búsqueda por numero_expediente_sede
-            const folio = (p.numero_expediente_sede || '').toUpperCase();
+            const filtrados = todosLosPacientes.filter(p => {
+                const nom = (p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`).toUpperCase();
+                const curp = (p.curp || '').toUpperCase();
+                const folio = (p.numero_expediente_sede || '').toUpperCase();
+                
+                return nom.includes(termino) || curp.includes(termino) || folio.includes(termino);
+            });
             
-            return nom.includes(termino) || curp.includes(termino) || folio.includes(termino);
-        });
-        
-        dibujarTabla(filtrados);
-    });
-}
-
-    const btnSalir = document.getElementById('btnSalir');
-    if (btnSalir) {
-        btnSalir.addEventListener('click', async () => {
-            await fisioNet.auth.signOut();
-            localStorage.clear();
-            window.location.href = 'index.html';
+            dibujarTabla(filtrados);
         });
     }
 });

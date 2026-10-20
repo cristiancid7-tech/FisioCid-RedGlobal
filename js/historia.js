@@ -15,20 +15,13 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-const urlParams = new URLSearchParams(window.location.search);
-let idPaciente = urlParams.get('id') || localStorage.getItem('paciente_seleccionado_id');
 
+
+const urlParams = new URLSearchParams(window.location.search);
+let idPaciente = urlParams.get('id') || localStorage.getItem('paciente_seleccionado_id') || sessionStorage.getItem('paciente_seleccionado_id');
 
 const cargarExpedienteFijo = async () => {
-    if (!idPaciente) {
-        console.warn("No se detectó ID de paciente");
-        return;
-    }
-
-    const idLimpio = idPaciente.trim();
-    const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
-
-    // 🕒 1. REPARACIÓN FECHA Y HORA (Formato NOM Completo)
+    // 🕒 1. REPARACIÓN FECHA Y HORA (Se ejecuta SIEMPRE)
     const contenedorReloj = document.getElementById('reloj-consulta');
     if (contenedorReloj) {
         const pintarFechaHora = () => {
@@ -43,8 +36,8 @@ const cargarExpedienteFijo = async () => {
         setInterval(pintarFechaHora, 1000); 
     }
 
-    // 👨‍⚕️ 2. REPARACIÓN PERFIL MÉDICO (Columnas Exactas de tu Base de Datos)
-   try {
+    // 👨‍⚕️ 2. REPARACIÓN PERFIL MÉDICO (Se ejecuta SIEMPRE)
+    try {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (user) {
             const { data: perfil, error: errorPerfil } = await fisioNet
@@ -54,12 +47,10 @@ const cargarExpedienteFijo = async () => {
                 .single();
 
             if (!errorPerfil && perfil) {
-                // Asignamos variables limpias
                 const nombreDoc = perfil.nombre_completo || "Profesional Registrado";
                 const cedulaPro = perfil.cedula_profesional || "REVISAR PERFIL";
                 const especialidadDoc = perfil.especialidad || localStorage.getItem('especialidadUsuario') || "General";
 
-                // Inyectamos de forma exacta en tus elementos HTML
                 if (document.getElementById('doc-nombre')) {
                     document.getElementById('doc-nombre').innerText = ` ${nombreDoc}`.toUpperCase();
                 }
@@ -67,10 +58,9 @@ const cargarExpedienteFijo = async () => {
                     document.getElementById('doc-especialidad').innerText = especialidadDoc.toUpperCase();
                 }
                 if (document.getElementById('doc-cedula')) {
-                    document.getElementById('doc-cedula').innerText = cedulaPro; // 🎯 Ahora sí se mostrará tu cédula aquí
+                    document.getElementById('doc-cedula').innerText = cedulaPro;
                 }
             } else {
-                console.warn("No se encontró el perfil o hubo error, usando datos de respaldo:", errorPerfil?.message);
                 if (document.getElementById('doc-nombre')) document.getElementById('doc-nombre').innerText = "PROFESIONAL ACTIVO";
                 if (document.getElementById('doc-cedula')) document.getElementById('doc-cedula').innerText = "REVISAR PERFIL";
                 if (document.getElementById('doc-especialidad')) document.getElementById('doc-especialidad').innerText = (localStorage.getItem('especialidadUsuario') || "GENERAL").toUpperCase();
@@ -80,7 +70,18 @@ const cargarExpedienteFijo = async () => {
         console.error("Error al mapear datos del médico desde la tabla perfiles:", e);
     }
 
-    // 3. JALAMOS EL PACIENTE MAESTRO
+    // 🛡️ 3. VALIDACIÓN DE PACIENTE SELECCIONADO
+    if (!idPaciente) {
+        console.warn("No se detectó ID de paciente");
+        alert("⚠️ No has seleccionado ningún paciente para abrir consulta.\n\nSerás redirigido a la lista de pacientes.");
+        window.location.href = 'lista-pacientes.html';
+        return;
+    }
+
+    const idLimpio = idPaciente.trim();
+    const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
+
+    // 4. CÓDIGO RESTANTE PARA JALAR PACIENTE MAESTRO Y EXPEDIENTE
     const { data, error } = await fisioNet
         .from('pacientes_maestros')
         .select('*')
@@ -90,6 +91,7 @@ const cargarExpedienteFijo = async () => {
 
     if (error || !data) {
         console.error("Error de Supabase o acceso denegado:", error?.message);
+        alert("⚠️ No se encontró la información del paciente o no pertenece a esta clínica.");
         return;
     }
 
@@ -128,6 +130,8 @@ const cargarExpedienteFijo = async () => {
             <span style="font-family: monospace; color: #64748b;">${curp}</span>
         `;
     }
+
+  
 
     // 📂 4. TRAER NÚMERO DE EXPEDIENTE
     try {
@@ -1484,7 +1488,6 @@ async function cargarDatosDesdeRecetaPendiente() {
     }
 }
 
-
 // =========================================================
 // ⚡ CONTROL DEL SPEED DIAL FLOTANTE Y MODALES
 // =========================================================
@@ -1492,6 +1495,8 @@ function toggleSpeedDial() {
     const opciones = document.getElementById('opcionesSpeedDial');
     const icono = document.getElementById('iconoSpeedDial');
     
+    if (!opciones) return;
+
     if (opciones.style.display === 'none' || opciones.style.display === '') {
         opciones.style.display = 'flex';
         if (icono) icono.style.transform = 'rotate(45deg)';
@@ -1529,77 +1534,7 @@ function sanearNombreArchivo(nombreOriginal) {
     return `${timestamp}_${hashRandom}_${nombreLimpio}.${extension}`;
 }
 
-// =========================================================
-// 📤 SUBIDA DE EVIDENCIA INTERNA PRIVADA POR CLÍNICA
-// =========================================================
-document.getElementById('formSubirEvidencia')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
 
-    const fileInput = document.getElementById('evidencia_archivo');
-    const categoria = document.getElementById('evidencia_categoria').value;
-    const descripcion = document.getElementById('evidencia_descripcion').value;
-    const btn = document.getElementById('btnGuardarEvidencia');
-
-    if (!fileInput.files.length) {
-        alert("Por favor selecciona o toma una fotografía.");
-        return;
-    }
-
-    const file = fileInput.files[0];
-    const nombreArchivoSaneado = sanearNombreArchivo(file.name);
-    const idClinicaActiva = typeof idClinica !== 'undefined' ? idClinica : (localStorage.getItem('id_clinica_activa') || 'sin_clinica');
-    const filePath = `${idPaciente}/${idClinicaActiva}/${categoria}/${nombreArchivoSaneado}`;
-
-    try {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando evidencia interna...';
-
-        const { data: { user } } = await fisioNet.auth.getUser();
-
-        // 1. Subir al bucket 'expedientes-multimedia'
-        const { data: storageData, error: storageError } = await fisioNet.storage
-            .from('expedientes-multimedia')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-
-        if (storageError) throw storageError;
-
-        // 2. Obtener URL del archivo
-        const { data: urlData } = fisioNet.storage
-            .from('expedientes-multimedia')
-            .getPublicUrl(filePath);
-
-        // 3. Insertar en BD
-        const { error: dbError } = await fisioNet
-            .from('paciente_evidencia_multimedia')
-            .insert({
-                id_paciente: idPaciente,
-                id_profesional: user?.id,
-                id_clinica: idClinicaActiva,
-                categoria_especialidad: categoria,
-                url_imagen: urlData.publicUrl,
-                ruta_storage: filePath,
-                descripcion: descripcion,
-                es_privado_clinica: true,
-                fecha_registro: new Date().toISOString()
-            });
-
-        if (dbError) throw dbError;
-
-        alert("✅ ¡Evidencia clínica guardada y organizada por expediente!");
-        cerrarModalEvidenciaMultimedia();
-        document.getElementById('formSubirEvidencia').reset();
-
-    } catch (err) {
-        console.error("❌ Error al guardar evidencia jerárquica:", err);
-        alert(`Error al guardar: ${err.message}`);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '🚀 GUARDAR EVIDENCIA EN EXPEDIENTE';
-    }
-});
 
 // =========================================================
 // 📂 ABRIR / CERRAR MODAL HISTORIAL DE EVIDENCIAS
@@ -1620,28 +1555,156 @@ function cerrarModalHistorialEvidencias() {
     if (modal) modal.style.display = 'none';
 }
 
+// =========================================================
+// 📤 SUBIDA DE EVIDENCIA INTERNA PRIVADA POR CLÍNICA
+// =========================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const formEvidencia = document.getElementById('formSubirEvidencia');
+
+    if (!formEvidencia) return;
+
+    formEvidencia.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const fileInput = document.getElementById('evidencia_archivo');
+        const categoriaSelect = document.getElementById('evidencia_categoria');
+        const descripcionInput = document.getElementById('evidencia_descripcion');
+        const btn = document.getElementById('btnGuardarEvidencia');
+
+        const categoria = categoriaSelect ? categoriaSelect.value : 'GENERAL';
+        const descripcion = descripcionInput ? descripcionInput.value.trim() : '';
+
+        const pacienteActualId = (typeof idPaciente !== 'undefined' && idPaciente) 
+            ? idPaciente 
+            : (localStorage.getItem('paciente_seleccionado_id') || new URLSearchParams(window.location.search).get('id'));
+
+        if (!pacienteActualId) {
+            alert("⚠️ No se detectó el ID del paciente. Asegúrate de haber seleccionado un paciente.");
+            return;
+        }
+
+        if (!fileInput || !fileInput.files.length) {
+            alert("Por favor selecciona o toma una fotografía.");
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const nombreArchivoSaneado = sanearNombreArchivo(file.name);
+        
+        const idClinicaActiva = (typeof idClinica !== 'undefined' && idClinica) 
+            ? idClinica 
+            : (localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id') || 'sin_clinica');
+
+        const filePath = `${pacienteActualId}/${idClinicaActiva}/${categoria}/${nombreArchivoSaneado}`;
+
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Guardando en expediente...';
+            }
+
+            const { data: { user } } = await fisioNet.auth.getUser();
+
+            // 1. Subir al bucket privado 'expedientes-multimedia'
+            const { data: storageData, error: storageError } = await fisioNet.storage
+                .from('expedientes-multimedia')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (storageError) throw storageError;
+
+            // 2. Generar URL firmada temporal (válida por 1 hora)
+            const { data: urlData } = await fisioNet.storage
+                .from('expedientes-multimedia')
+                .createSignedUrl(filePath, 3600);
+
+            const urlFirmada = urlData?.signedUrl || '';
+
+            // 3. Insertar registro guardando la ruta del almacenamiento y la firma
+            const { error: dbError } = await fisioNet
+                .from('paciente_evidencia_multimedia')
+                .insert({
+                    id_paciente: pacienteActualId,
+                    id_profesional: user?.id,
+                    id_clinica: idClinicaActiva,
+                    categoria_especialidad: categoria,
+                    url_imagen: urlFirmada,
+                    ruta_storage: filePath,
+                    descripcion: descripcion,
+                    es_privado_clinica: true,
+                    fecha_registro: new Date().toISOString()
+                });
+
+            if (dbError) throw dbError;
+
+            alert("🔒 ¡Evidencia clínica guardada de forma 100% privada y segura!");
+            cerrarModalEvidenciaMultimedia();
+            formEvidencia.reset();
+
+            if (typeof cargarHistorialEvidencias === 'function') {
+                cargarHistorialEvidencias();
+            }
+
+        } catch (err) {
+            console.error("❌ Error al guardar evidencia:", err);
+            alert(`Error al guardar: ${err.message || 'Error desconocido'}`);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '🚀 GUARDAR EVIDENCIA EN EXPEDIENTE';
+            }
+        }
+    });
+});
+
+// =========================================================
+// 📂 CARGAR HISTORIAL CON GENERACIÓN DE URLS FIRMADAS DÍNAMICAS
+// =========================================================
 async function cargarHistorialEvidencias() {
     const contenedor = document.getElementById('contenedor_lista_evidencias');
-    const idClinicaActiva = typeof idClinica !== 'undefined' ? idClinica : localStorage.getItem('id_clinica_activa');
+    if (!contenedor) return;
 
-    if (!idPaciente) {
+    const idClinicaActiva = (typeof idClinica !== 'undefined' && idClinica) 
+        ? idClinica 
+        : (localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id'));
+
+    const pacienteActualId = (typeof idPaciente !== 'undefined' && idPaciente) 
+        ? idPaciente 
+        : (localStorage.getItem('paciente_seleccionado_id') || new URLSearchParams(window.location.search).get('id'));
+
+    if (!pacienteActualId) {
         contenedor.innerHTML = `<div class="alert alert-warning text-center">No hay un paciente seleccionado actualmente.</div>`;
         return;
     }
 
     try {
-        contenedor.innerHTML = `<p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando expediente multimedia...</p>`;
+        contenedor.innerHTML = `<p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando expediente multimedia privado...</p>`;
 
         const { data, error } = await fisioNet
             .from('paciente_evidencia_multimedia')
             .select('*')
-            .eq('id_paciente', idPaciente)
+            .eq('id_paciente', pacienteActualId)
             .eq('id_clinica', idClinicaActiva)
             .order('fecha_registro', { ascending: false });
 
         if (error) throw error;
 
-        coleccionEvidenciasPaciente = data || [];
+        // 🔒 Generar URLs firmadas dinámicas y frescas para cada evidencia
+        const evidenciasConFirmas = await Promise.all((data || []).map(async (item) => {
+            if (item.ruta_storage) {
+                const { data: signedData } = await fisioNet.storage
+                    .from('expedientes-multimedia')
+                    .createSignedUrl(item.ruta_storage, 3600);
+                if (signedData?.signedUrl) {
+                    item.url_imagen = signedData.signedUrl;
+                }
+            }
+            return item;
+        }));
+
+        coleccionEvidenciasPaciente = evidenciasConFirmas;
         renderizarListaEvidencias(coleccionEvidenciasPaciente);
 
     } catch (err) {
@@ -1652,6 +1715,7 @@ async function cargarHistorialEvidencias() {
 
 function renderizarListaEvidencias(lista) {
     const contenedor = document.getElementById('contenedor_lista_evidencias');
+    if (!contenedor) return;
 
     if (!lista || lista.length === 0) {
         contenedor.innerHTML = `
@@ -1670,7 +1734,9 @@ function renderizarListaEvidencias(lista) {
         const fechaObj = new Date(item.fecha_registro);
         const fechaFormateada = fechaObj.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         const esPDF = item.url_imagen?.toLowerCase().endsWith('.pdf');
-        const catNombre = item.categoria_especialidad || 'EVIDENCIA';
+        
+        // 🎯 Mapeo adaptado para categoria_especial
+        const catNombre = item.categoria_especial || item.categoria_especialidad || 'EVIDENCIA';
         
         html += `
             <div class="tarjeta-evidencia-item" onclick="verEvidenciaPantallaCompleta('${item.url_imagen}', ${esPDF}, '${catNombre}', '${fechaFormateada}', '${(item.descripcion || '').replace(/'/g, "\\'")}')">
@@ -1712,21 +1778,27 @@ function filtrarEvidenciasLocales() {
     }
 
     if (catSeleccionada && catSeleccionada !== 'TODAS') {
-        resultado = resultado.filter(item => item.categoria_especialidad?.startsWith(catSeleccionada));
+        resultado = resultado.filter(item => {
+            const cat = item.categoria_especial || item.categoria_especialidad || '';
+            return cat.startsWith(catSeleccionada);
+        });
     }
 
     renderizarListaEvidencias(resultado);
 }
 
 function resetFiltrosEvidencia() {
-    document.getElementById('filtro_fecha_evidencia').value = '';
-    document.getElementById('filtro_categoria_evidencia').value = 'TODAS';
+    const fechaInput = document.getElementById('filtro_fecha_evidencia');
+    const catInput = document.getElementById('filtro_categoria_evidencia');
+    if (fechaInput) fechaInput.value = '';
+    if (catInput) catInput.value = 'TODAS';
     renderizarListaEvidencias(coleccionEvidenciasPaciente);
 }
 
 function verEvidenciaPantallaCompleta(url, esPDF, categoria, fecha, descripcion) {
     const modalFull = document.getElementById('modalVisorFullscreen');
     const contenedorArchivo = document.getElementById('full_contenido_archivo');
+    if (!modalFull || !contenedorArchivo) return;
     
     document.getElementById('full_titulo_evidencia').innerText = `Categoría: ${categoria}`;
     document.getElementById('full_fecha_evidencia').innerText = `Fecha de Registro: ${fecha}`;
@@ -1745,6 +1817,97 @@ function cerrarVisorFullscreen() {
     const modalFull = document.getElementById('modalVisorFullscreen');
     if (modalFull) {
         modalFull.style.display = 'none';
-        document.getElementById('full_contenido_archivo').innerHTML = '';
+        const contenedor = document.getElementById('full_contenido_archivo');
+        if (contenedor) contenedor.innerHTML = '';
+    }
+}
+
+// ============================================================================
+// 📥 IMPORTAR ESTUDIO / EVIDENCIA GLOBAL AL EXPEDIENTE LOCAL DE LA CLÍNICA
+// ============================================================================
+async function anexarEstudioAExpedienteClinica(itemOrigen) {
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+
+    if (!idClinicaActiva) {
+        alert("⚠️ No se detectó una clínica activa.");
+        return;
+    }
+
+    const confirmar = confirm(
+        `📥 ¿Deseas anexar este estudio al expediente de tu clínica?\n\n` +
+        `Quedará respaldado con la autorización OTP que otorgó el paciente.`
+    );
+
+    if (!confirmar) return;
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        // 1. Consultar los datos de la solicitud OTP que aprobó el acceso
+        let fechaOtpStr = new Date().toISOString();
+        let idOtpActivo = solicitudOTPActivaId || null;
+
+        if (idOtpActivo) {
+            const { data: datosOtp } = await fisioNet
+                .from('solicitudes_acceso_otp')
+                .select('fecha_autorizacion')
+                .eq('id', idOtpActivo)
+                .maybeSingle();
+
+            if (datosOtp?.fecha_autorizacion) {
+                fechaOtpStr = datosOtp.fecha_autorizacion;
+            }
+        }
+
+        const fechaOtpFormateada = new Date(fechaOtpStr).toLocaleDateString('es-MX', {
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        const nombreDoctorModal = document.getElementById('doc-nombre')?.innerText?.trim() || "PROFESIONAL ACTIVO";
+
+        // 2. Construir la descripción auditada
+        const descripcionAuditada = 
+            `[ANEXADO VÍA AUTORIZACIÓN OTP el ${fechaOtpFormateada} por ${nombreDoctorModal}] ` +
+            `${itemOrigen.descripcion || itemOrigen.hallazgos_resumen || 'Sin descripción original.'}`;
+
+        // 3. Generar URL firmada temporal para el almacenamiento local
+        const rutaStorage = itemOrigen.ruta_storage || itemOrigen.archivo_url;
+        let urlFirmada = itemOrigen.url_imagen || itemOrigen.archivo_url || '';
+
+        if (rutaStorage && !rutaStorage.startsWith('http')) {
+            const { data: signedData } = await fisioNet.storage
+                .from('expedientes-multimedia')
+                .createSignedUrl(rutaStorage, 3600);
+            if (signedData?.signedUrl) urlFirmada = signedData.signedUrl;
+        }
+
+        // 4. Insertar el nuevo registro de evidencia local sin duplicar archivo en Storage
+        const { error } = await fisioNet
+            .from('paciente_evidencia_multimedia')
+            .insert({
+                id_paciente: idPacienteLimpio,
+                id_profesional: user?.id,
+                id_clinica: idClinicaActiva,
+                categoria_especialidad: itemOrigen.categoria_especialidad || itemOrigen.tipo_estudio || 'ESTUDIOS_EXTERNOS',
+                url_imagen: urlFirmada,
+                ruta_storage: rutaStorage,
+                descripcion: descripcionAuditada,
+                es_privado_clinica: true,
+                fecha_registro: new Date().toISOString()
+            });
+
+        if (error) throw error;
+
+        alert("✅ ¡Estudio/Evidencia anexado con éxito al expediente de tu clínica con respaldo legal OTP!");
+
+        // Recargar el historial local si el modal o sección está abierto
+        if (typeof cargarHistorialEvidencias === 'function') {
+            cargarHistorialEvidencias();
+        }
+
+    } catch (err) {
+        console.error("💥 Error al anexar estudio:", err);
+        alert("Error al anexar estudio: " + (err.message || "Error de conexión"));
     }
 }

@@ -1,20 +1,21 @@
 // ==========================================
 // 1. CERRAR SESIÓN Y LIMPIEZA
 // ==========================================
-async function salir() {
+export async function salir() {
     try {
-        //console.log("🧹 Iniciando limpieza profunda de FisioCid...");
-        
         localStorage.clear();
         sessionStorage.clear();
 
-        await fisioNet.auth.signOut();
+        if (typeof fisioNet !== 'undefined' && fisioNet.auth) {
+            await fisioNet.auth.signOut();
+        }
 
         window.location.replace('login.html');
 
     } catch (error) {
         console.error("Error al salir:", error);
         localStorage.clear();
+        sessionStorage.clear();
         window.location.replace('login.html');
     }
 }
@@ -28,11 +29,10 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// 2. VALIDADOR DE CUOTA DE PACIENTES (Para crear nuevos)
+// 2. VALIDADOR DE CUOTA DE PACIENTES
 // ==========================================
-async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
+export async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
     try {
-        // 1. Obtener límite del plan en la tabla planes_suscripcion
         const { data: plan, error: errPlan } = await fisioNet
             .from('planes_suscripcion')
             .select('limite_pacientes')
@@ -43,12 +43,10 @@ async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
             return { permitido: false, motivo: "No se pudo verificar tu plan de suscripción." };
         }
 
-        // 2. Si el plan es ilimitado (-1)
         if (plan.limite_pacientes === -1) {
             return { permitido: true };
         }
 
-        // 3. Contar pacientes actuales registrados por este profesional
         const { count, error: errCount } = await fisioNet
             .from('pacientes_maestros')
             .select('id', { count: 'exact', head: true })
@@ -58,7 +56,6 @@ async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
             return { permitido: false, motivo: "Error al consultar la cuota de pacientes." };
         }
 
-        // 4. Evaluar cuota disponible
         if (count >= plan.limite_pacientes) {
             return { 
                 permitido: false, 
@@ -75,16 +72,15 @@ async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
 }
 
 // ==========================================
-// 3. PORTERO DE SEGURIDAD (Perfil completo + Suscripción activa)
+// 3. PORTERO DE SEGURIDAD (Perfil + Suscripción)
 // ==========================================
-async function verificarPerfilCompleto() {
+export async function verificarPerfilCompleto() {
     const rolActual = localStorage.getItem('rol_actual');
     const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
 
-    if (esStaff) {
-        //console.log("👥 Seguridad FisioCid: Colaborador detectado. Omitiendo portero de dueños.");
-        return; 
-    }
+    if (esStaff) return;
+
+    if (typeof fisioNet === 'undefined' || !fisioNet.auth) return;
 
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) return; 
@@ -126,7 +122,7 @@ async function verificarPerfilCompleto() {
             if (!perfil.suscripcion_activa || estaVencida) {
                 console.warn("Suscripción inactiva o vencida.");
                 sessionStorage.setItem('mensaje_bloqueo', '💳 TU SUSCRIPCIÓN HA VENCIDO O SE ENCUENTRA INACTIVA. POR FAVOR SELECCIONA UN PLAN PARA CONTINUAR.');
-                window.location.href = 'suscripcion.html'; // Redirige a la pantalla de planes/pago
+                window.location.href = 'suscripcion.html';
             }
         }
 
@@ -138,28 +134,44 @@ async function verificarPerfilCompleto() {
 // Ejecutar automáticamente al cargar cualquier página
 document.addEventListener('DOMContentLoaded', verificarPerfilCompleto);
 
+// ==========================================
+// 4. FUNCIONES AUXILIARES Y FORMATO
+// ==========================================
 export function procesarNombreMexicano(textoCompleto) {
+    if (!textoCompleto) return { nombre: "", paterno: "", materno: "" };
+    
     const conectores = ["DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"];
     let palabras = textoCompleto.toUpperCase().trim().split(/\s+/);
     let piezas = [];
+    
     for (let i = 0; i < palabras.length; i++) {
         if (conectores.includes(palabras[i]) && i + 1 < palabras.length) {
             piezas.push(palabras[i] + " " + palabras[i + 1]);
             i++;
-        } else { piezas.push(palabras[i]); }
+        } else { 
+            piezas.push(palabras[i]); 
+        }
     }
+    
     let nombre = "", paterno = "", materno = "";
     const n = piezas.length;
+    
     if (n >= 3) {
-        materno = piezas[n - 1]; paterno = piezas[n - 2];
+        materno = piezas[n - 1]; 
+        paterno = piezas[n - 2];
         nombre = piezas.slice(0, n - 2).join(" ");
     } else if (n === 2) {
-        nombre = piezas[0]; paterno = piezas[1];
-    } else { nombre = piezas[0] || ""; }
+        nombre = piezas[0]; 
+        paterno = piezas[1];
+    } else { 
+        nombre = piezas[0] || ""; 
+    }
+    
     return { nombre, paterno, materno };
 }
 
 export function formatearFechaCorta(fechaStr) {
+    if (!fechaStr) return "";
     return new Date(fechaStr + "T00:00:00").toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
 }
 
@@ -171,8 +183,12 @@ export function obtenerFechaLocal() {
     return `${anio}-${mes}-${dia}`;
 }
 
-
-window.obtenerFechaLocal = obtenerFechaLocal;
+// ==========================================
+// 5. REGISTRO EN SCOPE GLOBAL (WINDOW)
+// ==========================================
+window.salir = salir;
+window.validarCuotaPaciente = validarCuotaPaciente;
+window.verificarPerfilCompleto = verificarPerfilCompleto;
+window.procesarNombreMexicano = procesarNombreMexicano;
 window.formatearFechaCorta = formatearFechaCorta;
-window.procesarNombreMexicano = procesarNombreMexicano
-
+window.obtenerFechaLocal = obtenerFechaLocal;

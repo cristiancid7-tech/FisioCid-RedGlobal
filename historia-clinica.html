@@ -752,7 +752,7 @@ html, body {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="js/supabase-config.js"></script>
-    <script src="js/utils.js"></script>
+  <script type="module" src="js/utils.js"></script>
     <script src="js/valoraciones.js"></script>
     <script src="js/diccionario-sintomas.js"></script>
     <script src="js/protocolos.js"></script>
@@ -1072,13 +1072,22 @@ function siguienteTabSOAP(idTab) {
             </div>
             <div class="mb-3">
                 <label class="form-label fw-bold small text-secondary">CATEGORÍA / ESPECIALIDAD *</label>
-                <select id="evidencia_categoria" class="form-select form-select-sm" required style="border-radius: 8px;">
-                    <option value="FISIO_">🦴 Fisioterapia y Rehabilitación</option>
-                    <option value="ODONTO_">🦷 Odontología</option>
-                    <option value="MED_">🩺 Medicina General / Derma</option>
-                    <option value="ENF_">🩹 Enfermería y Cuidados / UPP</option>
-                    <option value="NUTRI_">🥗 Nutrición / Psicología</option>
-                </select>
+               <!-- 1. SELECT DENTRO DEL FORMULARIO DE SUBIDA (formSubirEvidencia) -->
+<select id="evidencia_categoria" class="form-select" required>
+    <option value="" disabled selected>SELECCIONA LA ESPECIALIDAD *</option>
+    <option value="FISIOTERAPIA">🦴 FISIOTERAPIA Y REHABILITACIÓN</option>
+    <option value="TRAUMATOLOGIA">🩺 TRAUMATOLOGÍA Y ORTOPEDIA</option>
+    <option value="MEDICINA_GENERAL">🩺 MEDICINA GENERAL Y ESPECIALIDADES</option>
+    <option value="PSICOLOGIA">🧠 PSICOLOGÍA Y SALUD MENTAL</option>
+    <option value="NUTRICION">🥗 NUTRICIÓN Y DIETÉTICA</option>
+    <option value="PODOLOGIA">🦶 PODOLOGÍA</option>
+    <option value="TERAPIA_OCUPACIONAL">✋ TERAPIA OCUPACIONAL</option>
+    <option value="ENFERMERIA">💊 ENFERMERÍA Y CUIDADOS</option>
+    <option value="ODONTOLOGIA">🦷 ODONTOLOGÍA</option>
+    <option value="ESTUDIOS_EXTERNOS">📁 ESTUDIOS EXTERNOS / OTROS</option>
+</select>
+
+
             </div>
             <div class="mb-3">
                 <label class="form-label fw-bold small text-secondary">DESCRIPCIÓN / OBSERVACIONES</label>
@@ -1148,14 +1157,19 @@ function siguienteTabSOAP(idTab) {
                 <input type="date" id="filtro_fecha_evidencia" onchange="filtrarEvidenciasLocales()" class="form-control form-control-sm bg-dark text-white border-secondary" style="border-radius: 8px;">
             </div>
             <div style="flex: 1; min-width: 200px;">
-                <select id="filtro_categoria_evidencia" onchange="filtrarEvidenciasLocales()" class="form-select form-select-sm bg-dark text-white border-secondary" style="border-radius: 8px;">
-                    <option value="TODAS">-- Todas las Especialidades --</option>
-                    <option value="ENF_">🩹 Enfermería y Cuidados</option>
-                    <option value="FISIO_">🦴 Fisioterapia y Rehabilitación</option>
-                    <option value="ODONTO_">🦷 Odontología</option>
-                    <option value="MED_">🩺 Medicina General / Derma</option>
-                    <option value="NUTRI_">🥗 Nutrición / Psicología</option>
-                </select>
+              <select id="filtro_categoria_evidencia" class="form-select" onchange="filtrarEvidenciasLocales()">
+    <option value="TODAS">-- TODAS LAS ESPECIALIDADES --</option>
+    <option value="FISIOTERAPIA">🦴 FISIOTERAPIA Y REHABILITACIÓN</option>
+    <option value="TRAUMATOLOGIA">🩺 TRAUMATOLOGÍA Y ORTOPEDIA</option>
+    <option value="MEDICINA_GENERAL">🩺 MEDICINA GENERAL Y ESPECIALIDADES</option>
+    <option value="PSICOLOGIA">🧠 PSICOLOGÍA Y SALUD MENTAL</option>
+    <option value="NUTRICION">🥗 NUTRICIÓN Y DIETÉTICA</option>
+    <option value="PODOLOGIA">🦶 PODOLOGÍA</option>
+    <option value="TERAPIA_OCUPACIONAL">✋ TERAPIA OCUPACIONAL</option>
+    <option value="ENFERMERIA">💊 ENFERMERÍA Y CUIDADOS</option>
+    <option value="ODONTOLOGIA">🦷 ODONTOLOGÍA</option>
+    <option value="ESTUDIOS_EXTERNOS">📁 ESTUDIOS EXTERNOS / OTROS</option>
+</select>
             </div>
             <button type="button" onclick="resetFiltrosEvidencia()" class="btn btn-sm btn-outline-light" style="border-radius: 8px; font-size: 0.72rem;">
                 🔄 Ver Todo
