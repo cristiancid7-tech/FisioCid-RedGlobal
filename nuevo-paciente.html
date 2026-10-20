@@ -158,19 +158,27 @@
                             </div>
                             
                             <div class="row g-3">
-                                <div class="col-md-4"><label class="form-label small fw-bold">Tipo Sangre</label>
-                                    <select class="form-select" name="tipo_sangre">
-                                        <option value="DESCONOCE">DESCONOCE</option>
-                                         <option value="O+">O+</option><option value="O-">O-</option>
-                <option value="A+">A+</option><option value="A-">A-</option>
-                <option value="B+">B+</option><option value="B-">B-</option>
-                <option value="AB+">AB+</option><option value="AB-">AB-</option>
-                                    
-                                    </select>
-                                </div>
-                                <div class="col-md-4"><label class="form-label small fw-bold">Lateralidad</label>
-                                    <select class="form-select" name="lateralidad"><option value="DIESTRO">Diestro</option><option value="ZURDO">Zurdo</option></select>
-                                </div>
+                               <div class="col-md-4">
+    <label class="form-label small fw-bold">Tipo de sangre</label>
+    <select class="form-select" name="tipo_sangre" id="valTipoSangre">
+        <option value="" selected>-- SELECCIONAR --</option>
+        <option value="DESCONOCE">DESCONOCE</option>
+        <option value="O+">O+</option><option value="O-">O-</option>
+        <option value="A+">A+</option><option value="A-">A-</option>
+        <option value="B+">B+</option><option value="B-">B-</option>
+        <option value="AB+">AB+</option><option value="AB-">AB-</option>
+    </select>
+</div>
+
+<div class="col-md-4">
+    <label class="form-label small fw-bold">LATERALIDAD</label>
+    <select class="form-select" name="lateralidad" id="valLateralidad">
+        <option value="" selected>-- SELECCIONAR --</option>
+        <option value="DIESTRO">Diestro</option>
+        <option value="ZURDO">Zurdo</option>
+        <option value="AMBIDIESTRO">Ambidestro</option>
+    </select>
+</div>
                                 <div class="col-md-4"><label class="form-label small fw-bold text-danger">Alergias Conocidas</label><input type="text" class="form-control" name="alergias"></div>
                                 
                                 <div class="col-md-6"><label class="form-label small fw-bold">Antecedentes Heredofamiliares</label><textarea class="form-control" name="antecedentes_heredofamiliares" rows="2"></textarea></div>
@@ -198,34 +206,46 @@
         </div>
     </div>
 
-    <div id="seccion-tutor" class="col-12 d-none">
-        <div class="p-3 border rounded-3 mb-3" style="background: rgba(var(--primary-rgb), 0.05); border: 1px solid var(--primary) !important;">
-            <h6 class="fw-bold mb-3" style="color: var(--primary); font-size: 0.8rem;">
+    
+  <div id="seccion-tutor" class="col-12 d-none">
+    <div class="p-3 border rounded-3 mb-3 shadow-sm" style="background: rgba(var(--primary-rgb), 0.04); border: 1px solid var(--primary) !important;">
+        
+        <!-- 🎯 ENCABEZADO CON BOTÓN EXPRESS INTEGRADO EN LA DERECHA -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0" style="color: var(--primary); font-size: 0.82rem; letter-spacing: 0.5px;">
                 <i class="fas fa-shield-alt me-2"></i>RESPONSABLE LEGAL (MENOR DE EDAD)
             </h6>
-            <div class="row g-2">
-            
-                <div class="position-relative mb-3">
-                    <label class="form-label font-weight-bold">Nombre del Responsable:</label>
-                    <input type="text" id="tutor-nombre" class="form-control" autocomplete="off" placeholder="ESCRIBE PARA BUSCAR UN TUTOR...">
-                    <input type="hidden" id="idTutorSeleccionado" name="id_tutor">
-                    <div id="listaTutores" class="lista-sugerencias-flotante" style="display:none;"></div>
-                </div>
-                <div class="col-md-3">
-                    <label class="small fw-bold text-muted">Parentesco</label>
-                    <input type="text" id="tutor-parentesco" name="parentesco_tutor" class="form-control form-control-sm text-uppercase" placeholder="EJ. MADRE">
-                </div>
-                <div class="col-md-4">
-                    <label class="small fw-bold text-muted">Teléfono del Tutor</label>
-                    <input type="tel" id="tutor-tel" name="telefono_tutor" class="form-control form-control-sm" placeholder="10 DÍGITOS">
-                </div>
-                <div class="col-md-5">
-                    <label class="small fw-bold text-muted">Correo del Responsable (Acceso al Portal)</label>
-                    <input type="email" id="correo-tutor" name="correo_tutor" class="form-control form-control-sm" placeholder="correo@ejemplo.com">
-                </div>
+            <button type="button" class="btn btn-sm btn-success fw-bold px-3 rounded-pill shadow-sm" onclick="abrirModalTutorExpress()">
+                <i class="fas fa-user-plus me-1"></i> ➕ Registrar Tutor Express
+            </button>
+        </div>
+
+        <div class="row g-2">
+            <!-- 🔍 Buscador de Tutor Existente -->
+            <div class="col-12 position-relative mb-2">
+                <label class="form-label small fw-bold text-muted mb-1">Nombre del Responsable (Buscar o Autocompletar):</label>
+                <input type="text" id="tutor-nombre" class="form-control form-control-sm" autocomplete="off" placeholder="ESCRIBE PARA BUSCAR UN TUTOR REGISTRADO...">
+                <input type="hidden" id="idTutorSeleccionado" name="id_tutor">
+                <div id="listaTutores" class="lista-sugerencias-flotante" style="display:none;"></div>
+            </div>
+
+            <!-- 📝 Datos de Contacto del Tutor -->
+            <div class="col-md-3">
+                <label class="small fw-bold text-muted mb-1">Parentesco</label>
+                <input type="text" id="tutor-parentesco" name="parentesco_tutor" class="form-control form-control-sm text-uppercase" placeholder="EJ. MADRE / PADRE">
+            </div>
+            <div class="col-md-4">
+                <label class="small fw-bold text-muted mb-1">Teléfono del Tutor</label>
+                <input type="tel" id="tutor-tel" name="telefono_tutor" class="form-control form-control-sm" placeholder="10 DÍGITOS">
+            </div>
+            <div class="col-md-5">
+                <label class="small fw-bold text-muted mb-1">Correo del Responsable (Acceso al Portal)</label>
+                <input type="email" id="correo-tutor" name="correo_tutor" class="form-control form-control-sm" placeholder="tutor@ejemplo.com">
             </div>
         </div>
+
     </div>
+</div>
 
     <div class="col-md-12">
         <label class="form-label small fw-bold">Dirección Completa</label>
@@ -413,6 +433,138 @@
         </div>
 
     </div>
+</div>
+
+<!-- 🧑‍🍼 MODAL REGISTRO EXPRESS DE TUTOR ADULTO (ESTILO IDÉNTICO A REGISTRO PRINCIPAL) -->
+<div class="modal fade" id="modalTutorExpress" tabindex="-1" aria-hidden="true" style="background: rgba(0,0,0,0.6);">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; border-top: 8px solid var(--primary, #2563eb) !important; overflow: hidden;">
+      
+      <!-- 🎯 ENCABEZADO IDÉNTICO A LA PANTALLA PRINCIPAL -->
+      <div class="modal-header bg-white border-0 pt-4 pb-2 text-center d-block position-relative">
+        <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+        
+        <h4 class="fw-bold mb-1" style="color: var(--primary, #2563eb);">
+          <i class="fas fa-user-shield text-primary me-2"></i> Expediente Tutor Adulto
+        </h4>
+        
+        <div class="d-flex flex-column align-items-center mb-1">
+          <p class="text-muted small mb-1" id="lblSedeRegistroTutor">Cargando sede...</p>
+          
+          <!-- 🆔 BADGE PILL DE FOLIO (MISMOS ESTILOS QUE EL PACIENTE) -->
+          <div class="px-3 py-1 border rounded-pill bg-light d-inline-flex align-items-center justify-content-center shadow-sm" 
+               style="border: 1px solid var(--primary, #2563eb) !important; min-width: 220px; width: auto;">
+            <i class="fas fa-fingerprint text-primary me-2" style="font-size: 0.85rem;"></i>
+            <input type="text" id="inputFolioTutorExpress" 
+                   class="form-control form-control-sm border-0 bg-transparent fw-bold p-0 text-center" 
+                   style="color: var(--primary, #2563eb); font-size: 0.9rem; width: auto; min-width: 150px; pointer-events: none; box-shadow: none;" 
+                   value="GENERANDO..." readonly>
+          </div>
+
+          <!-- 🟢 LEYENDA / STATUS DE SINCRONIZACIÓN -->
+          <div id="statusFolioTutorExpress" class="text-primary fw-bold mt-1" style="font-size: 0.65rem; letter-spacing: 1px;">
+            <i class="fas fa-circle-notch fa-spin"></i> SINCRONIZANDO
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-body p-4 pt-2">
+        <!-- 📜 LEYENDA / AVISO CLINICO MAESTRO -->
+        <div class="alert alert-primary d-flex align-items-center p-2 mb-3 border-0 rounded-3 shadow-sm" style="background: rgba(var(--primary-rgb, 37, 99, 235), 0.08); color: var(--primary, #2563eb);">
+          <i class="fas fa-info-circle fs-5 me-2 ms-1"></i>
+          <div class="small fw-semibold">
+            Este registro creará la <strong>Ficha Maestra y Expediente Clínico</strong> del tutor con interoperabilidad en la Red FisioCid.
+          </div>
+        </div>
+
+        <form id="formTutorExpress">
+          <div class="row g-3">
+            <!-- Datos de Nombre -->
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Nombre(s) *</label>
+              <input type="text" id="tutExpNombre" class="form-control" required placeholder="EJ. CRISTIAN MIGUEL" oninput="generarCurpExpressTutor()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">A. Paterno *</label>
+              <input type="text" id="tutExpPaterno" class="form-control" required placeholder="EJ. CID" oninput="generarCurpExpressTutor()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">A. Materno</label>
+              <input type="text" id="tutExpMaterno" class="form-control" placeholder="EJ. ESPINDOLA" oninput="generarCurpExpressTutor()">
+            </div>
+
+            <!-- Datos Nacimiento -->
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Fecha Nacimiento *</label>
+              <input type="date" id="tutExpFecha" class="form-control" required onchange="generarCurpExpressTutor()">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Género *</label>
+              <select id="tutExpGenero" class="form-select" required onchange="generarCurpExpressTutor()">
+                <option value="HOMBRE">HOMBRE</option>
+                <option value="MUJER">MUJER</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">Estado Nacimiento *</label>
+              <select id="tutExpEstado" class="form-select" required onchange="generarCurpExpressTutor()">
+                <option value="PL">PUEBLA</option>
+                <option value="DF">CIUDAD DE MÉXICO</option>
+                <option value="MC">MÉXICO (ESTADO DE)</option>
+                <option value="VZ">VERACRUZ</option>
+                <option value="OC">OAXACA</option>
+              </select>
+            </div>
+
+            <!-- 🎯 SECCIÓN CURP DIVIDIDA (16 + 2) IGUAL QUE EN EL FORMULARIO PRINCIPAL -->
+            <div class="col-12 mt-3">
+              <div class="p-3 bg-light rounded-3 border">
+                <label class="form-label small fw-bold mb-2 text-muted">CURP DEL TUTOR (18 DÍGITOS)</label>
+                <div class="row g-2 align-items-center">
+                  <div class="col-md-7">
+                    <input type="text" id="tutExpCurpBase" class="form-control font-monospace text-uppercase" placeholder="16 DÍGITOS BASE" maxlength="16" readonly style="background-color: #edf2f7;">
+                  </div>
+                  <div class="col-md-2">
+                  
+                <input type="text" id="tutExpCurpHomo" 
+       class="form-control font-monospace text-uppercase text-center fw-bold border-primary" 
+       placeholder="00" 
+       maxlength="2" 
+       autocomplete="off" 
+       oninput="evaluarCurpHomoclaveTutorExpress()">
+    </div>
+                  <div class="col-md-3">
+                    <button type="button" id="btnAutoHomoTutor" class="btn btn-outline-danger w-100 fw-bold" onclick="autocompletarHomoclaveRenapoTutor()">
+                      <i class="fas fa-bolt"></i> Auto
+                    </button>
+                  </div>
+                </div>
+                <div id="msjHomoclaveAutoTutor" class="small mt-1 fw-bold"></div>
+              </div>
+            </div>
+
+            <!-- Contacto -->
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Teléfono Celular (10 Dígitos) *</label>
+              <input type="tel" id="tutExpTel" class="form-control" maxlength="10" required placeholder="Ej. 2381234567">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Correo Electrónico (Portal Paciente)</label>
+              <input type="email" id="tutExpEmail" class="form-control" placeholder="tutor@correo.com">
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- PIE DEL MODAL -->
+      <div class="modal-footer border-0 bg-light px-4 py-3">
+        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-camaleon-solid rounded-pill fw-bold px-4 shadow" onclick="guardarTutorExpress()">
+          <i class="fas fa-save me-1"></i> GUARDAR Y VINCULAR TUTOR
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 </body>
 </html>

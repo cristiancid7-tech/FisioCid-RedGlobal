@@ -864,102 +864,241 @@ document.addEventListener('click', async (e) => {
 
 
 // ============================================================================
-// 📑 CARGAR Y MOSTRAR CONTENIDO DEL EXPEDIENTE DENTRO DEL MODAL
+// 📑 CARGAR Y MOSTRAR CONTENIDO DEL EXPEDIENTE DENTRO DEL MODAL (VERSIÓN PREMIUM)
 // ============================================================================
 async function cargarYMostrarVisorExpediente(pacienteId) {
     const contenedorNotas = document.getElementById('listaNotasHistorial');
     const contenedorImagen = document.getElementById('listaEstudiosImagen');
     const contenedorLab = document.getElementById('listaEstudiosLab');
 
-    // 1. Mostrar modal inmediatamente en estado de carga
+    const loaderHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-2" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
+            <p class="text-muted fw-bold small mb-0">Cargando expediente con desencriptación segura...</p>
+        </div>
+    `;
+
+    if (contenedorNotas) contenedorNotas.innerHTML = loaderHTML;
+    if (contenedorImagen) contenedorImagen.innerHTML = loaderHTML;
+    if (contenedorLab) contenedorLab.innerHTML = loaderHTML;
+
+    // 1. Mostrar modal inmediatamente
     const modalVisorEl = document.getElementById('modalVisorExpediente');
     const modalInstance = bootstrap.Modal.getOrCreateInstance(modalVisorEl);
     modalInstance.show();
 
     try {
-        // A) CONSULTAR HISTORIAL CLÍNICO (NOTAS)
-        const { data: notas } = await fisioNet
+        // A) CONSULTAR HISTORIAL CLÍNICO (NOTAS DE EVOLUCIÓN)
+        const { data: notas, error: errNotas } = await fisioNet
             .from('historial_clinico')
             .select('*')
             .eq('id_paciente', pacienteId)
             .order('fecha_nota', { ascending: false });
 
+        if (errNotas) throw errNotas;
+
         if (contenedorNotas) {
             if (notas && notas.length > 0) {
-                contenedorNotas.innerHTML = notas.map(n => `
-                    <div class="card border-0 shadow-sm p-3 style="border-left: 5px solid var(--primary) !important;">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="badge bg-dark">${new Date(n.fecha_nota).toLocaleDateString('es-MX')}</span>
-                            <span class="fw-bold text-primary small">${n.diagnostico_principal || 'SIN DIAGNÓSTICO'} (${n.codigo_cie10 || 'N/A'})</span>
+                contenedorNotas.innerHTML = notas.map(n => {
+                    const fechaFmt = new Date(n.fecha_nota).toLocaleDateString('es-MX', {
+                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+
+                    return `
+                        <div class="card border-0 shadow-sm p-3 mb-1" style="border-left: 5px solid #3b82f6 !important; border-radius: 12px; background: white;">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <span class="badge bg-slate-800 text-info font-monospace px-2 py-1" style="background-color: #0f172a; font-size: 0.72rem;">
+                                    📅 ${fechaFmt}
+                                </span>
+                                <span class="fw-bold text-primary small">
+                                    🩺 ${n.diagnostico_principal || 'SIN DIAGNÓSTICO'} <span class="text-secondary font-monospace">(${n.codigo_cie10 || 'N/A'})</span>
+                                </span>
+                            </div>
+                            
+                            <div class="bg-light p-2.5 rounded-3 mb-2" style="font-size: 0.85rem; line-height: 1.4;">
+                                <p class="mb-1"><strong>Motivo:</strong> ${n.motivo_consulta || 'Sin registro'}</p>
+                                <p class="mb-1"><strong>Exploración:</strong> ${n.exploracion_fisica || 'Sin registro'}</p>
+                                <p class="mb-0"><strong>Tratamiento:</strong> ${n.plan_tratamiento || 'Sin registro'}</p>
+                            </div>
+
+                            <div class="d-flex justify-content-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3" 
+                                        onclick="inyectardatoEnConsulta('exploracion', 'HISTORIAL PREVIO (${fechaFmt}): ${n.exploracion_fisica || ''}')">
+                                    ➕ Inyectar Exploración a Consulta
+                                </button>
+                            </div>
                         </div>
-                        <p class="mb-1 small"><strong>Motivo:</strong> ${n.motivo_consulta || 'N/A'}</p>
-                        <p class="mb-1 small"><strong>Exploración:</strong> ${n.exploracion_fisica || 'N/A'}</p>
-                        <p class="mb-2 small"><strong>Tratamiento:</strong> ${n.plan_tratamiento || 'N/A'}</p>
-                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" 
-                                onclick="inyectardatoEnConsulta('exploracion', 'HISTORIAL PREVIO (${new Date(n.fecha_nota).toLocaleDateString()}): ${n.exploracion_fisica || ''}')">
-                            ➕ Inyectar Exploración a la Nota
-                        </button>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } else {
-                contenedorNotas.innerHTML = `<div class="alert alert-info">Sin notas de evolución registradas previamente.</div>`;
+                contenedorNotas.innerHTML = `
+                    <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+                        <i class="fas fa-file-medical-alt fa-3x text-muted opacity-50 mb-3"></i>
+                        <h6 class="fw-bold text-secondary">Sin notas de evolución registradas</h6>
+                        <small class="text-muted">Las futuras consultas guardadas por los especialistas aparecerán aquí.</small>
+                    </div>
+                `;
             }
         }
 
         // B) CONSULTAR ESTUDIOS DE GABINETE (IMAGEN Y LABS)
-        const { data: estudios } = await fisioNet
+        const { data: estudios, error: errEstudios } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
             .eq('paciente_id', pacienteId)
             .order('fecha_registro', { ascending: false });
 
-        if (estudios && estudios.length > 0) {
-            const imagenes = estudios.filter(e => e.tipo_estudio !== 'LABORATORIO CLÍNICO');
-            const laboratorios = estudios.filter(e => e.tipo_estudio === 'LABORATORIO CLÍNICO');
+        if (errEstudios) throw errEstudios;
 
-            // Render Imagenología
+        if (estudios && estudios.length > 0) {
+            // Generar URLs firmadas frescas si las imágenes usan rutas privadas
+            const estudiosFirmados = await Promise.all(estudios.map(async (est) => {
+                let urlFinal = est.archivo_url || '';
+                if (est.ruta_storage && !est.ruta_storage.startsWith('http')) {
+                    const { data: signed } = await fisioNet.storage
+                        .from('expedientes-multimedia')
+                        .createSignedUrl(est.ruta_storage, 3600);
+                    if (signed?.signedUrl) urlFinal = signed.signedUrl;
+                }
+                return { ...est, url_firmada: urlFinal };
+            }));
+
+            const imagenes = estudiosFirmados.filter(e => e.tipo_estudio !== 'LABORATORIO CLÍNICO');
+            const laboratorios = estudiosFirmados.filter(e => e.tipo_estudio === 'LABORATORIO CLÍNICO');
+
+            // --- RENDER IMAGENOLOGÍA ---
             if (contenedorImagen) {
-                contenedorImagen.innerHTML = imagenes.length > 0 ? imagenes.map(img => `
-                    <div class="col-md-6">
-                        <div class="card h-100 shadow-sm p-3">
-                            <h6 class="fw-bold text-primary mb-1">${img.tipo_estudio}</h6>
-                            <span class="text-muted small mb-2">${new Date(img.fecha_registro).toLocaleDateString('es-MX')}</span>
-                            <p class="small text-dark fw-bold mb-2">${img.hallazgos_resumen}</p>
-                            ${img.archivo_url ? `<a href="${img.archivo_url}" target="_blank" class="btn btn-sm btn-warning fw-bold mb-2">🔗 Ver Archivo / PACS</a>` : ''}
-                            <button type="button" class="btn btn-sm btn-outline-dark fw-bold mt-auto" 
-                                    onclick="inyectardatoEnConsulta('exploracion', 'ESTUDIO (${img.tipo_estudio}): ${img.hallazgos_resumen}')">
-                                ➕ Copiar Hallazgos a la Consulta
-                            </button>
+                if (imagenes.length > 0) {
+                    contenedorImagen.innerHTML = imagenes.map(img => {
+                        const fechaFmt = new Date(img.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                        const jsonPayload = JSON.stringify(img).replace(/'/g, "&apos;");
+
+                        return `
+                            <div class="col-md-6">
+                                <div class="card h-100 border-0 shadow-sm p-3 style="border-top: 4px solid #3b82f6 !important; border-radius: 12px; background: white;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="fw-bold text-primary mb-0" style="font-size: 0.9rem;">🩻 ${img.tipo_estudio || 'ESTUDIO DE IMAGEN'}</h6>
+                                        <span class="badge bg-light text-dark border small">${fechaFmt}</span>
+                                    </div>
+
+                                    <p class="small text-secondary fw-semibold mb-3" style="min-height: 40px;">
+                                        ${img.hallazgos_resumen || img.descripcion || 'Sin interpretación previa disponible.'}
+                                    </p>
+
+                                    <div class="d-flex flex-column gap-2 mt-auto">
+                                        ${img.url_firmada ? `
+                                            <a href="${img.url_firmada}" target="_blank" class="btn btn-sm btn-info text-white fw-bold rounded-pill w-100">
+                                                🔗 Ver Archivo / Placa / PACS
+                                            </a>
+                                        ` : ''}
+
+                                        <button type="button" class="btn btn-sm btn-outline-dark fw-bold rounded-pill w-100" 
+                                                onclick="inyectardatoEnConsulta('exploracion', 'ESTUDIO (${img.tipo_estudio}): ${img.hallazgos_resumen || img.descripcion || ''}')">
+                                            ➕ Copiar Hallazgos a Consulta
+                                        </button>
+
+                                        <button type="button" class="btn btn-sm btn-success text-white fw-bold rounded-pill w-100" 
+                                                onclick='anexarEstudioAExpedienteClinica(${jsonPayload})'>
+                                            📥 Anexar a Expediente de mi Clínica
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    contenedorImagen.innerHTML = `
+                        <div class="col-12">
+                            <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+                                <i class="fas fa-x-ray fa-3x text-muted opacity-50 mb-3"></i>
+                                <h6 class="fw-bold text-secondary">Sin estudios de imagenología registrados</h6>
+                            </div>
                         </div>
-                    </div>
-                `).join('') : `<div class="alert alert-info">Sin estudios de imagenología registrados.</div>`;
+                    `;
+                }
             }
 
-            // Render Laboratorios
+            // --- RENDER LABORATORIOS ---
             if (contenedorLab) {
-                contenedorLab.innerHTML = laboratorios.length > 0 ? laboratorios.map(lab => `
-                    <div class="col-md-6">
-                        <div class="card h-100 shadow-sm p-3">
-                            <h6 class="fw-bold text-danger mb-1">🧪 ${lab.tipo_estudio}</h6>
-                            <span class="text-muted small mb-2">${new Date(lab.fecha_registro).toLocaleDateString('es-MX')}</span>
-                            <p class="small text-dark mb-2">${lab.hallazgos_resumen}</p>
-                            ${lab.archivo_url ? `<a href="${lab.archivo_url}" target="_blank" class="btn btn-sm btn-danger fw-bold mb-2">🔗 Ver Resultados PDF</a>` : ''}
-                            <button type="button" class="btn btn-sm btn-outline-danger fw-bold mt-auto" 
-                                    onclick="inyectardatoEnConsulta('sintomas', 'LABORATORIO (${new Date(lab.fecha_registro).toLocaleDateString()}): ${lab.hallazgos_resumen}')">
-                                ➕ Copiar a Síntomas / Acompañantes
-                            </button>
+                if (laboratorios.length > 0) {
+                    contenedorLab.innerHTML = laboratorios.map(lab => {
+                        const fechaFmt = new Date(lab.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                        const jsonPayload = JSON.stringify(lab).replace(/'/g, "&apos;");
+
+                        return `
+                            <div class="col-md-6">
+                                <div class="card h-100 border-0 shadow-sm p-3" style="border-top: 4px solid #ef4444 !important; border-radius: 12px; background: white;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="fw-bold text-danger mb-0" style="font-size: 0.9rem;">🧪 ${lab.tipo_estudio || 'ANÁLISIS DE LAB'}</h6>
+                                        <span class="badge bg-light text-dark border small">${fechaFmt}</span>
+                                    </div>
+
+                                    <p class="small text-secondary mb-3" style="min-height: 40px;">
+                                        ${lab.hallazgos_resumen || lab.descripcion || 'Sin reporte de resultados anexado.'}
+                                    </p>
+
+                                    <div class="d-flex flex-column gap-2 mt-auto">
+                                        ${lab.url_firmada ? `
+                                            <a href="${lab.url_firmada}" target="_blank" class="btn btn-sm btn-danger text-white fw-bold rounded-pill w-100">
+                                                📄 Ver Resultados en PDF
+                                            </a>
+                                        ` : ''}
+
+                                        <button type="button" class="btn btn-sm btn-outline-danger fw-bold rounded-pill w-100" 
+                                                onclick="inyectardatoEnConsulta('sintomas', 'LABORATORIO (${fechaFmt}): ${lab.hallazgos_resumen || lab.descripcion || ''}')">
+                                            ➕ Copiar a Síntomas / Acompañantes
+                                        </button>
+
+                                        <button type="button" class="btn btn-sm btn-success text-white fw-bold rounded-pill w-100" 
+                                                onclick='anexarEstudioAExpedienteClinica(${jsonPayload})'>
+                                            📥 Anexar a Expediente de mi Clínica
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    contenedorLab.innerHTML = `
+                        <div class="col-12">
+                            <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+                                <i class="fas fa-vial fa-3x text-muted opacity-50 mb-3"></i>
+                                <h6 class="fw-bold text-secondary">Sin análisis de laboratorio registrados</h6>
+                            </div>
                         </div>
-                    </div>
-                `).join('') : `<div class="alert alert-info">Sin exámenes de laboratorio registrados.</div>`;
+                    `;
+                }
             }
 
         } else {
-            if (contenedorImagen) contenedorImagen.innerHTML = `<div class="alert alert-info">Sin archivos multimedia de imagen.</div>`;
-            if (contenedorLab) contenedorLab.innerHTML = `<div class="alert alert-info">Sin informes de laboratorio.</div>`;
+            if (contenedorImagen) {
+                contenedorImagen.innerHTML = `
+                    <div class="col-12">
+                        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+                            <i class="fas fa-x-ray fa-3x text-muted opacity-50 mb-3"></i>
+                            <h6 class="fw-bold text-secondary">Sin estudios de imagenología registrados</h6>
+                        </div>
+                    </div>
+                `;
+            }
+            if (contenedorLab) {
+                contenedorLab.innerHTML = `
+                    <div class="col-12">
+                        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+                            <i class="fas fa-vials fa-3x text-muted opacity-50 mb-3"></i>
+                            <h6 class="fw-bold text-secondary">Sin informes de laboratorio registrados</h6>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
     } catch (e) {
-        console.error("💥 Error al recuperar el visor:", e);
+        console.error("💥 Error crítico al recuperar el visor:", e);
+        const errHTML = `<div class="alert alert-danger text-center font-monospace">Error al cargar datos: ${e.message || 'Error de conexión'}</div>`;
+        if (contenedorNotas) contenedorNotas.innerHTML = errHTML;
+        if (contenedorImagen) contenedorImagen.innerHTML = errHTML;
+        if (contenedorLab) contenedorLab.innerHTML = errHTML;
     }
 }
 
@@ -1634,7 +1773,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     ruta_storage: filePath,
                     descripcion: descripcion,
                     es_privado_clinica: true,
-                    fecha_registro: new Date().toISOString()
+                    fecha_registro: new Date().toISOString(),
+
+                    id_otp_origen: solicitudOTPActivaId || null,
+        fecha_autorizacion_otp: fechaOtpStr || new Date().toISOString()
                 });
 
             if (dbError) throw dbError;

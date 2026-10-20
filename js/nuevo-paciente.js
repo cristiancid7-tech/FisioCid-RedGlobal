@@ -1,6 +1,10 @@
-// Variable maestra global únicacreqara
+// Variable maestra global única.
 let pacienteExistenteId = null;
 let edicionFichaAutorizada = false;
+let estaCargandoFormulario = false;
+let tokenSeguridadActivo = null;
+let tutorExpressExistenteId = null;
+
 
 function sanitizarTexto(texto) {
     if (!texto) return ""; // Evita errores si el texto llega vacío o undefined
@@ -16,31 +20,31 @@ function sanitizarTexto(texto) {
 document.addEventListener('DOMContentLoaded', async () => {
     aplicarIdentidadCamaleonica();
 
+    // Listener para búsqueda de tutor en input principal
     document.getElementById('tutor-nombre')?.addEventListener('input', (e) => {
-    const texto = e.target.value;
-    const lista = document.getElementById('listaTutores');
-    
-    if (texto.length >= 3) {
-        buscarTutorEnBase(texto);
-    } else if (lista) {
-        lista.style.display = 'none';
-        document.getElementById('idTutorSeleccionado').value = ""; // Limpiamos si borra
-    }
-});
-// 🛡️ BLINDAJE DE FECHA: Evitar años ilógicos (1800 o el futuro)
+        const texto = e.target.value;
+        const lista = document.getElementById('listaTutores');
+        
+        if (texto.length >= 3) {
+            buscarTutorEnBase(texto);
+        } else if (lista) {
+            lista.style.display = 'none';
+            document.getElementById('idTutorSeleccionado').value = ""; // Limpiamos si borra
+        }
+    });
+
+    // 🛡️ BLINDAJE DE FECHA: Evitar años ilógicos (1800 o el futuro)
     const campoFecha = document.getElementById('valFecha');
     if (campoFecha) {
         const hoy = new Date();
-        // Fecha máxima: Hoy (Nadie nace mañana)
         const fechaMax = hoy.toISOString().split('T')[0];
-        // Fecha mínima: Hace 110 años (1916 aprox)
         const hace110Anios = new Date(hoy.setFullYear(hoy.getFullYear() - 110)).toISOString().split('T')[0];
         
         campoFecha.setAttribute('max', fechaMax);
         campoFecha.setAttribute('min', hace110Anios);
     }
 
-    // 🔥 1. MAYÚSCULAS AUTOMÁTICAS (Menos en correo)
+    // 🔥 1. MAYÚSCULAS AUTOMÁTICAS (Menos en correo y contraseña)
     document.addEventListener('input', (e) => {
         const el = e.target;
         if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && 
@@ -49,24 +53,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Escuchadores dinámicos para campos maestros
     const camposMaestros = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'valGenero', 'valEstado'];
-   camposMaestros.forEach(id => {
+    camposMaestros.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             const tipoEvento = (el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
             el.addEventListener(tipoEvento, () => {
                 if (id === 'valNombre') {
-                     const lista = document.getElementById('listaCitas');
+                    const lista = document.getElementById('listaCitas');
                     if (el.value.length >= 3) { 
-                    buscarEnAgenda(el.value); 
+                        buscarEnAgenda(el.value); 
                     } else if (lista) { 
-                    lista.style.display = 'none'; 
-        // 🔹 AGREGAR ESTAS DOS LÍNEAS AQUÍ:
-                     pacienteExistenteId = null;
-                window.pacienteCargado = null;
+                        lista.style.display = 'none'; 
+                        if (!edicionFichaAutorizada && !window.pacienteCargado) {
+                            pacienteExistenteId = null;
+                            window.pacienteCargado = null;
+                        }
+                    }
                 }
-                }
-                // 👇 AGREGA ESTA LÍNEA AQUÍ
+                
                 if (id === 'valFecha') { actualizarInterfazEdad(); }
                 
                 procesarCurp(); 
@@ -74,37 +80,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // 🎯 HOMOCLAVE DISPARA LA VERIFICACIÓN Y ASIGNACIÓN DE FOLIO
+    document.getElementById('curpHomo')?.addEventListener('input', async (e) => {
+        const homo = e.target.value.trim().toUpperCase();
 
-    
-// 🎯 EL GATILLO MAESTRO DE CRISTIAN: La Homoclave dispara la verificación y asignación de Folio
-document.getElementById('curpHomo')?.addEventListener('input', async (e) => {
-    const homo = e.target.value.trim().toUpperCase();
+        if (homo.length === 2) {
+            const parteBase = document.getElementById('curpAuto')?.value?.trim().toUpperCase() || '';
+            const curpCompleta = `${parteBase}${homo}`;
 
-    if (homo.length === 2) {
-        const parteBase = document.getElementById('curpAuto')?.value?.trim().toUpperCase() || '';
-        const curpCompleta = `${parteBase}${homo}`;
+            const lista = document.getElementById('listaCitas');
+            if (lista) lista.style.display = 'none';
 
-        // Ocultar listas desplegables abiertas
-        const lista = document.getElementById('listaCitas');
-        if (lista) lista.style.display = 'none';
-
-        if (curpCompleta.length === 18) {
-            // Evaluamos en BD si la CURP ya existe
-            await verificarPacienteExistentePorCurp(curpCompleta);
-        } else if (!pacienteExistenteId) {
-            // Si la base no tenía los 16 caracteres completos pero pusieron homoclave, asegura folio
-            await gestionarFolioAutomatico(null);
+            if (curpCompleta.length === 18) {
+                await verificarPacienteExistentePorCurp(curpCompleta);
+            } else if (!pacienteExistenteId) {
+                await gestionarFolioAutomatico(null);
+            }
         }
-    }
-});
-
-    document.addEventListener('click', (e) => {
-        const lista = document.getElementById('listaCitas');
-        if (lista && e.target.id !== 'valNombre') lista.style.display = 'none';
     });
 
-    // 🎯 3. ACTIVAR MODALES
-    document.getElementById('btnAutoHomo.....')?.addEventListener('click', (e) => {
+    // 🎯 MODAL RENAPO DE RESPALDO
+    document.getElementById('btnAutoHomo')?.addEventListener('click', (e) => {
         e.preventDefault();
         document.getElementById('modalRenapo').style.display = 'flex';
     });
@@ -117,21 +113,25 @@ document.getElementById('curpHomo')?.addEventListener('input', async (e) => {
         document.getElementById('curpHomo').focus();
     });
 
-    document.getElementById('btnVerConvenios')?.addEventListener('click', (e) => {
+    // 🎯 MODAL CONVENIOS
+    document.getElementById('btnVerConvenios')?.addEventListener('click', async (e) => {
         e.preventDefault();
-        document.getElementById('modalConvenios').style.display = 'flex';
+        const modal = document.getElementById('modalConvenios');
+        if (modal) {
+            modal.style.display = 'flex';
+            await cargarListaConveniosModal(); 
+        }
     });
     document.getElementById('cerrarConvenios')?.addEventListener('click', () => {
         document.getElementById('modalConvenios').style.display = 'none';
     });
 
-   // 🚀 4. AUTOCARGA INICIAL POR URL (Si viene de la lista externa)
+    // 🚀 AUTOCARGA INICIAL POR URL
     const urlParams = new URLSearchParams(window.location.search);
     const editId = urlParams.get('id');
     if (editId) { 
         await cargarPacienteParaEdicion(editId); 
         
-        // 🎯 Si cargó por URL, también le ponemos el búnker y su botón al terminar
         setTimeout(() => {
             congelarCamposIdentidad(true);
             crearBotonDesbloqueoDinamico();
@@ -162,8 +162,6 @@ async function cargarPacienteParaEdicion(id) {
     }
 }
 
-// Variable de control global (asegúrate de declararla fuera de la función)
-let estaCargandoFormulario = false;
 
 async function llenarFormularioCompleto(p) {
     // Si ya estamos cargando este paciente, no hacemos nada para evitar parpadeos
@@ -359,36 +357,39 @@ function congelarCamposIdentidad(bloquear) {
         'antecedentes_no_patologicos', 'farmacologia_activa', 'antecedentes_quirurgicos', 'checkConsentimiento'
     ];
 
-   todosLosCampos.forEach(idOrName => {
-        const el = document.getElementById(idOrName) || document.querySelector(`[name="${idOrName}"]`);
+  // 🔒 DENTRO DE congelarCamposIdentidad(bloquear):
+todosLosCampos.forEach(idOrName => {
+    const el = document.getElementById(idOrName) || document.querySelector(`[name="${idOrName}"]`);
+    
+    if (el) {
+        let estaLleno = false;
         
-        if (el) {
-            // Lógica inteligente para distintos tipos de input
-            let estaLleno = false;
-            
-            if (el.type === 'checkbox') {
-                estaLleno = el.checked; // Está lleno si está marcado
-            } else {
-                const valor = el.value ? el.value.trim() : "";
-                estaLleno = valor !== "" && valor !== "SELECCION" && valor !== "SELECCIONAR ESTADO --" && valor !== "NO SABE";
-            }
-            
-            const aplicarBloqueo = bloquear && estaLleno;
-
-            // Aplicamos bloqueo
-            if (el.type === 'checkbox') {
-                el.disabled = aplicarBloqueo; 
-            } else {
-                el.readOnly = aplicarBloqueo;
-                if (el.tagName === 'SELECT') el.disabled = aplicarBloqueo;
-                
-                // Estilos visuales para inputs y selects
-                el.style.backgroundColor = aplicarBloqueo ? "#edf2f7" : "#ffffff";
-                el.style.color = aplicarBloqueo ? "#4a5568" : "#000000";
-                el.style.cursor = aplicarBloqueo ? "not-allowed" : "text";
-            }
+        if (el.type === 'checkbox') {
+            estaLleno = el.checked;
+        } else {
+            const valor = el.value ? el.value.trim().toUpperCase() : "";
+            // Lista de valores neutros que NO deben congelar el campo
+            const valoresIncompletos = [
+                "", "SELECCION", "SELECCIONAR", "SELECCIONAR ESTADO --", 
+                "-- SELECCIONAR --", "DESCONOCE", "NO SABE"
+            ];
+            estaLleno = !valoresIncompletos.includes(valor);
         }
-    });
+        
+        const aplicarBloqueo = bloquear && estaLleno;
+
+        if (el.type === 'checkbox') {
+            el.disabled = aplicarBloqueo; 
+        } else {
+            el.readOnly = aplicarBloqueo;
+            if (el.tagName === 'SELECT') el.disabled = aplicarBloqueo;
+            
+            el.style.backgroundColor = aplicarBloqueo ? "#edf2f7" : "#ffffff";
+            el.style.color = aplicarBloqueo ? "#4a5568" : "#000000";
+            el.style.cursor = aplicarBloqueo ? "not-allowed" : "text";
+        }
+    }
+});
 
   
 
@@ -408,8 +409,6 @@ function congelarCamposIdentidad(bloquear) {
     }
 }
 
-// Variable global para mantener el token activo en memoria
-let tokenSeguridadActivo = null;
 
 function crearBotonDesbloqueoDinamico() {
     const tituloSeccion = document.querySelector('h2') || 
@@ -576,12 +575,16 @@ async function buscarEnAgenda(texto) {
             lista.innerHTML = '';
             
             if (!pacientes || pacientes.length === 0) {
-                lista.innerHTML = '<div style="padding: 10px; color: #a0aec0; font-size: 0.85rem;"><i class="fas fa-user-plus"></i> Paciente nuevo sin registros previos en la red</div>';
-                lista.style.display = 'block';
-                pacienteExistenteId = null;
-                window.pacienteCargado = null;
-                return;
-            }
+    lista.innerHTML = '<div style="padding: 10px; color: #a0aec0; font-size: 0.85rem;"><i class="fas fa-user-plus"></i> Paciente nuevo sin registros previos en la red</div>';
+    lista.style.display = 'block';
+    
+    // 🛡️ MANTENER EL ID SI YA HAY UN PACIENTE CARGADO
+    if (!edicionFichaAutorizada && !window.pacienteCargado) {
+        pacienteExistenteId = null;
+        window.pacienteCargado = null;
+    }
+    return;
+}
 
             lista.style.display = 'block';
 
@@ -721,7 +724,9 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         // =====================================================================
         // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID (MATRIZ DINÁMICA DE SUSCRIPCIÓN)
         // =====================================================================
-        const esPacienteExistente = (pacienteExistenteId !== null) || (window.pacienteCargado && window.pacienteCargado.id);
+      const esPacienteExistente = Boolean(pacienteExistenteId || window.pacienteCargado?.id);
+const idRealPaciente = pacienteExistenteId || window.pacienteCargado?.id;
+
 
         if (!esPacienteExistente) {
             const { data: perfProf } = await fisioNet
@@ -818,7 +823,7 @@ if (!chequeoCuota.permitido) {
         //console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
 
         if (esPacienteExistente) {
-            const idRealPaciente = pacienteExistenteId || window.pacienteCargado.id;
+
             
             const camposCriticos = ['alergias', 'antecedentes_patologicos', 'antecedentes_heredofamiliares', 'farmacologia_activa'];
             const huboCambiosCriticos = camposCriticos.some(campo => {
@@ -963,17 +968,6 @@ function procesarCurp() {
     }
 }
 
-document.getElementById('btnVerConvenios')?.addEventListener('click', async () => {
-    const modal = document.getElementById('modalConvenios');
-    
-    if (modal) {
-        modal.style.display = 'flex'; // Abrimos el modal
-        //console.log("🚀 Cargando convenios (Doctores y Empresas)...");
-        
-        // Llamamos a la función de carga que usa el filtro .or()
-        await cargarListaConveniosModal(); 
-    }
-});
 
 async function cargarListaConveniosModal() {
     const contenedor = document.getElementById('contenedorListaConvenios');
@@ -1083,21 +1077,19 @@ function limpiarApellidoMexicano(apellidoRaw) {
 }
 
 
-async function gestionarFolioAutomatico(idPacienteExistente = null) {
-    //console.log("🚀 Iniciando gestión de folio para paciente:", idPacienteExistente);
-    const idClinica = localStorage.getItem('id_clinica_activa');
-    const inputFolio = document.getElementById('inputFolioExpediente');
-    const statusFolio = document.getElementById('statusFolio');
+async function gestionarFolioAutomatico(idPacienteExistente = null, inputElemId = 'inputFolioExpediente', statusElemId = 'statusFolio') {
+    const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    const inputFolio = document.getElementById(inputElemId);
+    const statusFolio = document.getElementById(statusElemId);
 
     if (!idClinica) {
         console.error("❌ Error: id_clinica_activa no encontrado en localStorage");
-        return;
+        return null;
     }
 
     try {
         // 1. SI EL PACIENTE YA EXISTE
         if (idPacienteExistente) {
-            //console.log("🔍 Buscando folio existente en DB...");
             const { data: exp, error } = await fisioNet
                 .from('expedientes_clinicos')
                 .select('folio_personalizado')
@@ -1106,18 +1098,16 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
                 .maybeSingle();
 
             if (exp) {
-                //console.log("✅ Folio encontrado:", exp.folio_personalizado);
                 if (inputFolio) inputFolio.value = exp.folio_personalizado;
-                if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-check-circle"></i> EXPEDIENTE LOCALIZADO';
+                if (statusFolio) {
+                    statusFolio.className = 'text-success fw-bold mt-1';
+                    statusFolio.innerHTML = '<i class="fas fa-check-circle me-1"></i> EXPEDIENTE LOCALIZADO EN RED';
+                }
                 return { folio: exp.folio_personalizado, nuevo: false };
             }
-            //console.log("ℹ️ El paciente existe pero no tiene folio en esta sede.");
         }
 
-        // 2. GENERAR NUEVO
-        //console.log("🏗️ Generando nuevo folio...");
-        
-        // A) Obtenemos la configuración de folios de la clínica
+        // 2. GENERAR NUEVO FOLIO
         const { data: conf, error: errConf } = await fisioNet
             .from('clinicas')
             .select('folio_prefijo, folio_sede, folio_separador')
@@ -1126,7 +1116,6 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
 
         if (errConf) throw errConf;
 
-        // B) Obtenemos el conteo real de expedientes registrados en esta clínica
         const { count, error: errCount } = await fisioNet
             .from('expedientes_clinicos')
             .select('id', { count: 'exact', head: true })
@@ -1134,7 +1123,6 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
 
         if (errCount) throw errCount;
 
-        // C) Formateo e incremento del consecutivo
         const totalRegistrados = count !== null && count !== undefined ? count : 0;
         const siguiente = totalRegistrados + 1;
 
@@ -1145,16 +1133,21 @@ async function gestionarFolioAutomatico(idPacienteExistente = null) {
         
         const nuevoFolio = `${prefijo}${sep}${sede}${sep}${anio}${sep}${siguiente.toString().padStart(4, '0')}`;
 
-        //console.log(`✨ Conteo actual: ${totalRegistrados} | Siguiente asignado: ${siguiente} | Folio: ${nuevoFolio}`);
-        
         if (inputFolio) inputFolio.value = nuevoFolio;
-        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-magic"></i> NUEVO EXPEDIENTE POR ASIGNAR';
+        if (statusFolio) {
+            statusFolio.className = 'text-primary fw-bold mt-1';
+            statusFolio.innerHTML = '<i class="fas fa-magic me-1"></i> NUEVO EXPEDIENTE POR ASIGNAR';
+        }
         
         return { folio: nuevoFolio, numero_consecutivo: siguiente, nuevo: true };
 
     } catch (error) {
         console.error("❌ ERROR CRÍTICO EN FOLIOS:", error);
-        if (statusFolio) statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ERROR DE CONEXIÓN';
+        if (statusFolio) {
+            statusFolio.className = 'text-warning fw-bold mt-1';
+            statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> ERROR DE CONEXIÓN';
+        }
+        return null;
     }
 }
 
@@ -1477,4 +1470,402 @@ function abrirModalPrivacidad(e) {
 function cerrarModalPrivacidad() {
     const modal = document.getElementById('modalPrivacidad');
     if (modal) modal.style.display = 'none';
+}
+
+
+
+
+
+// 🎯 LISTENER DISPARADOR AL ESCRIBIR LA HOMOCLAVE EN EL MODAL
+document.getElementById('tutExpCurpHomo')?.addEventListener('input', async (e) => {
+    const homo = e.target.value.trim().toUpperCase();
+
+    if (homo.length === 2) {
+        const parteBase = document.getElementById('tutExpCurpBase')?.value?.trim().toUpperCase() || '';
+        const curpCompleta = `${parteBase}${homo}`;
+
+        if (curpCompleta.length === 18) {
+            await verificarTutorExistentePorCurpModal(curpCompleta);
+        }
+    }
+});
+
+
+
+
+async function guardarTutorExpress() {
+    const nombre = document.getElementById('tutExpNombre')?.value.trim().toUpperCase();
+    const paterno = document.getElementById('tutExpPaterno')?.value.trim().toUpperCase();
+    const materno = document.getElementById('tutExpMaterno')?.value.trim().toUpperCase() || "";
+    const fechaNac = document.getElementById('tutExpFecha')?.value;
+    const genero = document.getElementById('tutExpGenero')?.value;
+    const estado = document.getElementById('tutExpEstado')?.value;
+    const tel = document.getElementById('tutExpTel')?.value.trim();
+    const email = document.getElementById('tutExpEmail')?.value.trim().toLowerCase() || null;
+    
+    const curpBase = document.getElementById('tutExpCurpBase')?.value.trim().toUpperCase() || "";
+    const curpHomo = document.getElementById('tutExpCurpHomo')?.value.trim().toUpperCase() || "";
+    const curpCompleta = (curpBase + curpHomo).length === 18 ? (curpBase + curpHomo) : null;
+
+    if (!nombre || !paterno || !fechaNac || !tel || tel.length < 10) {
+        alert("⚠️ Por favor completa los campos obligatorios (*): Nombre, A. Paterno, Fecha Nac. y Teléfono a 10 dígitos.");
+        return;
+    }
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+        let tutorFinalId = tutorExpressExistenteId;
+        let nombreCompleto = `${nombre} ${paterno} ${materno}`.trim();
+        let folioInfoMensaje = "";
+
+        // 🛡️ BÚSQUEDA DE SEGURIDAD ANTI-DUPLICADOS (Por CURP o Nombre + Fecha)
+        if (!tutorFinalId && curpCompleta) {
+            const { data: tutorExiste } = await fisioNet
+                .from('pacientes_maestros')
+                .select('id')
+                .eq('curp', curpCompleta)
+                .maybeSingle();
+            if (tutorExiste) tutorFinalId = tutorExiste.id;
+        }
+
+        if (!tutorFinalId) {
+            const { data: tutorNombreExiste } = await fisioNet
+                .from('pacientes_maestros')
+                .select('id')
+                .ilike('nombre', nombre)
+                .ilike('apellido_paterno', paterno)
+                .eq('fecha_nacimiento', fechaNac)
+                .maybeSingle();
+            if (tutorNombreExiste) tutorFinalId = tutorNombreExiste.id;
+        }
+
+        // 🅰️ CASO 1: EL TUTOR YA EXISTE EN LA RED (REUTILIZAR Y VINCULAR A ESTA CLÍNICA)
+        if (tutorFinalId) {
+            // Actualizar teléfonos o correos si sufrieron cambios
+            await fisioNet.from('pacientes_maestros').update({
+                telefono: tel,
+                correo_electronico: email
+            }).eq('id', tutorFinalId);
+
+            // Verificar si el tutor ya tiene expediente activo en esta sede
+            const { data: expExistente } = await fisioNet
+                .from('expedientes_clinicos')
+                .select('folio_personalizado')
+                .eq('id_paciente', tutorFinalId)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle();
+
+            if (expExistente) {
+                folioInfoMensaje = `Expediente en sede: ${expExistente.folio_personalizado}`;
+            } else {
+                // Generar expediente de esta clínica para el tutor reutilizado
+                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+                const folioAsignado = datosFolio?.folio || null;
+                const consecutivoNum = datosFolio?.numero_consecutivo || 0;
+
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: tutorFinalId,
+                    id_clinica: clinicaId,
+                    folio_personalizado: folioAsignado,
+                    numero_consecutivo: consecutivoNum,
+                    estado_expediente: 'ACTIVO'
+                }]);
+
+                folioInfoMensaje = `Nuevo expediente en sede asignado: ${folioAsignado}`;
+            }
+
+            // Asegurar vínculo clínico con el profesional activo
+            const { data: vinculoExistente } = await fisioNet
+                .from('vinculos_clinicos')
+                .select('id')
+                .eq('paciente_id', tutorFinalId)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle();
+
+            if (!vinculoExistente) {
+                await fisioNet.from('vinculos_clinicos').insert([{
+                    paciente_id: tutorFinalId,
+                    profesional_id: user?.id,
+                    id_clinica: clinicaId,
+                    rol_en_relacion: 'OPERATIVO',
+                    estado_vinculo: 'ACTIVO'
+                }]);
+            }
+
+        } 
+        // 🅱️ CASO 2: ES UN TUTOR NUEVO ABSOLUTO EN LA RED
+        else {
+            const payloadTutor = {
+                nombre: nombre,
+                apellido_paterno: paterno,
+                apellido_materno: materno,
+                fecha_nacimiento: fechaNac,
+                genero: genero,
+                estado_nacimiento: estado,
+                curp: curpCompleta,
+                telefono: tel,
+                correo_electronico: email,
+                creado_por: user?.id,
+                id_clinica: clinicaId,
+                id_clinica_origen: clinicaId,
+                nombre_clinica: localStorage.getItem('nombre_clinica'),
+                es_menor_edad: false,
+                acceso_red_activo: true,
+                fecha_registro: new Date().toISOString()
+            };
+
+            const { data: tutorInsertado, error: errTutor } = await fisioNet
+                .from('pacientes_maestros')
+                .insert([payloadTutor])
+                .select();
+
+            if (errTutor) throw errTutor;
+
+            if (tutorInsertado && tutorInsertado.length > 0) {
+                tutorFinalId = tutorInsertado[0].id;
+
+                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+                const folioAsignado = datosFolio?.folio || null;
+                const consecutivoNum = datosFolio?.numero_consecutivo || 0;
+
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: tutorFinalId,
+                    id_clinica: clinicaId,
+                    folio_personalizado: folioAsignado,
+                    numero_consecutivo: consecutivoNum,
+                    estado_expediente: 'ACTIVO'
+                }]);
+
+                await fisioNet.from('vinculos_clinicos').insert([{
+                    paciente_id: tutorFinalId,
+                    profesional_id: user?.id,
+                    id_clinica: clinicaId,
+                    rol_en_relacion: 'OPERATIVO',
+                    estado_vinculo: 'ACTIVO'
+                }]);
+
+                folioInfoMensaje = `Nuevo folio asignado: ${folioAsignado || 'S/N'}`;
+            }
+        }
+
+        // 🎯 INYECTAR DATOS DE TUTOR EN EL FORMULARIO PRINCIPAL DEL MENOR
+        if (tutorFinalId) {
+            const inputNombreTutor = document.getElementById('tutor-nombre');
+            const inputTelTutor = document.getElementById('tutor-tel');
+            const inputEmailTutor = document.getElementById('correo-tutor');
+            const inputIdTutor = document.getElementById('idTutorSeleccionado');
+
+            if (inputNombreTutor) inputNombreTutor.value = nombreCompleto;
+            if (inputTelTutor) inputTelTutor.value = tel;
+            if (inputEmailTutor) inputEmailTutor.value = email || "";
+            if (inputIdTutor) inputIdTutor.value = tutorFinalId;
+
+            alert(`✅ ¡Tutor listo y enlazado!\n📄 ${folioInfoMensaje}\n🔗 Vinculado al expediente del menor.`);
+
+            tutorExpressExistenteId = null;
+            const modalEl = document.getElementById('modalTutorExpress');
+            if (modalEl) {
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) modalInstance.hide();
+            }
+        }
+
+    } catch (err) {
+        console.error("💥 Error al procesar tutor express:", err);
+        alert("Error al registrar tutor: " + (err.message || "Error de conexión"));
+    }
+}
+
+async function abrirModalTutorExpress() {
+    const modalEl = document.getElementById('modalTutorExpress');
+    if (modalEl) {
+        document.getElementById('formTutorExpress')?.reset();
+        
+        const nombreClinica = localStorage.getItem('nombre_clinica') || 'Clínica Activa';
+        const lblSede = document.getElementById('lblSedeRegistroTutor');
+        if (lblSede) lblSede.innerText = `Registrando Tutor en: ${nombreClinica.toUpperCase()}`;
+
+        const statusEl = document.getElementById('statusFolioTutorExpress');
+        if (statusEl) statusEl.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> GENERANDO FOLIO...';
+        
+        // Se especifican los IDs de los inputs dentro del modal
+        await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+
+        tutorExpressExistenteId = null;
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+    }
+}
+
+async function verificarTutorExistentePorCurpModal(curpCompleta) {
+    const statusEl = document.getElementById('statusFolioTutorExpress');
+    const msjEl = document.getElementById('msjHomoclaveAutoTutor');
+
+    if (!curpCompleta || curpCompleta.length !== 18) return;
+
+    if (statusEl) {
+        statusEl.className = 'text-primary fw-bold mt-1';
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> CONSULTANDO EXPEDIENTES EN RED...';
+    }
+
+    try {
+        const { data: tutor, error } = await fisioNet
+            .from('pacientes_maestros')
+            .select('*')
+            .eq('curp', curpCompleta.toUpperCase())
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (tutor) {
+            // 🅰️ TUTOR LOCALIZADO EN LA RED
+            tutorExpressExistenteId = tutor.id;
+
+            if (document.getElementById('tutExpTel')) document.getElementById('tutExpTel').value = tutor.telefono || '';
+            if (document.getElementById('tutExpEmail')) document.getElementById('tutExpEmail').value = tutor.correo_electronico || '';
+
+            await gestionarFolioAutomatico(tutor.id, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+
+            if (msjEl) {
+                msjEl.innerHTML = "<span class='text-success'>✅ ¡Tutor localizado en la red! Se vinculará directamente.</span>";
+            }
+        } else {
+            // 🅱️ TUTOR NUEVO ABSOLUTO
+            tutorExpressExistenteId = null;
+
+            await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+
+            if (msjEl) {
+                msjEl.innerHTML = "<span class='text-success'>✅ CURP Verificada (Tutor Nuevo)</span>";
+            }
+        }
+
+    } catch (err) {
+        console.error("❌ Error al verificar CURP de tutor:", err.message);
+        if (statusEl) {
+            statusEl.className = 'text-warning fw-bold mt-1';
+            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> ERROR DE CONEXIÓN CON EXPEDIENTES';
+        }
+    }
+}
+
+// 1. Delegación de eventos global (Funciona aunque el modal cargue dinámicamente)
+document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'tutExpCurpHomo') {
+        evaluarCurpHomoclaveTutorExpress();
+    }
+});
+
+// 2. Generador de CURP base
+function generarCurpExpressTutor() {
+    const nom = document.getElementById('tutExpNombre')?.value || "";
+    const pat = document.getElementById('tutExpPaterno')?.value || "";
+    const mat = document.getElementById('tutExpMaterno')?.value || "X";
+    const fec = document.getElementById('tutExpFecha')?.value || "";
+    const gen = document.getElementById('tutExpGenero')?.value === 'HOMBRE' ? 'H' : 'M';
+    const est = document.getElementById('tutExpEstado')?.value || "PL";
+
+    if (nom.length >= 2 && pat.length >= 2 && fec) {
+        const pNom = typeof procesarNombreMexicano === 'function' ? procesarNombreMexicano(nom).nombre : nom[0];
+        const pPat = typeof limpiarApellidoMexicano === 'function' ? limpiarApellidoMexicano(pat) : pat;
+        const pMat = typeof limpiarApellidoMexicano === 'function' ? limpiarApellidoMexicano(mat) : mat;
+
+        const l1 = pPat[0] || "X";
+        const l2 = pPat.slice(1).match(/[AEIOU]/)?.[0] || "X";
+        const l3 = pMat[0] || "X";
+        const l4 = pNom[0] || "X";
+        const aa = fec.substring(2, 4);
+        const mm = fec.substring(5, 7);
+        const dd = fec.substring(8, 10);
+
+        const c1 = pPat.slice(1).match(/[BCDFGHJKLMNPQRSTVWXYZ]/)?.[0] || "X";
+        const c2 = pMat.slice(1).match(/[BCDFGHJKLMNPQRSTVWXYZ]/)?.[0] || "X";
+        const c3 = pNom.slice(1).match(/[BCDFGHJKLMNPQRSTVWXYZ]/)?.[0] || "X";
+
+        const base16 = `${l1}${l2}${l3}${l4}${aa}${mm}${dd}${gen}${est}${c1}${c2}${c3}`.toUpperCase();
+        
+        const inputBase = document.getElementById('tutExpCurpBase');
+        if (inputBase) inputBase.value = base16;
+
+        // Disparar evaluación por si ya había homoclave de 2 dígitos escrita
+        evaluarCurpHomoclaveTutorExpress();
+    }
+}
+
+// 3. Consulta RENAPO para Tutor Express
+async function autocompletarHomoclaveRenapoTutor() {
+    const btn = document.getElementById('btnAutoHomoTutor');
+    const msj = document.getElementById('msjHomoclaveAutoTutor');
+    const inputHomo = document.getElementById('tutExpCurpHomo');
+
+    const nombres = document.getElementById('tutExpNombre')?.value.trim().toUpperCase() || "";
+    const apellidoPaterno = document.getElementById('tutExpPaterno')?.value.trim().toUpperCase() || "";
+    const apellidoMaterno = document.getElementById('tutExpMaterno')?.value.trim().toUpperCase() || "";
+    const fechaNacimiento = document.getElementById('tutExpFecha')?.value || ""; 
+    const generoFull = document.getElementById('tutExpGenero')?.value || "";
+    const estadoSelect = document.getElementById('tutExpEstado');
+    const estadoTexto = estadoSelect ? estadoSelect.options[estadoSelect.selectedIndex].text.toUpperCase() : "";
+
+    if (!nombres || !apellidoPaterno || !fechaNacimiento) {
+        if (msj) msj.innerHTML = "<span class='text-danger'>⚠️ Completa los datos marcados con * primero.</span>";
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (msj) msj.innerHTML = "<span class='text-primary'>🔍 Verificando en RENAPO...</span>";
+
+    try {
+        const clienteSupabase = window.fisioNet || window.supabase;
+        const { data, error } = await clienteSupabase.functions.invoke('validar-curp', {
+            body: { 
+                nombres, 
+                apellidoPaterno, 
+                apellidoMaterno, 
+                fechaNacimiento, 
+                genero: (generoFull === 'HOMBRE') ? 'H' : 'M', 
+                estado: estadoTexto 
+            }
+        });
+
+        if (error) throw error;
+
+        if (data.error || !data.curp) {
+            if (msj) msj.innerHTML = "<span class='text-danger'>❌ No se encontró la CURP en RENAPO.</span>";
+            return;
+        }
+
+        const homoclaveExtraida = data.curp.substring(16, 18).toUpperCase(); 
+        if (inputHomo) {
+            inputHomo.value = homoclaveExtraida;
+        }
+
+        // 🚀 Llama directamente a la función de búsqueda de expediente
+        await evaluarCurpHomoclaveTutorExpress();
+
+    } catch (err) {
+        console.error("❌ Error en RENAPO Tutor:", err);
+        if (msj) msj.innerHTML = `<span class='text-danger'>⚠️ ${err.message || 'Error de conexión.'}</span>`;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// 🎯 EVALUADOR CENTRAL DE CURP COMPLETA EN MODAL TUTOR EXPRESS
+async function evaluarCurpHomoclaveTutorExpress() {
+    const parteBase = document.getElementById('tutExpCurpBase')?.value?.trim().toUpperCase() || '';
+    const homo = document.getElementById('tutExpCurpHomo')?.value?.trim().toUpperCase() || '';
+    
+    // Forzar mayúsculas en el input de homoclave
+    const inputHomo = document.getElementById('tutExpCurpHomo');
+    if (inputHomo && inputHomo.value !== homo) {
+        inputHomo.value = homo;
+    }
+
+    const curpCompleta = `${parteBase}${homo}`;
+
+    if (curpCompleta.length === 18) {
+        await verificarTutorExistentePorCurpModal(curpCompleta);
+    }
 }

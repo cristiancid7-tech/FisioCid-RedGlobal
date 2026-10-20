@@ -932,70 +932,58 @@ function siguienteTabSOAP(idTab) {
 </div>
 
 
-<!-- MODAL VISOR INTEGRAL DE EXPEDIENTE Y GABINETE (PANTALLA ANCHA) -->
-<div class="modal fade" id="modalVisorExpediente" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 95vw; width: 95vw;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 18px; overflow: hidden; height: 90vh;">
+<!-- Estructura recomendada para el Modal Visor en tu HTML -->
+<div class="modal fade" id="modalVisorExpediente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden; background: #f8fafc;">
             
-            <!-- Encabezado del visor -->
-            <div class="modal-header text-white" style="background: #0f172a; padding: 15px 25px;">
-                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size: 1.1rem; font-weight: 800;">
-                    <i class="fas fa-folder-open text-warning"></i> EXPEDIENTE AUTORIZADO Y GABINETE CLÍNICO
-                </h5>
+            <!-- Encabezado Modal Estilo Búnker -->
+            <div class="modal-header border-0 px-4 py-3" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fas fa-folder-open text-info fa-lg"></i>
+                    <h5 class="modal-title fw-bold mb-0">EXPEDIENTE CLÍNICO UNIFICADO</h5>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <!-- Cuerpo principal desplegado -->
-            <div class="modal-body p-0" style="background: #f8fafc; display: flex; flex-direction: column;">
-                
-                <!-- Pestañas horizontales completas -->
-                <ul class="nav nav-tabs nav-justified bg-white border-bottom shadow-sm" id="tabVisor" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active fw-bold py-3" id="tab-notas-link" data-bs-toggle="tab" data-bs-target="#tab-notas" style="font-size: 0.9rem;">
-                            📜 HISTORIAL NOTAS
+            <div class="modal-body p-4">
+                <!-- Pestañas o Secciones del Visor -->
+                <ul class="nav nav-pills nav-fill mb-4 gap-2 bg-white p-2 rounded-3 shadow-sm border" id="pills-tab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold small" id="tab-notas" data-bs-toggle="pill" data-bs-target="#sec-notas" type="button">
+                            📝 NOTAS DE EVOLUCIÓN
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link fw-bold py-3" id="tab-imagen-link" data-bs-toggle="tab" data-bs-target="#tab-imagen" style="font-size: 0.9rem;">
-                            🩻 IMAGENOLOGÍA (RX / RM)
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold small text-primary" id="tab-imagen" data-bs-toggle="pill" data-bs-target="#sec-imagen" type="button">
+                            🩻 IMAGENOLOGÍA / PACS
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link fw-bold py-3" id="tab-lab-link" data-bs-toggle="tab" data-bs-target="#tab-lab" style="font-size: 0.9rem;">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold small text-danger" id="tab-lab" data-bs-toggle="pill" data-bs-target="#sec-lab" type="button">
                             🧪 LABORATORIO CLÍNICO
                         </button>
                     </li>
                 </ul>
 
-                <!-- Área de contenido amplio -->
-                <div class="tab-content p-4 overflow-auto" id="contenidoVisor" style="flex: 1;">
-                    <!-- 📜 HISTORIAL DE NOTAS -->
-                    <div class="tab-pane fade show active" id="tab-notas">
-                        <div id="listaNotasHistorial" class="d-flex flex-column gap-3">
-                            <p class="text-muted text-center">Cargando historial de notas...</p>
-                        </div>
+                <div class="tab-content" id="pills-tabContent">
+                    <!-- Sección A: Notas -->
+                    <div class="tab-pane fade show active" id="sec-notas">
+                        <div id="listaNotasHistorial" class="d-flex flex-column gap-3"></div>
                     </div>
-
-                    <!-- 🩻 IMAGENOLOGÍA -->
-                    <div class="tab-pane fade" id="tab-imagen">
-                        <div id="listaEstudiosImagen" class="row g-3">
-                            <p class="text-muted text-center">Cargando placas y estudios de imagen...</p>
-                        </div>
+                    <!-- Sección B: Imagenología -->
+                    <div class="tab-pane fade" id="sec-imagen">
+                        <div id="listaEstudiosImagen" class="row g-3"></div>
                     </div>
-
-                    <!-- 🧪 LABORATORIO -->
-                    <div class="tab-pane fade" id="tab-lab">
-                        <div id="listaEstudiosLab" class="row g-3">
-                            <p class="text-muted text-center">Cargando resultados de laboratorio...</p>
-                        </div>
+                    <!-- Sección C: Laboratorios -->
+                    <div class="tab-pane fade" id="sec-lab">
+                        <div id="listaEstudiosLab" class="row g-3"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Pie de ventana -->
-            <div class="modal-footer bg-light border-0 px-4 py-3 justify-content-between">
-                <span class="text-muted small fw-bold">💡 Tip: Haz clic en "Inyectar" para agregar información directo a tu nota activa.</span>
-                <button type="button" class="btn btn-secondary fw-bold px-4 rounded-pill" data-bs-dismiss="modal">CERRAR VISOR</button>
+            <div class="modal-footer border-0 bg-white px-4">
+                <button type="button" class="btn btn-secondary rounded-pill fw-bold px-4" data-bs-dismiss="modal">CERRAR VISOR</button>
             </div>
         </div>
     </div>
