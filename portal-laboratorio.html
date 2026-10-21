@@ -308,14 +308,20 @@
     </div>
 </section>
 
-    <!-- 3. ACCIÓN FINAL -->
-    <footer class="mt-5 text-center pb-5">
-        <button id="btn-finalizar-laboratorio" 
-                class="btn btn-lg px-5 shadow-lg" 
-                onclick="guardarEstudioLaboratorio(event)"
-                style="background-color: var(--color-camaleon); border: none; border-radius: 50px; padding: 15px; font-weight: 900; color: white;">
-            <i class="fas fa-save me-2"></i> REGISTRAR RESULTADOS EN RED FISIOCID
+
+    
+       <footer class="mt-5 text-center pb-5">
+        <button id="btn-finalizar-laboratorio" class="btn btn-lg px-5 shadow-lg animate__animated animate__pulse animate__infinite" onclick="guardarEstudioGabinete(event)" style="background-color: var(--color-camaleon); border: none; border-radius: 50px; padding: 18px; font-weight: 900; color: white; margin-bottom: 15px;">
+            <i class="fas fa-check-circle me-2"></i> INTEGRAR A EXPEDIENTE FISIOCID
         </button>
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+            <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">
+                <span style="color: var(--color-camaleon, #00cfd5); font-weight: 800;">FisioCid</span> Red Global © 2026
+            </span>
+            <small style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 0.3px; max-width: 400px; line-height: 1.3;">
+                Infraestructura digital blindada para interoperabilidad clínica.
+            </small>
+        </div>
     </footer>
 
 </main>

@@ -1,12 +1,10 @@
 // ==========================================
-// 🧠 GESTIÓN DE EQUIPO - FISIOCID PRO (CONSOLA DUAL)
+// 🧠 GESTIÓN DE EQUIPO - FISIOCID PRO
 // ==========================================
 
 async function obtenerIdClinicaReal(userId) {
-    //console.log("🔍 Consultando tabla clinicas en Supabase para el usuario:", userId);
-    
     // 1. Busqueda: ¿Es el dueño directo?
-    let { data: clinica, error: errC } = await fisioNet
+    let { data: clinica } = await fisioNet
         .from('clinicas')
         .select('id, nombre_clinica, dominio_corporativo')
         .eq('id_dueno', userId)
@@ -14,7 +12,6 @@ async function obtenerIdClinicaReal(userId) {
 
     // 2. Busqueda: Si no es el dueño, ¿es un colaborador activo?
     if (!clinica) {
-        //console.log("🔍 Buscando en colaboradores_clinica...");
         const { data: colab } = await fisioNet
             .from('colaboradores_clinica')
             .select('id_clinica')
@@ -141,72 +138,228 @@ async function cargarSuperioresDirectos(idClinica) {
     }
 }
 
-async function cargarRedActual(idClinica) {
-    const contenedor = document.getElementById('listaRedActual'); 
-    if (!contenedor) return;
 
-    if (!idClinica || idClinica.length < 30) {
-        contenedor.innerHTML = `
-            <div style="text-align:center; padding:20px; grid-column: 1/-1;">
-                <p style="color:#ef4444; font-weight:bold;">🚨 ERROR DE ACCESO</p>
-                <p style="font-size:0.8rem; color:#64748b;">No se pudo identificar la clínica activa.</p>
-            </div>`;
-        return;
-    }
+// ==========================================
+// 🎨 RENDERIZADO DE TARJETAS
+// ==========================================
 
-    const { data: equipo, error } = await fisioNet
-        .from('colaboradores_clinica')
-        .select('*')
-        .eq('id_clinica', idClinica)
-        .order('cargo_clinico', { ascending: true });
-
-    if (error) {
-        console.error("❌ ERROR AL CARGAR EQUIPO:", error);
-        return;
-    }
-
-    if (!equipo || equipo.length === 0) {
-        contenedor.innerHTML = '<p style="text-align:center; color:#64748b; padding:20px; grid-column: 1/-1;">No hay colaboradores activos en esta clínica.</p>';
-        return;
-    }
-
-    contenedor.innerHTML = equipo.map(colab => {
-        const esExterno = colab.tipo_vinculo === 'EXTERNO';
-        let colorCargo = colab.rol_sistema === 'ADMIN_SISTEMA' ? '#2563eb' : (esExterno ? '#10b981' : '#3b82f6');
-        const esInactivo = colab.estado === 'INACTIVO';
-
-        return `
-        <div style="background:white; padding:15px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; border-left:5px solid ${colorCargo}; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
-            <div>
-                <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                    <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; font-weight:800; background:${esExterno ? '#dcfce7' : '#dbeafe'}; color:${esExterno ? '#15803d' : '#1e40af'};">
-                        ${esExterno ? '🟢 EXTERNO / ALIANZA' : '🔵 INTERNO'}
-                    </span>
-                </div>
-                <h4 style="margin:0; font-size:0.9rem; color:#1e293b; text-transform:uppercase;">
-                    ${colab.id_profesional === localStorage.getItem('id_usuario_actual') ? '⭐ MI PERFIL' : colab.cargo_clinico}
-                </h4>
-                <p style="margin:5px 0 0 0; font-size:0.75rem; color:#64748b;">
-                    <strong>Área:</strong> ${colab.area_asignada || colab.area_ubicacion || 'GENERAL'}
-                </p>
-                <p style="margin:2px 0 0 0; font-size:0.65rem; color:#94a3b8;">
-                    Turno: ${colab.turno || 'SIN ASIGNAR'}
-                </p>
-            </div>
-
-            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-                <span style="background:${colorCargo}20; color:${colorCargo}; padding:5px 12px; border-radius:10px; font-size:0.65rem; font-weight:900; text-transform:uppercase;">
-                    ${colab.rol_sistema}
+function crearTarjetaEquipoInterno(usuario) {
+    return `
+    <div class="tarjeta-integrante" style="background: #f8fafc; border-left: 4px solid #2563eb; border-radius: 10px; padding: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; border-left-width: 4px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px;">
+        <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="background: #dbeafe; color: #1e40af; font-size: 0.68rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">
+                    <i class="fas fa-graduation-cap"></i> ${usuario.rol || 'STAFF'}
                 </span>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="//console.log('Cambiar Clave de: ${colab.id_profesional}')" title="Cambiar Contraseña" style="border:none; background:#f1f5f9; padding:5px 8px; border-radius:6px; cursor:pointer;">🔑</button>
-                    <button onclick="//console.log('Toggle Estado de: ${colab.id_profesional}')" title="${esInactivo ? 'Reactivar' : 'Pausar'}" style="border:none; background:#f1f5f9; padding:5px 8px; border-radius:6px; cursor:pointer;">
-                        ${esInactivo ? '▶️' : '⏸️'}
-                    </button>
-                </div>
+                <span style="background: #eff6ff; color: #2563eb; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #bfdbfe;">
+                    🔑 ${usuario.acceso || 'ACCESO LIMITADO'}
+                </span>
             </div>
-        </div>`;
-    }).join('');
+
+            <h5 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a;">${usuario.nombre}</h5>
+            <p style="margin: 2px 0 8px 0; font-size: 0.75rem; color: #64748b;">
+                <i class="fas fa-envelope" style="margin-right: 4px;"></i>${usuario.email}
+            </p>
+
+            <div style="font-size: 0.75rem; color: #475569; background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1px solid #f1f5f9;">
+                <div><strong>Área:</strong> ${usuario.area || 'General'}</div>
+                <div><strong>Turno:</strong> ${usuario.turno || 'Sin Asignar'}</div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid #f1f5f9; padding-top: 8px;">
+            <button class="btn-icon" title="Editar Permisos" onclick="abrirModalEditarColaborador('${usuario.id}')" style="background: #e2e8f0; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: #475569;">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </div>`;
+}
+
+function crearTarjetaAlianza(alianza) {
+    return `
+    <div class="tarjeta-alianza" style="background: #f8fafc; border-left: 4px solid #16a34a; border-radius: 10px; padding: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; border-left-width: 4px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px;">
+        <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="background: #dcfce7; color: #15803d; font-size: 0.68rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">
+                    🤝 ${alianza.especialidad || 'CONVENIO EXTERNO'}
+                </span>
+                <span style="background: #f0fdf4; color: #16a34a; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #bbf7d0;">
+                    ${alianza.beneficio || 'SIN DESC'}
+                </span>
+            </div>
+
+            <h5 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a;">${alianza.nombre}</h5>
+            <p style="margin: 2px 0 8px 0; font-size: 0.75rem; color: #64748b;">
+                <i class="fas fa-user-tag" style="margin-right: 4px;"></i>Contacto: ${alianza.contacto || 'N/A'}
+            </p>
+
+            <div style="font-size: 0.75rem; color: #475569; background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1px solid #f1f5f9;">
+                <div><i class="fas fa-envelope" style="margin-right: 4px;"></i>${alianza.email || 'Sin correo registrado'}</div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid #f1f5f9; padding-top: 8px;">
+            <button class="btn-icon" title="Opciones de Convenio" style="background: #e2e8f0; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: #475569;">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </div>`;
+}
+
+// ==========================================
+// 🔄 CARGAR RED Y DISTRIBUIR EN TARJETAS
+// ==========================================
+async function cargarRedActual(idClinica) {
+    const contenedorInterno = document.getElementById('listaEquipoInterno');
+    const contenedorExterno = document.getElementById('listaAlianzasExternas');
+    const contadorSocios = document.getElementById('contadorSocios');
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const idUsuarioActual = user?.id || localStorage.getItem('id_usuario_actual');
+
+        let equipo = [];
+        if (idClinica && idClinica.length >= 10) {
+            const { data: colabs, error: errColab } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('*')
+                .eq('id_clinica', idClinica)
+                .order('cargo_clinico', { ascending: true });
+            
+            if (!errColab) equipo = colabs || [];
+        }
+
+        let redConvenios = [];
+        if (idUsuarioActual) {
+            const { data: convenios, error: errRed } = await fisioNet
+                .from('red_colaboracion')
+                .select('*')
+                .or(`id_doctor_emisor.eq.${idUsuarioActual},id_doctor_receptor.eq.${idUsuarioActual}`)
+                .eq('estado_conexion', 'ACTIVO');
+
+            if (!errRed) redConvenios = convenios || [];
+        }
+
+        const uidsColabs = equipo.map(c => c.id_profesional).filter(Boolean);
+        const uidsRed = redConvenios.map(r => (r.id_doctor_emisor === idUsuarioActual ? r.id_doctor_receptor : r.id_doctor_emisor)).filter(Boolean);
+        const todosLosIDs = [...new Set([...uidsColabs, ...uidsRed, idUsuarioActual])].filter(Boolean);
+
+        let mapaPerfiles = {};
+
+        if (todosLosIDs.length > 0) {
+            const { data: perfProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('*')
+                .in('id', todosLosIDs);
+
+            (perfProf || []).forEach(p => {
+                mapaPerfiles[p.id] = {
+                    ...p,
+                    nombre: p.nombre_completo || p.nombre || p.nombre_contacto,
+                    especialidad: p.especialidad_principal || p.especialidad || p.profesion || p.cargo_clinico || p.cargo,
+                    correo: p.correo_contacto || p.correo_institucional || p.correo || p.email || p.email_contacto
+                };
+            });
+
+            const { data: perfBasicos } = await fisioNet
+                .from('perfiles')
+                .select('*')
+                .in('id', todosLosIDs);
+
+            (perfBasicos || []).forEach(p => {
+                if (!mapaPerfiles[p.id]) mapaPerfiles[p.id] = {};
+                const exist = mapaPerfiles[p.id];
+                exist.nombre = exist.nombre || p.nombre_completo || p.nombre;
+                exist.correo = exist.correo || p.correo_institucional || p.correo || p.email || p.correo_contacto;
+                exist.especialidad = exist.especialidad || p.profesion || p.especialidad || p.cargo;
+            });
+        }
+
+        const internos = [];
+        const externos = [];
+
+        equipo.forEach(colab => {
+            const perf = mapaPerfiles[colab.id_profesional] || {};
+            const vinculo = (colab.tipo_vinculo || '').toUpperCase();
+            const cargo = (colab.cargo_clinico || colab.cargo || '').toUpperCase();
+            const rol = (colab.rol_sistema || '').toUpperCase();
+
+            const esExterno = vinculo === 'EXTERNO' || 
+                              cargo.includes('EXTERNO') || 
+                              cargo.includes('ALIANZA') || 
+                              cargo.includes('REFERIDO') ||
+                              cargo.includes('QUIMICO') ||
+                              cargo.includes('ENFERMERIA') ||
+                              rol === 'SOCIOS_EXTERNOS';
+
+            const profesionColab = colab.cargo_clinico || colab.cargo || colab.especialidad || perf.especialidad || perf.profesion || 'STAFF';
+            const emailColab = perf.correo || colab.correo || colab.email || colab.correo_contacto || 'Sin correo registrado';
+            const nombreColab = perf.nombre || colab.nombre_completo || colab.nombre || (colab.id_profesional === idUsuarioActual ? 'CRISTIAN MIGUEL CID ESPINDOLA' : 'COLABORADOR');
+
+            if (esExterno) {
+                externos.push({
+                    id: colab.id,
+                    especialidad: profesionColab,
+                    beneficio: colab.tipo_vinculo || 'SIN DESC',
+                    nombre: nombreColab,
+                    contacto: colab.nombre_contacto || nombreColab,
+                    email: emailColab
+                });
+            } else {
+                internos.push({
+                    id: colab.id,
+                    rol: profesionColab,
+                    acceso: colab.rol_sistema || 'STAFF_CLINICO',
+                    nombre: nombreColab,
+                    email: emailColab,
+                    area: colab.area_asignada || colab.area_ubicacion || 'General',
+                    turno: colab.turno || 'Sin Asignar'
+                });
+            }
+        });
+
+        redConvenios.forEach(conv => {
+            const idContraparte = (conv.id_doctor_emisor === idUsuarioActual) ? conv.id_doctor_receptor : conv.id_doctor_emisor;
+            const perfSocio = mapaPerfiles[idContraparte] || {};
+
+            const nombreFinal = perfSocio.nombre || conv.nombre_entidad || conv.nombre_contacto || conv.nombre_completo || conv.nombre || 'DOCTOR / ALIANZA';
+            const correoFinal = perfSocio.correo || conv.correo_contacto || conv.correo || conv.email || conv.email_contacto || conv.correo_entidad || 'Sin correo registrado';
+            const profesionFinal = conv.profesion || conv.especialidad || conv.cargo_entidad || conv.tipo_convenio || conv.cargo_clinico || conv.cargo || conv.area_especialidad || perfSocio.especialidad || perfSocio.profesion || 'CONVENIO EXTERNO';
+            const contactoFinal = conv.nombre_contacto || conv.persona_contacto || perfSocio.nombre || nombreFinal;
+
+            const yaExiste = externos.some(e => e.nombre.toLowerCase() === nombreFinal.toLowerCase());
+
+            if (!yaExiste) {
+                externos.push({
+                    id: conv.id,
+                    especialidad: profesionFinal,
+                    beneficio: conv.porcentaje_descuento ? `${conv.porcentaje_descuento}% DESC` : (conv.beneficio || 'SIN DESC'),
+                    nombre: nombreFinal,
+                    contacto: contactoFinal,
+                    email: correoFinal
+                });
+            }
+        });
+
+        if (contadorSocios) {
+            contadorSocios.innerText = `${internos.length + externos.length} En Red`;
+        }
+
+        if (contenedorInterno) {
+            contenedorInterno.innerHTML = internos.length === 0
+                ? `<p style="color:#64748b; font-size:0.85rem; grid-column:1/-1;">No hay colaboradores internos registrados.</p>`
+                : internos.map(usr => crearTarjetaEquipoInterno(usr)).join('');
+        }
+
+        if (contenedorExterno) {
+            contenedorExterno.innerHTML = externos.length === 0
+                ? `<p style="color:#64748b; font-size:0.85rem; grid-column:1/-1;">No hay alianzas ni doctores externos registrados.</p>`
+                : externos.map(ali => crearTarjetaAlianza(ali)).join('');
+        }
+
+    } catch (err) {
+        console.error("❌ ERROR AL CARGAR LA RED EN GESTIÓN-EQUIPO:", err);
+    }
 }
 
 // ==========================================
@@ -369,29 +522,178 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
 });
 
 // ==========================================
+// 🤝 MODAL 1: NUEVO CONVENIO / ALIANZA
+// ==========================================
+
+function abrirModalNuevoConvenio() {
+    const modal = document.getElementById('modalConvenios');
+    if (modal) modal.style.display = 'flex';
+}
+
+function cerrarModalConvenios() {
+    const modal = document.getElementById('modalConvenios');
+    if (modal) modal.style.display = 'none';
+    const form = document.getElementById('formNuevoConvenio');
+    if (form) form.reset();
+}
+
+async function guardarNuevoConvenio(e) {
+    e.preventDefault();
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) throw new Error("No hay usuario autenticado.");
+
+        const nomConvenio = document.getElementById('nomConvenio').value.trim();
+        const contactoNombre = document.getElementById('contactoNombre').value.trim();
+        const contactoTel = document.getElementById('contactoTel').value.trim();
+        const emailContacto = document.getElementById('email_contacto').value.trim();
+        const porcentajeDesc = document.getElementById('porcentajeDesc').value || 0;
+        const tipoConvenio = document.getElementById('tipoConvenio').value;
+
+        const { error } = await fisioNet
+            .from('red_colaboracion')
+            .insert([{
+                id_doctor_emisor: user.id,
+                nombre_entidad: nomConvenio,
+                nombre_contacto: contactoNombre,
+                telefono_contacto: contactoTel,
+                correo_contacto: emailContacto,
+                porcentaje_descuento: parseInt(porcentajeDesc),
+                tipo_convenio: tipoConvenio,
+                estado_conexion: 'ACTIVO'
+            }]);
+
+        if (error) throw error;
+
+        alert('✅ Convenio / Alianza guardado exitosamente.');
+        cerrarModalConvenios();
+
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa');
+        cargarRedActual(idClinicaActiva);
+
+    } catch (err) {
+        console.error("❌ Error al guardar el convenio:", err);
+        alert('Ocurrió un error al guardar el convenio: ' + (err.message || err));
+    }
+}
+
+// ==========================================
+// ⚙️ MODAL 2: GESTIÓN / EDICIÓN COLABORADOR
+// ==========================================
+
+async function abrirModalEditarColaborador(idColaborador) {
+    try {
+        if (!idColaborador) return;
+
+        const { data: colab, error } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('*')
+            .eq('id', idColaborador)
+            .single();
+
+        if (error) throw error;
+
+        let nombreMostrar = 'COLABORADOR';
+        if (colab.id_profesional) {
+            const { data: perf } = await fisioNet
+                .from('perfiles')
+                .select('nombre_completo')
+                .eq('id', colab.id_profesional)
+                .maybeSingle();
+            
+            if (perf?.nombre_completo) nombreMostrar = perf.nombre_completo;
+        }
+
+        document.getElementById('idColabActivo').value = colab.id;
+        document.getElementById('nombreColabModal').innerText = `👤 ${nombreMostrar}`;
+        
+        if (document.getElementById('selectCargoModal')) document.getElementById('selectCargoModal').value = colab.cargo_clinico || '';
+        if (document.getElementById('selectRolSistemaModal')) document.getElementById('selectRolSistemaModal').value = colab.rol_sistema || 'STAFF_CLINICO';
+        if (document.getElementById('selectAreaModal')) document.getElementById('selectAreaModal').value = colab.area_asignada || 'GENERAL';
+        if (document.getElementById('superiorModal')) document.getElementById('superiorModal').value = colab.id_superior_directo || '';
+        if (document.getElementById('selectTurnoModal')) document.getElementById('selectTurnoModal').value = colab.turno || 'MATUTINO';
+        if (document.getElementById('fechaFinModal')) document.getElementById('fechaFinModal').value = colab.fecha_finalizacion || '';
+        if (document.getElementById('obsModal')) document.getElementById('obsModal').value = colab.observaciones || '';
+
+        const modal = document.getElementById('modalConfigEquipo');
+        if (modal) modal.style.display = 'flex';
+
+    } catch (err) {
+        console.error("❌ Error al cargar colaborador en modal:", err);
+        alert("No se pudo cargar la información del colaborador.");
+    }
+}
+
+function cerrarModalConfig() {
+    const modal = document.getElementById('modalConfigEquipo');
+    if (modal) modal.style.display = 'none';
+    document.getElementById('idColabActivo').value = '';
+}
+
+async function guardarConfigEquipo() {
+    const idColab = document.getElementById('idColabActivo').value;
+    if (!idColab) return alert("No hay un colaborador seleccionado.");
+
+    try {
+        const cargo = document.getElementById('selectCargoModal').value;
+        const rolSistema = document.getElementById('selectRolSistemaModal').value;
+        const area = document.getElementById('selectAreaModal').value;
+        const superior = document.getElementById('superiorModal').value;
+        const turno = document.getElementById('selectTurnoModal').value;
+        const fechaFin = document.getElementById('fechaFinModal').value || null;
+        const obs = document.getElementById('obsModal').value;
+
+        const { error } = await fisioNet
+            .from('colaboradores_clinica')
+            .update({
+                cargo_clinico: cargo,
+                rol_sistema: rolSistema,
+                area_asignada: area,
+                id_superior_directo: superior || null,
+                turno: turno,
+                fecha_finalizacion: fechaFin,
+                observaciones: obs
+            })
+            .eq('id', idColab);
+
+        if (error) throw error;
+
+        alert('✅ Cambios guardados correctamente.');
+        cerrarModalConfig();
+
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa');
+        cargarRedActual(idClinicaActiva);
+
+    } catch (err) {
+        console.error("❌ Error al guardar configuración del colaborador:", err);
+        alert('Ocurrió un error al guardar la configuración: ' + (err.message || err));
+    }
+}
+
+// ==========================================
 // ⚙️ ARRANQUE PRINCIPAL
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
+    const formConvenio = document.getElementById('formNuevoConvenio');
+    if (formConvenio) {
+        formConvenio.addEventListener('submit', guardarNuevoConvenio);
+    }
+
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) { window.location.href = 'login.html'; return; }
 
-    //console.log("👤 Usuario detectado ID:", user.id);
-
-    // Forzamos limpieza si había un valor basura guardado
     const domGuardado = localStorage.getItem('clinica_dominio');
     if (!domGuardado || domGuardado === 'undefined' || domGuardado === 'null') {
         localStorage.removeItem('clinica_dominio');
     }
 
     const clinica = await obtenerIdClinicaReal(user.id);
-    //console.log("🏢 Datos de clínica recuperados:", clinica);
 
     const spanDominio = document.getElementById('labelDominio');
-    
     if (clinica && clinica.dominio) {
         if (spanDominio) spanDominio.innerText = `@${clinica.dominio}`;
     } else {
-        console.warn("⚠️ No se encontró dominio corporativo. Aplicando fallback.");
         if (spanDominio) spanDominio.innerText = `@fisiocid.com`;
     }
 

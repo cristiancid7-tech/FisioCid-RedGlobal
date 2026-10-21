@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FisioCid Pro | Gestión Institucional</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
+   <style>
         :root {
             --primary-color: #0f172a; 
+            --primary: #0f172a;
             --accent-color: #2563eb;
             --bg-body: #f8fafc;
-            /* Nuevas variables para el efecto cristal */
             --glass-bg: rgba(255, 255, 255, 0.75);
             --glass-border: rgba(255, 255, 255, 0.6);
         }
@@ -21,12 +21,12 @@
             min-height: 100vh;
             margin: 0;
             color: #1e293b;
-            padding-bottom: 3rem; /* Espacio extra al final */
+            padding-bottom: 3rem;
         }
 
         /* FUERZA VISUAL DE MAYÚSCULAS (EXCEPTO EMAIL) */
         input, select { text-transform: uppercase; }
-        #emailInvitar, #userApoyo, #passTemporal { text-transform: none; }
+        #emailInvitar, #userApoyo, #passTemporal, #email_contacto { text-transform: none; }
 
         .navbar {
             background: rgba(255, 255, 255, 0.7);
@@ -42,7 +42,7 @@
         }
 
         .container {
-            max-width: 1100px; /* Un poco más ancho para las 2 columnas */
+            max-width: 1100px;
             margin: 2rem auto;
             padding: 0 1.5rem;
         }
@@ -63,18 +63,17 @@
             display: flex; align-items: center; gap: 8px;
         }
 
-        /* GRID PARA LOS PANELES DUALES */
         .dual-panel-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1.5rem;
             margin-bottom: 2rem;
-            align-items: stretch; /* Para que ambas cajas midan lo mismo */
+            align-items: stretch;
         }
 
         .form-grid {
             display: grid;
-            grid-template-columns: 1fr; /* Una sola columna dentro de cada panel */
+            grid-template-columns: 1fr;
             gap: 1rem;
             margin-bottom: 1rem;
         }
@@ -88,7 +87,7 @@
             margin-bottom: 6px;
         }
 
-        input, select {
+        input, select, textarea {
             width: 100%;
             padding: 12px 14px;
             border-radius: 12px;
@@ -100,13 +99,12 @@
             color: #334155;
         }
 
-        input:focus, select:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--accent-color);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
-        /* Envoltura especial para el alias corporativo */
         .input-wrapper-dominio {
             display: flex;
             align-items: center;
@@ -127,7 +125,6 @@
             font-size: 0.85rem;
         }
 
-        /* Estilo unificado para los botones */
         button[id^="btnEnviarInv"] {
             width: 100%;
             padding: 1.1rem;
@@ -148,7 +145,31 @@
         #btnEnviarInvAPOYO { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); }
         #btnEnviarInvAPOYO:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.4); }
 
-        /* Media Query para pantallas pequeñas (móviles) */
+        /* ESTILOS PARA MODALES */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
         @media (max-width: 768px) {
             .dual-panel-grid { grid-template-columns: 1fr; }
         }
@@ -438,15 +459,215 @@
             <button id="btnEnviarInvAPOYO">Crear Acceso Corporativo</button>
         </section>
     </div>
+<!-- SECCIÓN DE RED DE EQUIPO Y ALIANZAS -->
+        <section id="seccion-equipo-alianzas" style="margin-top: 1.5rem;">
+            <div class="card-fisiocid" style="border-radius: 16px; background: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e2e8f0;">
+                
+                <div style="background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%); padding: 18px 25px; display: flex; justify-content: space-between; align-items: center; color: white; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: white; display: flex; align-items: center; gap: 8px;">
+                            <span>👥</span> Red de Equipo y Alianzas Estratégicas
+                        </h3>
+                        <p style="margin: 4px 0 0 0; font-size: 0.8rem; opacity: 0.85;" id="contadorSocios">
+                            Cargando integrantes...
+                        </p>
+                    </div>
+                    <button onclick="abrirModalNuevoConvenio()" 
+                            style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 8px 16px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-weight: 700; transition: all 0.2s ease; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-plus"></i> + Nueva Alianza
+                    </button>
+                </div>
 
-    <section class="glass-section" style="margin-top: 2rem;">
-        <h3>👥 RED ACTUAL DE COLABORADORES</h3>
-        <div id="listaRedActual" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
-            <p style="text-align: center; color: #94a3b8; grid-column: 1 / -1; padding: 20px;">Cargando red profesional...</p>
+                <div style="padding: 20px;">
+                    
+                    <!-- GRUPO 1: MI EQUIPO INTERNO -->
+                    <div style="margin-bottom: 25px;">
+                        <div style="display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #eff6ff; padding-bottom: 8px; margin-bottom: 15px;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background-color: #2563eb; display: inline-block;"></span>
+                            <h4 style="margin: 0; font-size: 0.85rem; font-weight: 800; color: #1e3a8a; letter-spacing: 0.05em; text-transform: uppercase;">
+                                Mi Equipo Interno
+                            </h4>
+                        </div>
+
+                        <div id="listaEquipoInterno" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px;">
+                            <p style="color: #94a3b8; font-size: 0.85rem;">Cargando equipo interno...</p>
+                        </div>
+                    </div>
+
+                    <!-- GRUPO 2: ALIANZAS ESTRATÉGICAS -->
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #f0fdf4; padding-bottom: 8px; margin-bottom: 15px;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background-color: #16a34a; display: inline-block;"></span>
+                            <h4 style="margin: 0; font-size: 0.85rem; font-weight: 800; color: #14532d; letter-spacing: 0.05em; text-transform: uppercase;">
+                                Alianzas Estratégicas y Doctores Externos
+                            </h4>
+                        </div>
+
+                        <div id="listaAlianzasExternas" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px;">
+                            <p style="color: #94a3b8; font-size: 0.85rem;">Cargando alianzas...</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- MODAL 1: NUEVO CONVENIO -->
+    <div id="modalConvenios" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 450px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">🤝 Nuevo Socio / Convenio</h3>
+                <button onclick="cerrarModalConvenios()" style="background:none; border:none; font-size:1.2rem; cursor:pointer;">✕</button>
+            </div>
+            
+            <form id="formNuevoConvenio">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="font-size: 0.8rem; font-weight: bold;">NOMBRE DEL NEGOCIO / EMPRESA</label>
+                    <input type="text" id="nomConvenio" placeholder="Ej: Gym Iron o Coca-Cola" required>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 1.5;">
+                        <label style="font-size: 0.7rem; font-weight: bold; color: #64748b;">NOMBRE DEL DUEÑO / CONTACTO</label>
+                        <input type="text" id="contactoNombre" placeholder="Ej: Juan Pérez" style="font-size: 0.8rem;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label style="font-size: 0.7rem; font-weight: bold; color: #64748b;">TELÉFONO</label>
+                        <input type="tel" id="contactoTel" placeholder="238..." style="font-size: 0.8rem;">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="font-size: 0.7rem; font-weight: bold; color: #64748b;">CORREO ELECTRÓNICO</label>
+                    <input type="email" id="email_contacto" placeholder="socio@ejemplo.com" style="font-size: 0.8rem;" required>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label style="font-size: 0.8rem; font-weight: bold;">% DESCUENTO</label>
+                        <input type="number" id="porcentajeDesc" placeholder="15" min="0" max="100">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label style="font-size: 0.8rem; font-weight: bold;">TIPO</label>
+                        <select id="tipoConvenio">
+                            <option value="EMPRESA">Empresa</option>
+                            <option value="ESPECIALISTA">Especialista</option>
+                            <option value="CLINICA">Clínica</option>
+                            <option value="GIMNASIO">Gimnasio</option>
+                            <option value="DEPORTIVO">Club Deportivo</option>
+                            <option value="OTRO">Otro</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" style="width: 100%; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                    Guardar Convenio ⚡
+                </button>
+            </form>
         </div>
-    </section>
-</div>
+    </div>
 
+    <!-- MODAL 2: CONFIGURACIÓN / EDICIÓN DE COLABORADOR -->
+    <div id="modalConfigEquipo" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 480px;">
+            <h4 style="margin-top: 0; color: #0f172a; font-weight: 800;">⚙️ Gestión de Colaborador</h4>
+            <p id="nombreColabModal" style="font-weight: bold; color: #2563eb; margin-bottom: 15px;"></p>
+
+            <input type="hidden" id="idColabActivo">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div>
+                    <label style="font-size: 0.7rem; color: #64748b; font-weight: 700; display: block;">CARGO CLÍNICO:</label>
+                    <select id="selectCargoModal">
+                        <option value="" disabled selected>SELECCIONE...</option>
+                        <optgroup label="DIRECCIÓN Y ADMINISTRACIÓN">
+                            <option value="DIRECTOR MEDICO">DIRECTOR MÉDICO</option>
+                            <option value="ADMINISTRADOR_CLINICA">ADMINISTRADOR DE CLÍNICA</option>
+                            <option value="RECEPCIONISTA">RECEPCIONISTA / CONTROL DE CAJA</option>
+                            <option value="AUXILIAR_ADMIN">AUXILIAR ADMINISTRATIVO</option>
+                            <option value="JEFE_ALMACEN / INSUMOS">JEFE DE ALMACÉN / INSUMOS</option>
+                            <option value="ENCARGADO_FARMACIA">ENCARGADO DE FARMACIA</option>
+                        </optgroup>
+                        <optgroup label="REHABILITACIÓN Y TERAPIA">
+                            <option value="FISIOTERAPEUTA">FISIOTERAPEUTA</option>
+                            <option value="REHABILITADOR_FISICO">REHABILITADOR FÍSICO</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 0.7rem; color: #64748b; font-weight: 700; display: block;">ROL DE SISTEMA:</label>
+                    <select id="selectRolSistemaModal">
+                        <option value="ADMIN_SISTEMA">ADMINISTRADOR</option>
+                        <option value="STAFF_CLINICO">STAFF CLÍNICO</option>
+                        <option value="ADMINISTRATIVO">ADMINISTRATIVO</option>
+                        <option value="OPERATIVO">OPERATIVO</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div>
+                    <label style="font-size: 0.7rem; color: #64748b; font-weight: 700; display: block;">UBICACIÓN / ÁREA:</label>
+                    <select id="selectAreaModal">
+                        <option value="GENERAL">GENERAL</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 0.7rem; color: #64748b; font-weight: 700; display: block;">SUPERIOR DIRECTO:</label>
+                    <select id="superiorModal">
+                        <option value="">SIN ASIGNAR</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                <div>
+                    <label style="font-size: 0.7rem; color: #64748b; font-weight: 700; display: block;">TURNO:</label>
+                    <select id="selectTurnoModal">
+                        <option value="MATUTINO">MATUTINO (09:00 - 14:00)</option>
+                        <option value="VESPERTINO">VESPERTINO (14:00 - 19:00)</option>
+                        <option value="COMPLETO">JORNADA COMPLETA</option>
+                        <option value="PARTIDO">HORARIO PARTIDO</option>
+                        <option value="24X24">GUARDIA 24x24</option>
+                        <option value="NOCTURNO">NOCTURNO / VELADA</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="background-color: #fffbeb; border: 1px solid #fde68a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 1.2rem; margin-right: 8px;">⚠️</span>
+                    <span style="font-size: 0.75rem; color: #92400e; font-weight: 800; text-transform: uppercase;">Zona de Finalización / Observaciones</span>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 0.7rem; color: #b45309; font-weight: 700; display: block; margin-bottom: 4px;">FECHA DE FINALIZACIÓN:</label>
+                    <input type="date" id="fechaFinModal" style="border: 1px solid #fcd34d;">
+                </div>
+
+                <label style="font-size: 0.7rem; color: #b45309; font-weight: 700; display: block; margin-bottom: 4px;">OBSERVACIONES CRÍTICAS:</label>
+                <textarea id="obsModal" rows="2" style="border: 1px solid #fcd34d; font-family: sans-serif; resize: none;" placeholder="Escribir solo en caso de cambios importantes..."></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                <button onclick="cerrarModalConfig()" style="padding: 10px; background: #f1f5f9; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Cancelar</button>
+                <button onclick="guardarConfigEquipo()" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+<footer style="width: 100%; text-align: center; padding: 25px 15px 15px 15px; margin-top: 40px; box-sizing: border-box;">
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; max-width: 300px; margin: 0 auto 15px auto; opacity: 0.7;">
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+        <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">
+            <span style="color: var(--primary); font-weight: 800;">FisioCid</span> Red Global © 2026
+        </span>
+        <small style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 0.3px; max-width: 400px; line-height: 1.3;">
+            Infraestructura digital blindada para interoperabilidad clínica.
+        </small>
+    </div>
+</footer>
+    <!-- SCRIPTS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/gestion-equipo.js"></script>

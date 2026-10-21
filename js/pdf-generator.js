@@ -1,16 +1,20 @@
+// ============================================================================
+// 📄 GENERADOR MAESTRO DE RECETAS PDF FISIOCID (CON QR Y SIGNOS VITALES)
+// Archivo: js/pdf-generator.js
+// ============================================================================
 window.generarPDF = async (datos) => {
     if (!window.jspdf) {
-        alert("La libreria jsPDF no esta cargada en esta pantalla.");
+        alert("La librería jsPDF no está cargada en esta pantalla.");
         return;
     }
     const { jsPDF } = window.jspdf;
 
-    // 1. OBTENER CONTEXTO DE SESION Y CLINICA
+    // 1. OBTENER CONTEXTO DE SESIÓN Y CLÍNICA
     const { data: { user } } = await fisioNet.auth.getUser();
     const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
 
     if (!user || !idClinica) {
-        alert("Error de sesion o clinica activa.");
+        alert("Error de sesión o clínica activa.");
         return;
     }
 
@@ -24,7 +28,7 @@ window.generarPDF = async (datos) => {
     const perfil = perfilRes.data || {};
     const configPdf = clinica.config_pdf || {};
 
-    // 📏 DETECCION DE FORMATO DE HOJA
+    // 📏 DETECCIÓN DE FORMATO DE HOJA
     const formatoPref = perfil.formato_impresion || localStorage.getItem('pdf_formato_papel') || 'CARTA';
     let configDoc = { orientation: 'p', unit: 'mm', format: 'letter' };
 
@@ -110,22 +114,34 @@ window.generarPDF = async (datos) => {
         }
         y += 6;
 
-        // C. SIGNOS VITALES
-        if (mostrarVitales && (datos.ta_sistolica || datos.peso || datos.eva)) {
+        // C. SIGNOS VITALES Y SOMATOMETRÍA (CON FREC. RESPIRATORIA Y TEMPERATURA)
+        const tieneVitales = datos.ta_sistolica || datos.frecuencia_cardiaca || datos.frecuencia_respiratoria || datos.temperatura || datos.spo2 || datos.peso || datos.eva;
+
+        if (mostrarVitales && tieneVitales) {
             doc.setFillColor(248, 250, 252);
             doc.setDrawColor(226, 232, 240);
             doc.rect(margin, y, innerWidth, 8, 'FD');
 
-            doc.setFontSize(7.5);
+            doc.setFontSize(7);
             doc.setFont("helvetica", "normal");
             doc.setTextColor(50);
             
-            const vitalesTexto = `T.A: ${datos.ta_sistolica || '--'}/${datos.ta_diastolica || '--'} mmHg  |  F.C: ${datos.frecuencia_cardiaca || '--'} bpm  |  SpO2: ${datos.spo2 || '--'}%  |  Peso: ${datos.peso || '--'}kg  |  Dolor (EVA): ${datos.eva || 0}/10`;
-            doc.text(vitalesTexto, width / 2, y + 5.5, { align: "center" });
+            // Construcción fluida con Frecuencia Respiratoria y Temperatura incluidas
+            const vitalesArr = [];
+            if (datos.ta_sistolica || datos.ta_diastolica) vitalesArr.push(`T.A: ${datos.ta_sistolica || '--'}/${datos.ta_diastolica || '--'}`);
+            if (datos.frecuencia_cardiaca) vitalesArr.push(`F.C: ${datos.frecuencia_cardiaca} lpm`);
+            if (datos.frecuencia_respiratoria) vitalesArr.push(`F.R: ${datos.frecuencia_respiratoria} rpm`);
+            if (datos.temperatura) vitalesArr.push(`Temp: ${datos.temperatura}°C`);
+            if (datos.spo2) vitalesArr.push(`SpO2: ${datos.spo2}%`);
+            if (datos.peso) vitalesArr.push(`Peso: ${datos.peso} kg`);
+            if (datos.eva) vitalesArr.push(`EVA: ${datos.eva}/10`);
+
+            const vitalesTexto = vitalesArr.join('  |  ');
+            doc.text(vitalesTexto, width / 2, y + 5.2, { align: "center" });
             y += 12;
         }
 
-        // D. DIAGNOSTICO (CIE-10)
+        // D. DIAGNÓSTICO (CIE-10)
         if (datos.diagnostico_principal) {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8.5);
@@ -139,14 +155,13 @@ window.generarPDF = async (datos) => {
             y += 6;
         }
 
-       // E. CUADRO DE INDICACIONES Y PLAN (DINÁMICO SEGÚN LA CANTIDAD DE TEXTO)
+        // E. CUADRO DE INDICACIONES Y PLAN (DINÁMICO)
         doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
         
         const txtPlan = datos.plan_tratamiento || datos.nota_evolucion || datos.cambios_medicacion || "Seguir las indicaciones dadas en consulta.";
         const lineasPlan = doc.splitTextToSize(txtPlan, innerWidth - 8);
         
-        // Calculamos la altura en base al número de líneas (aprox. 4.5 mm por línea + espacio del encabezado)
         const alturaCalculada = (lineasPlan.length * 4.5) + 12;
         const altoMinimo = (formatoPref === 'CARTA') ? 50 : (formatoPref === 'TICKET' ? 40 : 30);
         let altoCuadro = Math.max(alturaCalculada, altoMinimo);
@@ -167,34 +182,58 @@ window.generarPDF = async (datos) => {
         doc.setFont("helvetica", "normal");
         doc.text(lineasPlan, margin + 4, y + 12);
 
-        // Avanzamos el cursor "y" de manera fluida tomando en cuenta el alto real que ocupó la caja
         y += (altoCuadro + 8);
 
-        // F. FIRMA Y LEYENDA LEGAL
+        // F. SECCIÓN INFERIOR: FIRMA DEL MÉDICO + CÓDIGO QR DE CANJE ÚNICO EN FARMACIA
+        const yFirma = y;
+
+        // 1. Línea y Firma del Profesional (Centrado)
         doc.setDrawColor(180);
         doc.setLineWidth(0.3);
-        doc.line(width / 2 - 30, y, width / 2 + 30, y);
+        doc.line(width / 2 - 30, yFirma, width / 2 + 30, yFirma);
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
         doc.setTextColor(0);
-        doc.text(perfil.nombre_completo?.toUpperCase() || "PROFESIONAL ATENDIENTE", width / 2, y + 4, { align: "center" });
+        doc.text(perfil.nombre_completo?.toUpperCase() || "PROFESIONAL ATENDIENTE", width / 2, yFirma + 4, { align: "center" });
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         doc.setTextColor(100);
-        doc.text(`CEDULA PROFESIONAL: ${perfil.cedula_profesional || 'S/N'}`, width / 2, y + 8, { align: "center" });
+        doc.text(`CEDULA PROFESIONAL: ${perfil.cedula_profesional || 'S/N'}`, width / 2, yFirma + 8, { align: "center" });
 
+        // 2. 📱 INSERCIÓN DEL CÓDIGO QR (Alineado a la derecha de la firma)
+        if (datos.qr_code) {
+            const tamanoQR = (formatoPref === 'TICKET') ? 16 : 20;
+            const xQR = width - margin - tamanoQR;
+            const yQR = yFirma - 4;
+
+            try {
+                // Imprime la imagen PNG del QR
+                doc.addImage(datos.qr_code, 'PNG', xQR, yQR, tamanoQR, tamanoQR);
+                
+                // Leyenda pequeña bajo el QR
+                doc.setFontSize(5.5);
+                doc.setTextColor(120);
+                doc.setFont("helvetica", "bold");
+                doc.text("CANJE ÚNICO FARMACIA", xQR + (tamanoQR / 2), yQR + tamanoQR + 3, { align: "center" });
+            } catch (errQr) {
+                console.warn("No se pudo estampar el QR en el PDF:", errQr.message);
+            }
+        }
+
+        // 3. Leyenda legal al pie
         if (leyendaPie) {
-            y += 13;
+            y = yFirma + 15;
             doc.setFontSize(6.5);
             doc.setTextColor(130);
+            doc.setFont("helvetica", "normal");
             const lineasLeyenda = doc.splitTextToSize(leyendaPie, innerWidth);
             doc.text(lineasLeyenda, width / 2, y, { align: "center" });
         }
     };
 
-    // 🚀 SALIDA SEGUN FORMATO
+    // 🚀 SALIDA SEGÚN FORMATO DE IMPRESIÓN
     if (formatoPref === 'MEDIA_CARTA') {
         dibujarReceta(15, "ORIGINAL - EXPEDIENTE");
 

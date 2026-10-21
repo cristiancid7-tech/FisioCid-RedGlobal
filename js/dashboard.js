@@ -2436,26 +2436,35 @@ function irAPortalGabineteDesdeDashboard(archivoUrl, pacienteNombre) {
     window.location.href = 'portal-gabinete.html'; 
 }
 
-function mostrarSeccion(seccionId) {
+// Exponer la función al objeto window para que los onclick del HTML la reconozcan
+window.mostrarSeccion = function (seccionId) {
     const agenda = document.getElementById('agenda-container');
     const comunidad = document.getElementById('seccionComunidad');
 
+    // Ocultar ambas secciones
     if (agenda) agenda.style.setProperty('display', 'none', 'important');
     if (comunidad) comunidad.style.setProperty('display', 'none', 'important');
 
+    // Mostrar únicamente la sección seleccionada
     const activa = document.getElementById(seccionId);
     if (activa) {
         activa.style.setProperty('display', 'block', 'important');
     }
 
+    // Acciones específicas al activar Comunidad
     if (seccionId === 'seccionComunidad') {
-        if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+        if (typeof cargarSolicitudesRedPendientes === 'function') {
+            cargarSolicitudesRedPendientes();
+        }
     }
     
+    // Acciones específicas al activar Agenda
     if (seccionId === 'agenda-container') {
-        if (typeof cargarAgenda === 'function') cargarAgenda('semana');
+        if (typeof cargarAgenda === 'function') {
+            cargarAgenda('semana');
+        }
     }
-}
+};
 
 async function buscarColegasFisioCid() {
     const query = document.getElementById('inputBusquedaColegas').value.trim();

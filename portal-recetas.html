@@ -343,13 +343,26 @@
             <i class="fas fa-print me-2"></i> GUARDAR E IMPRIMIR RECETA PDF
         </button>
     </div>
+    
 <!-- ⏳ BOTÓN DE GUARDAR EN ESPERA PARA RECEPCIÓN (Abajo, pequeño y elegante) -->
 <div class="d-flex justify-content-start mt-3">
     <button type="button" id="btnGuardarEspera" onclick="guardarEnEspera()"
             style="background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.7rem; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; transition: all 0.2s;">
         <i class="fas fa-clock text-warning"></i> ⏳ Guardar en Espera (Recepción)
     </button>
+    
 </div>
+<footer style="width: 100%; text-align: center; padding: 25px 15px 15px 15px; margin-top: 40px; box-sizing: border-box;">
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; max-width: 300px; margin: 0 auto 15px auto; opacity: 0.7;">
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+        <span style="font-size: 0.75rem; color: #64748b; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">
+            <span style="color: var(--primary); font-weight: 800;">FisioCid</span> Red Global © 2026
+        </span>
+        <small style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 0.3px; max-width: 400px; line-height: 1.3;">
+            Infraestructura digital blindada para interoperabilidad clínica.
+        </small>
+    </div>
+</footer>
 </main>
 
 <!-- 🚀 AQUÍ LLAMAMOS A TU NUEVO ARCHIVO JS -->
@@ -529,5 +542,215 @@
   </div>
 </div>
     
+
+
+<!-- ========================================================= -->
+<!-- ✨ MÓDULO LABORATORIO/GABINETE: BOTÓN Y MODAL ✨ -->
+<!-- ========================================================= -->
+<style>
+    /* Fuerza la flecha del buscador para que siempre sea visible y parezca un select */
+    #inputLabDestino::-webkit-calendar-picker-indicator {
+        display: block !important;
+        opacity: 1 !important;
+        cursor: pointer !important;
+        background-color: #f8fafc;
+        padding: 5px;
+        border-radius: 4px;
+        border-left: 1px solid #cbd5e1;
+    }
+</style>
+
+
+<!-- ========================================================= -->
+<!-- ⚡ SPEED DIAL PRO: BOTÓN FLOTANTE DISCRETO (3 OPCIONES) -->
+<!-- ========================================================= -->
+<div id="contenedor-speed-dial" style="position: fixed; bottom: 20px; left: 20px; z-index: 10000; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px;">
+    
+    <!-- Botón Principal Disparador -->
+    <button type="button" id="btnMainSpeedDial" onclick="toggleSpeedDial()" 
+            style="background: #0f172a; color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 30px; padding: 8px 16px; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3); backdrop-filter: blur(8px); transition: all 0.25s ease;">
+        <i class="fas fa-bolt text-warning" id="iconoSpeedDial" style="font-size: 0.85rem; transition: transform 0.3s ease;"></i>
+        <span style="letter-spacing: 0.3px;">Acciones Clínicas</span>
+    </button>
+
+    <!-- Menú Desplegable con 3 Opciones -->
+    <div id="opcionesSpeedDial" style="display: none; flex-direction: column; gap: 6px; margin-left: 2px;">
+        
+        <!-- Opción 1: Ver Historial y Galería del Paciente -->
+        <button type="button" onclick="abrirModalHistorialEvidencias()" class="btn-speed-option">
+            <i class="fas fa-photo-video text-success"></i>
+            <span>📂 Historial y Galería Clínica</span>
+        </button>
+
+        <!-- Opción 2: Subir Nueva Foto / Evidencia -->
+        <button type="button" onclick="abrirModalEvidenciaMultimedia()" class="btn-speed-option">
+            <i class="fas fa-camera text-info"></i>
+            <span>📸 Subir Foto / Evidencia Clínica</span>
+        </button>
+
+        <!-- Opción 3: Solicitar Estudio a Aliado -->
+        <button type="button" onclick="abrirModalEstudioExpress()" class="btn-speed-option">
+            <i class="fas fa-flask text-warning"></i>
+            <span>🧪 Solicitar Estudio a Aliado</span>
+        </button>
+
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- 📸 MODAL 1: SUBIR EVIDENCIA MULTIMEDIA (FALTABA EN TU HTML) -->
+<!-- ========================================================= -->
+<div id="modalEvidenciaMultimedia" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.8); backdrop-filter: blur(6px); z-index:10050; justify-content:center; align-items:center; padding: 15px;">
+    <div style="background:white; max-width:550px; width:100%; border-radius:20px; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);">
+        <div style="background: #0f172a; color: white; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+            <h5 class="fw-bold mb-0 d-flex align-items-center gap-2" style="font-size: 0.95rem;">
+                <i class="fas fa-camera text-info"></i> Subir Foto / Evidencia Clínica
+            </h5>
+            <button type="button" onclick="cerrarModalEvidenciaMultimedia()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">&times;</button>
+        </div>
+        <form id="formSubirEvidencia" style="padding: 20px;">
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">SELECCIONAR O TOMAR FOTOGRAFÍA / PDF *</label>
+                <input type="file" id="evidencia_archivo" accept="image/*,application/pdf" capture="environment" class="form-control form-control-sm" required style="border-radius: 8px;">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">CATEGORÍA / ESPECIALIDAD *</label>
+               <!-- 1. SELECT DENTRO DEL FORMULARIO DE SUBIDA (formSubirEvidencia) -->
+<select id="evidencia_categoria" class="form-select" required>
+    <option value="" disabled selected>SELECCIONA LA ESPECIALIDAD *</option>
+    <option value="FISIOTERAPIA">🦴 FISIOTERAPIA Y REHABILITACIÓN</option>
+    <option value="TRAUMATOLOGIA">🩺 TRAUMATOLOGÍA Y ORTOPEDIA</option>
+    <option value="MEDICINA_GENERAL">🩺 MEDICINA GENERAL Y ESPECIALIDADES</option>
+    <option value="PSICOLOGIA">🧠 PSICOLOGÍA Y SALUD MENTAL</option>
+    <option value="NUTRICION">🥗 NUTRICIÓN Y DIETÉTICA</option>
+    <option value="PODOLOGIA">🦶 PODOLOGÍA</option>
+    <option value="TERAPIA_OCUPACIONAL">✋ TERAPIA OCUPACIONAL</option>
+    <option value="ENFERMERIA">💊 ENFERMERÍA Y CUIDADOS</option>
+    <option value="ODONTOLOGIA">🦷 ODONTOLOGÍA</option>
+    <option value="ESTUDIOS_EXTERNOS">📁 ESTUDIOS EXTERNOS / OTROS</option>
+</select>
+
+
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">DESCRIPCIÓN / OBSERVACIONES</label>
+                <textarea id="evidencia_descripcion" rows="3" class="form-control form-control-sm" placeholder="Ej: Evolución de cicatriz post-quirúrgica, zona lumbar..." style="border-radius: 8px;"></textarea>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" onclick="cerrarModalEvidenciaMultimedia()" class="btn btn-sm btn-light fw-bold px-3">Cancelar</button>
+                <button type="submit" id="btnGuardarEvidencia" class="btn btn-sm btn-success fw-bold px-4 rounded-pill">🚀 GUARDAR EVIDENCIA EN EXPEDIENTE</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- 🧪 MODAL 2: SOLICITAR ESTUDIO EXPRESS (FALTABA EN TU HTML) -->
+<!-- ========================================================= -->
+<div id="modalEstudioExpress" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.8); backdrop-filter: blur(6px); z-index:10050; justify-content:center; align-items:center; padding: 15px;">
+    <div style="background:white; max-width:550px; width:100%; border-radius:20px; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);">
+        <div style="background: #0f172a; color: white; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+            <h5 class="fw-bold mb-0 d-flex align-items-center gap-2" style="font-size: 0.95rem;">
+                <i class="fas fa-flask text-warning"></i> Solicitar Estudio a Aliado Comercial
+            </h5>
+            <button type="button" onclick="document.getElementById('modalEstudioExpress').style.display='none'" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">TIPO DE SERVICIO *</label>
+                <select id="tipoServicioExterno" class="form-select form-select-sm" style="border-radius: 8px;">
+                    <option value="LAB">🧪 Laboratorio Clínico (Sangre, Orina, etc.)</option>
+                    <option value="GAB">🩻 Estudio de Gabinete (RX, RM, Tomografía, USG)</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">ESTUDIO(S) REQUERIDO(S) *</label>
+                <input type="text" id="txtQueEstudio" class="form-control form-control-sm" placeholder="Ej: Biometría Hemática Completa / RX Columna Lumbar AP y Lat" style="border-radius: 8px;">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold small text-secondary">LABORATORIO / CENTRO ALIADO DESTINO *</label>
+                <input type="text" id="inputLabDestino" list="listaLabs" class="form-control form-control-sm" placeholder="Selecciona o busca un laboratorio de tu red..." style="border-radius: 8px;">
+                <datalist id="listaLabs"></datalist>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" onclick="document.getElementById('modalEstudioExpress').style.display='none'" class="btn btn-sm btn-light fw-bold px-3">Cancelar</button>
+                <button type="button" id="btnEnviarLab" onclick="enviarSolicitudLab()" class="btn btn-sm btn-warning fw-bold px-4 rounded-pill">ENVIAR SOLICITUD 🚀</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- 📂 MODAL 3: HISTORIAL DE EVIDENCIAS Y LÍNEA DE TIEMPO -->
+<!-- ========================================================= -->
+<div id="modalHistorialEvidencias" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.8); backdrop-filter: blur(6px); z-index:10050; justify-content:center; align-items:center; padding: 15px;">
+    <div style="background:white; max-width:900px; width:100%; height: 85vh; border-radius:20px; overflow:hidden; display:flex; flex-direction:column; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);">
+        
+        <!-- Encabezado Modal -->
+        <div style="background: #0f172a; color: white; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
+            <h5 class="fw-bold mb-0 d-flex align-items-center gap-2" style="font-size: 0.95rem;">
+                <i class="fas fa-history text-success"></i> Línea del Tiempo de Evidencias del Paciente
+            </h5>
+            <button type="button" onclick="cerrarModalHistorialEvidencias()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">&times;</button>
+        </div>
+
+        <!-- Filtros y Buscador por Fecha -->
+        <div style="background: #1e293b; padding: 12px 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid #334155;">
+            <div style="flex: 1; min-width: 180px;">
+                <input type="date" id="filtro_fecha_evidencia" onchange="filtrarEvidenciasLocales()" class="form-control form-control-sm bg-dark text-white border-secondary" style="border-radius: 8px;">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <select id="filtro_categoria_evidencia" class="form-select" onchange="filtrarEvidenciasLocales()">
+    <option value="TODAS">-- TODAS LAS ESPECIALIDADES --</option>
+    <option value="FISIOTERAPIA">🦴 FISIOTERAPIA Y REHABILITACIÓN</option>
+    <option value="TRAUMATOLOGIA">🩺 TRAUMATOLOGÍA Y ORTOPEDIA</option>
+    <option value="MEDICINA_GENERAL">🩺 MEDICINA GENERAL Y ESPECIALIDADES</option>
+    <option value="PSICOLOGIA">🧠 PSICOLOGÍA Y SALUD MENTAL</option>
+    <option value="NUTRICION">🥗 NUTRICIÓN Y DIETÉTICA</option>
+    <option value="PODOLOGIA">🦶 PODOLOGÍA</option>
+    <option value="TERAPIA_OCUPACIONAL">✋ TERAPIA OCUPACIONAL</option>
+    <option value="ENFERMERIA">💊 ENFERMERÍA Y CUIDADOS</option>
+    <option value="ODONTOLOGIA">🦷 ODONTOLOGÍA</option>
+    <option value="ESTUDIOS_EXTERNOS">📁 ESTUDIOS EXTERNOS / OTROS</option>
+</select>
+            </div>
+            <button type="button" onclick="resetFiltrosEvidencia()" class="btn btn-sm btn-outline-light" style="border-radius: 8px; font-size: 0.72rem;">
+                🔄 Ver Todo
+            </button>
+        </div>
+
+        <!-- Cuerpo con Scroll y Lista de Evidencias -->
+        <div id="contenedor_lista_evidencias" style="flex: 1; overflow-y: auto; padding: 20px; background: #f8fafc;" class="d-flex flex-column gap-3">
+            <p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando historial del paciente...</p>
+        </div>
+
+        <!-- Pie de Modal -->
+        <div style="background: #f1f5f9; padding: 10px 20px; text-align: right; border-top: 1px solid #e2e8f0;">
+            <button type="button" onclick="cerrarModalHistorialEvidencias()" class="btn btn-secondary btn-sm rounded-pill fw-bold px-4">Cerrar</button>
+        </div>
+
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- 🔍 VISOR PANTALLA COMPLETA (LIGHTBOX IMAGEN / PDF) -->
+<!-- ========================================================= -->
+<div id="modalVisorFullscreen" style="display:none; position: fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.92); z-index:20000; flex-direction:column; justify-content:center; align-items:center; backdrop-filter: blur(8px);">
+    <div style="position: absolute; top: 0; left: 0; width: 100%; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); z-index: 20001; color: white;">
+        <div>
+            <h6 id="full_titulo_evidencia" class="fw-bold mb-0 text-info" style="font-size: 1rem;">Categoría / Archivo</h6>
+            <small id="full_fecha_evidencia" class="text-light opacity-75" style="font-size: 0.75rem;">Fecha</small>
+        </div>
+        <button type="button" onclick="cerrarVisorFullscreen()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
+    </div>
+
+    <div id="full_contenido_archivo" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; padding: 60px 20px 80px 20px;">
+    </div>
+
+    <div style="position: absolute; bottom: 0; left: 0; width: 100%; padding: 15px 25px; background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%); color: white; text-align: center; z-index: 20001;">
+        <p id="full_descripcion_evidencia" class="mb-0 small text-slate-300" style="max-width: 800px; margin: 0 auto; font-style: italic;"></p>
+    </div>
+</div>
+
 </body>
 </html>
