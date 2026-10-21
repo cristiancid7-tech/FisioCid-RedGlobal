@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Búsqueda de Pacientes en tiempo real
     configurarBuscadorPaciente();
-
+    configurarBuscadorCIE10();  
     // 3. Escuchas dinámicas para CURP y Edad
     const inputsCurp = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'genero-manual', 'valEstado'];
     inputsCurp.forEach(id => {
@@ -670,7 +670,7 @@ function agregarFilaMedicamento() {
             <label class="label-fisiocid small">Medicamento / Presentación</label>
             <div class="input-group">
                 <span class="input-group-text bg-white border-end-0"><i class="fas fa-pills text-primary"></i></span>
-                <input type="text" class="form-control form-fisiocid border-start-0 text-uppercase fw-bold med-nombre" placeholder="Ej. PARACETAMOL 500MG">
+                <input type="text" class="form-control form-fisiocid border-start-0 text-uppercase fw-bold med-nombre" placeholder="Ej. PARACETAMOL 500MG" autocomplete="off">
             </div>
         </div>
         <div class="col-md-2">
@@ -692,6 +692,13 @@ function agregarFilaMedicamento() {
         </div>
     `;
     contenedor.appendChild(fila);
+
+    // Vincular autocompletado inteligente a los elementos de esta fila
+    const inNom = fila.querySelector('.med-nombre');
+    const inDos = fila.querySelector('.med-dosis');
+    const inFre = fila.querySelector('.med-frecuencia');
+    const inDur = fila.querySelector('.med-duracion');
+    if (inNom) vincularAutocompletadoMedicamento(inNom, inDos, inFre, inDur);
 }
 
 window.eliminarFila = function(id) {
@@ -715,21 +722,19 @@ async function procesarReceta() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> GUARDANDO Y GENERANDO PDF...';
 
     try {
-        // 🚀 Si el paciente es nuevo, creamos su ficha maestra + vínculo + expediente
         if (!pacienteExistenteId) {
             pacienteExistenteId = await registrarPacienteNuevo();
         }
 
         const diagnostico = document.getElementById('diagnostico-receta')?.value.trim() || '';
+        const codigoCIE10 = document.getElementById('codigo-cie10-seleccionado')?.value || null;
         const indicaciones = document.getElementById('indicacionesExtras')?.value.trim() || '';
         const folio = document.getElementById('inputFolioExpediente')?.value.trim() || '';
         const idClinica = localStorage.getItem('id_clinica_activa');
 
-        // 1. Obtener usuario autenticado actual
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
 
-        // 2. Recopilar medicamentos de la tabla dinámica
         const filasMeds = document.querySelectorAll('.fila-medicamento');
         const listaMedicamentos = [];
         
@@ -748,7 +753,6 @@ async function procesarReceta() {
             throw new Error("Debes agregar al menos un medicamento a la receta.");
         }
 
-        // 3. Signos vitales y somatometría
         const sistolica = parseInt(document.getElementById('valSistolica')?.value) || null;
         const diastolica = parseInt(document.getElementById('valDiastolica')?.value) || null;
         const frecuencia_cardiaca = parseInt(document.getElementById('valFC')?.value) || null;
@@ -759,60 +763,59 @@ async function procesarReceta() {
         const talla = parseFloat(document.getElementById('valTalla')?.value) || null;
         const imc = parseFloat(document.getElementById('valIMC')?.value) || null;
 
-        // 4. LÓGICA INTELIGENTE DE GUARDADO (UPDATE vs INSERT)
-        if (window.recetaPendienteVinculadaId) {
-            // 🚀 CASO A: Viene de la Sala de Espera. Actualizamos el registro existente.
+        const tokenQR = crypto.randomUUID();
+
+        let recetaIdFinal = window.recetaPendienteVinculadaId;
+
+        if (recetaIdFinal) {
             const { error: errUpdate } = await fisioNet
                 .from('recetas_medicas')
                 .update({
                     diagnostico: diagnostico,
+                    codigo_cie10: codigoCIE10,
                     indicaciones_generales: indicaciones,
                     medicamentos: listaMedicamentos,
                     estado_nota: 'PENDIENTE',
-                    sistolica,
-                    diastolica,
-                    frecuencia_cardiaca,
-                    frecuencia_respiratoria,
-                    temperatura,
-                    spo2,
-                    peso,
-                    talla,
-                    imc
+                    sistolica, diastolica, frecuencia_cardiaca, frecuencia_respiratoria,
+                    temperatura, spo2, peso, talla, imc
                 })
-                .eq('id', window.recetaPendienteVinculadaId);
+                .eq('id', recetaIdFinal);
 
             if (errUpdate) throw errUpdate;
-
         } else {
-            // 🚀 CASO B: Receta creada desde cero por el doctor. Insertamos un registro nuevo.
             const payloadNuevo = {
                 id_paciente: pacienteExistenteId,
                 id_clinica: idClinica,
                 medico_id: user.id,
                 folio_expediente: folio,
                 diagnostico: diagnostico,
+                codigo_cie10: codigoCIE10,
                 indicaciones_generales: indicaciones,
                 estado_nota: 'PENDIENTE',
-                sistolica,
-                diastolica,
-                frecuencia_cardiaca,
-                frecuencia_respiratoria,
-                temperatura,
-                spo2,
-                peso,
-                talla,
-                imc,
+                estado_dispensacion: 'PENDIENTE',
+                token_qr: tokenQR,
+                sistolica, diastolica, frecuencia_cardiaca, frecuencia_respiratoria,
+                temperatura, spo2, peso, talla, imc,
                 medicamentos: listaMedicamentos
             };
 
-            const { error: errInsert } = await fisioNet
+            const { data: resIns, error: errInsert } = await fisioNet
                 .from('recetas_medicas')
-                .insert([payloadNuevo]);
+                .insert([payloadNuevo])
+                .select('id, token_qr')
+                .single();
 
             if (errInsert) throw errInsert;
+            recetaIdFinal = resIns.id;
         }
 
-        // 5. Armar Nombre Completo y Edad para el PDF
+        // 1. Guardar/Incrementar contador de medicamentos frecuentes
+        await guardarMedicamentosFrecuentes(listaMedicamentos);
+
+        // 2. Generar Código QR Base64 para validación de canje único en farmacia
+        const urlValidacionQR = `https://fisiocid.app/validar-receta.html?token=${tokenQR}`;
+        const qrBase64 = await generarQRBase64(urlValidacionQR);
+
         const nombreVal = document.getElementById('valNombre')?.value.trim() || '';
         const paternoVal = document.getElementById('valPaterno')?.value.trim() || '';
         const maternoVal = document.getElementById('valMaterno')?.value.trim() || '';
@@ -822,7 +825,6 @@ async function procesarReceta() {
         const edadPaciente = (typeof calcularEdad === 'function') ? calcularEdad(fechaNacVal) : "N/A";
         const pacienteTextoPDF = edadPaciente !== "N/A" ? `${nombreCompleto} (${edadPaciente} AÑOS)` : nombreCompleto;
 
-        // 6. Construir texto limpio del plan de tratamiento para el PDF
         let textoMedicamentosParaPDF = "PRESCRIPCIÓN MÉDICA:\n\n";
         listaMedicamentos.forEach((m, index) => {
             textoMedicamentosParaPDF += `${index + 1}. ${m.nombre}\n   Dosis: ${m.dosis || 'N/A'} | Frecuencia: ${m.frecuencia || 'N/A'} | Duración: ${m.duracion || 'N/A'}\n\n`;
@@ -835,6 +837,7 @@ async function procesarReceta() {
         const datosParaPDF = {
             nombre_paciente: pacienteTextoPDF,
             fecha_nota: new Date().toISOString(),
+            qr_code: qrBase64, // Pasamos la imagen Base64 del QR al PDF Generator
             ta_sistolica: sistolica,
             ta_diastolica: diastolica,
             frecuencia_cardiaca: frecuencia_cardiaca,
@@ -847,11 +850,10 @@ async function procesarReceta() {
             plan_tratamiento: textoMedicamentosParaPDF
         };
 
-        // 7. Generación del PDF y limpieza de variable global
         if (typeof window.generarPDF === 'function') {
             await window.generarPDF(datosParaPDF);
             window.recetaPendienteVinculadaId = null;
-            alert("✅ ¡Receta guardada y PDF generado con éxito!");
+            alert("✅ ¡Receta guardada, medicamentos frecuentes actualizados y PDF con QR generado con éxito!");
         } else {
             alert("⚠️ Receta guardada en base de datos, pero el módulo de PDF no está vinculado.");
         }
@@ -1775,4 +1777,231 @@ async function evaluarCurpHomoclaveTutorExpress() {
     if (curpCompleta.length === 18) {
         await verificarTutorExistentePorCurpModal(curpCompleta);
     }
+}
+
+// ============================================================================
+// 🔍 BUSCADOR CIE-10 CONECTADO A 'catalogo_diagnosticos'
+// ============================================================================
+function configurarBuscadorCIE10() {
+    const inputDiag = document.getElementById('diagnostico-receta');
+    const listaCie = document.getElementById('sugerencias-cie10');
+    const inputCodigo = document.getElementById('codigo-cie10-seleccionado');
+    const badgeCie = document.getElementById('badge-cie10');
+    let timerCie;
+
+    if (!inputDiag || !listaCie) return;
+
+    inputDiag.addEventListener('input', (e) => {
+        const query = e.target.value.trim().toUpperCase();
+        clearTimeout(timerCie);
+
+        if (query.length < 2) {
+            listaCie.classList.add('d-none');
+            if (inputCodigo) inputCodigo.value = '';
+            if (badgeCie) badgeCie.innerText = 'CIE';
+            return;
+        }
+
+        timerCie = setTimeout(async () => {
+            try {
+                // Consulta en tu tabla 'catalogo_diagnosticos'
+                const { data, error } = await fisioNet
+                    .from('catalogo_diagnosticos')
+                    .select('clave, descripcion')
+                    .or(`clave.ilike.%${query}%,descripcion.ilike.%${query}%`)
+                    .limit(7);
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    listaCie.innerHTML = '';
+                    listaCie.classList.remove('d-none');
+
+                    data.forEach(item => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'list-group-item list-group-item-action p-2 text-start border-bottom';
+                        btn.innerHTML = `
+                            <span class="badge bg-primary me-2">${item.clave}</span>
+                            <strong class="small text-dark">${item.descripcion}</strong>
+                        `;
+
+                        btn.onclick = (evt) => {
+                            evt.preventDefault();
+                            inputDiag.value = `${item.clave} - ${item.descripcion}`;
+                            if (inputCodigo) inputCodigo.value = item.clave;
+                            if (badgeCie) badgeCie.innerText = item.clave;
+                            listaCie.classList.add('d-none');
+                        };
+                        listaCie.appendChild(btn);
+                    });
+                } else {
+                    listaCie.classList.add('d-none');
+                }
+            } catch (err) {
+                console.error("Error al consultar catalogo_diagnosticos:", err.message);
+            }
+        }, 250);
+    });
+}
+
+// ============================================================================
+// 💊 PREDICTOR INTELIGENTE DE MEDICAMENTOS Y AUTOCOMPLETADO
+// ============================================================================
+async function guardarMedicamentosFrecuentes(listaMedicamentos) {
+    const { data: { user } } = await fisioNet.auth.getUser();
+    if (!user) return;
+
+    for (const med of listaMedicamentos) {
+        if (!med.nombre) continue;
+
+        try {
+            const nomUpper = med.nombre.toUpperCase();
+            const { data: existente } = await fisioNet
+                .from('medicamentos_frecuentes')
+                .select('id, contador_uso')
+                .eq('medico_id', user.id)
+                .eq('nombre_medicamento', nomUpper)
+                .maybeSingle();
+
+            if (existente) {
+                await fisioNet
+                    .from('medicamentos_frecuentes')
+                    .update({
+                        contador_uso: existente.contador_uso + 1,
+                        dosis_frecuente: med.dosis,
+                        frecuencia_frecuente: med.frecuencia,
+                        duracion_frecuente: med.duracion,
+                        ultima_prescripcion: new Date().toISOString()
+                    })
+                    .eq('id', existente.id);
+            } else {
+                await fisioNet
+                    .from('medicamentos_frecuentes')
+                    .insert([{
+                        medico_id: user.id,
+                        nombre_medicamento: nomUpper,
+                        dosis_frecuente: med.dosis,
+                        frecuencia_frecuente: med.frecuencia,
+                        duracion_frecuente: med.duracion
+                    }]);
+            }
+        } catch (err) {
+            console.warn("Error al actualizar medicamentos frecuentes:", err.message);
+        }
+    }
+}
+
+function vincularAutocompletadoMedicamento(inputNombre, inputDosis, inputFrecuencia, inputDuracion) {
+    let timerMed;
+    const listaSug = document.createElement('div');
+    listaSug.className = 'list-group position-absolute w-100 shadow-sm d-none';
+    listaSug.style.zIndex = '1000';
+    listaSug.style.top = '100%';
+    inputNombre.parentElement.classList.add('position-relative');
+    inputNombre.parentElement.appendChild(listaSug);
+
+    inputNombre.addEventListener('input', async (e) => {
+        const val = e.target.value.trim().toUpperCase();
+        clearTimeout(timerMed);
+
+        if (val.length < 2) {
+            listaSug.classList.add('d-none');
+            return;
+        }
+
+        timerMed = setTimeout(async () => {
+            const { data: { user } } = await fisioNet.auth.getUser();
+            if (!user) return;
+
+            const [frecRes, invRes] = await Promise.all([
+                fisioNet.from('medicamentos_frecuentes').select('*').eq('medico_id', user.id).ilike('nombre_medicamento', `%${val}%`).order('contador_uso', { ascending: false }).limit(4),
+                fisioNet.from('inventario_insumos').select('nombre_insumo').ilike('nombre_insumo', `%${val}%`).limit(3)
+            ]);
+
+            const opcionesMap = new Map();
+            if (frecRes.data) {
+                frecRes.data.forEach(m => opcionesMap.set(m.nombre_medicamento, { 
+                    nombre: m.nombre_medicamento, 
+                    dosis: m.dosis_frecuente || '', 
+                    frecuencia: m.frecuencia_frecuente || '', 
+                    duracion: m.duracion_frecuente || '' 
+                }));
+            }
+            if (invRes.data) {
+                invRes.data.forEach(i => {
+                    const nom = i.nombre_insumo.toUpperCase();
+                    if (!opcionesMap.has(nom)) opcionesMap.set(nom, { nombre: nom, dosis: '', frecuencia: '', duracion: '' });
+                });
+            }
+
+            const resultados = Array.from(opcionesMap.values());
+
+            if (resultados.length > 0) {
+                listaSug.innerHTML = '';
+                listaSug.classList.remove('d-none');
+
+                resultados.forEach(m => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'list-group-item list-group-item-action p-2 text-start small border-bottom';
+
+                    // Construcción limpia del texto secundario de dosis / frecuencia
+                    let detalleTexto = '';
+                    if (m.dosis && m.frecuencia) {
+                        detalleTexto = `${m.dosis} &bull; ${m.frecuencia}`;
+                    } else if (m.dosis) {
+                        detalleTexto = m.dosis;
+                    }
+
+                    item.innerHTML = `
+                        <strong class="d-block text-dark">${m.nombre}</strong>
+                        ${detalleTexto ? `<span class="text-muted d-block mt-1" style="font-size:0.7rem;">${detalleTexto}</span>` : ''}
+                    `;
+                    
+                    item.onclick = (e) => {
+                        e.preventDefault();
+                        inputNombre.value = m.nombre;
+                        if (inputDosis && m.dosis) inputDosis.value = m.dosis;
+                        if (inputFrecuencia && m.frecuencia) inputFrecuencia.value = m.frecuencia;
+                        if (inputDuracion && m.duracion) inputDuracion.value = m.duracion;
+                        listaSug.classList.add('d-none');
+                    };
+                    listaSug.appendChild(item);
+                });
+            } else {
+                listaSug.classList.add('d-none');
+            }
+        }, 250);
+    });
+}
+
+
+
+function generarQRBase64(textoUrl) {
+    return new Promise((resolve) => {
+        const tempDiv = document.createElement('div');
+        tempDiv.style.display = 'none';
+        document.body.appendChild(tempDiv);
+
+        new QRCode(tempDiv, {
+            text: textoUrl,
+            width: 128,
+            height: 128,
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        setTimeout(() => {
+            const canvas = tempDiv.querySelector('canvas');
+            const img = tempDiv.querySelector('img');
+            let dataUrl = '';
+            if (canvas) {
+                dataUrl = canvas.toDataURL("image/png");
+            } else if (img) {
+                dataUrl = img.src;
+            }
+            tempDiv.remove();
+            resolve(dataUrl);
+        }, 120);
+    });
 }

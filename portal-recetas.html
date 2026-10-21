@@ -298,36 +298,42 @@
     <!-- ========================================================= -->
     <!-- 💊 3. RECETARIO INTELIGENTE -->
     <!-- ========================================================= -->
-    <section class="card-fisiocid mb-4 animate__animated animate__fadeInUp">
-        <div class="header-fisiocid justify-content-between">
-            <span><i class="fas fa-prescription-bottle-alt text-primary"></i> Prescripción Médica</span>
-        </div>
-        <div class="p-4">
-            
-            <!-- Diagnóstico Impreso en Receta -->
-            <div class="row mb-4">
-                <div class="col-md-12">
-                    <label class="label-fisiocid text-primary">Diagnóstico / Motivo de Prescripción (Se imprimirá en la receta)</label>
-                    <input type="text" id="diagnostico-receta" class="form-control form-fisiocid text-uppercase fw-bold" placeholder="EJ. INFECCIÓN DE VÍAS RESPIRATORIAS ALTAS">
+<section class="card-fisiocid mb-4 animate__animated animate__fadeInUp" style="overflow: visible;">
+    <div class="header-fisiocid justify-content-between">
+        <span><i class="fas fa-prescription-bottle-alt text-primary"></i> Prescripción Médica</span>
+    </div>
+    <div class="p-4">
+        
+        <!-- Diagnóstico Impreso en Receta con Buscador CIE-10/11 -->
+        <div class="row mb-4">
+            <div class="col-md-12 position-relative">
+                <label class="label-fisiocid text-primary fw-bold">Diagnóstico CIE-10 / Motivo de Prescripción (Se imprimirá en la receta)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-primary text-primary fw-bold" id="badge-cie10">CIE</span>
+                    <input type="text" id="diagnostico-receta" class="form-control form-fisiocid text-uppercase fw-bold" placeholder="Escribe clave o descripción (Ej. J00 o INFECCIÓN)..." autocomplete="off">
+                    <input type="hidden" id="codigo-cie10-seleccionado">
                 </div>
-            </div>
-
-            <!-- Contenedor Dinámico -->
-            <div id="contenedor-medicamentos">
-                <!-- Las filas se inyectan aquí con JS -->
-            </div>
-
-            <button class="btn btn-outline-primary fw-bold w-100 py-2 mt-2 shadow-sm" style="border-radius: 10px; border-style: dashed; border-width: 2px;" onclick="agregarFilaMedicamento()">
-                <i class="fas fa-plus-circle me-1"></i> AÑADIR OTRO MEDICAMENTO
-            </button>
-            
-            <!-- Indicaciones Generales -->
-            <div class="mt-4">
-                <label class="label-fisiocid">Indicaciones Generales / Cuidados en Casa</label>
-                <textarea id="indicacionesExtras" class="form-control form-fisiocid text-uppercase" rows="3" placeholder="Ej. Aumentar la ingesta de líquidos, reposo relativo..."></textarea>
+                <!-- Menú flotante de sugerencias CIE-10 -->
+                <div id="sugerencias-cie10" class="list-group position-absolute w-100 shadow-lg d-none" style="z-index: 1050; top: 100%;"></div>
             </div>
         </div>
-    </section>
+
+        <!-- Contenedor Dinámico -->
+        <div id="contenedor-medicamentos">
+            <!-- Las filas se inyectan aquí con JS -->
+        </div>
+
+        <button class="btn btn-outline-primary fw-bold w-100 py-2 mt-2 shadow-sm" style="border-radius: 10px; border-style: dashed; border-width: 2px;" onclick="agregarFilaMedicamento()">
+            <i class="fas fa-plus-circle me-1"></i> AÑADIR OTRO MEDICAMENTO
+        </button>
+        
+        <!-- Indicaciones Generales -->
+        <div class="mt-4">
+            <label class="label-fisiocid">Indicaciones Generales / Cuidados en Casa</label>
+            <textarea id="indicacionesExtras" class="form-control form-fisiocid text-uppercase" rows="3" placeholder="Ej. Aumentar la ingesta de líquidos, reposo relativo..."></textarea>
+        </div>
+    </div>
+</section>
 
 <!-- ========================================================= -->
     <!-- 💾 BOTÓN MAESTRO DE ACCIÓN -->
@@ -356,6 +362,7 @@
 <script src="js/supabase-config.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/herramientasVisuales.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="js/pdf-generator.js"></script>
 <script src="js/portal-recetas.js"></script>
 
