@@ -73,7 +73,6 @@ async function cargarEstadoSuscripcion() {
 }
 
 // 3. ABRIR PASARELA DE PAGO VÍA EDGE FUNCTION DE SUPABASE (CONEXIÓN SEGURA)
-// 3. ABRIR CHECKOUT MODAL AUTOMÁTICO SOBRE FISIOCID.COM
 async function abrirModalPago(codigoPlan, monto) {
     planSeleccionadoModal = codigoPlan;
     montoSeleccionadoModal = monto;
@@ -82,7 +81,7 @@ async function abrirModalPago(codigoPlan, monto) {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return alert("Sesión no válida. Por favor, inicia sesión nuevamente.");
 
-        // 1. Crear preferencia desde la Edge Function
+        // Invocación a la Edge Function
         const { data: prefData, error: prefErr } = await fisioNet.functions.invoke('crear-preferencia-mp', {
             body: {
                 codigoPlan: codigoPlan,
@@ -92,21 +91,27 @@ async function abrirModalPago(codigoPlan, monto) {
             }
         });
 
-        if (prefErr || !prefData?.id) {
-            throw new Error("No se pudo generar la preferencia de pago.");
-        }
+        // 🔍 IMPRIMIR EN CONSOLA LA RESPUESTA REAL DE MERCADO PAGO
+        console.log("🔍 Respuesta de la Edge Function / Mercado Pago:", prefData, prefErr);
 
-        // 2. 🚀 ABRIR MODAL FLOTANTE DE MERCADO PAGO SIN SALIR DE FISIOCID
-        mp.checkout({
-            preference: {
-                id: prefData.id
-            },
-            autoOpen: true // 👈 Abre la pasarela en una ventana modal sobre tu sitio
-        });
+        if (prefErr) throw prefErr;
+
+        if (prefData?.init_point) {
+            window.location.href = prefData.init_point;
+        } else if (prefData?.id) {
+            mp.checkout({
+                preference: { id: prefData.id },
+                autoOpen: true
+            });
+        } else {
+            // Si Mercado Pago devolvió un error (ej. credenciales inválidas), lo mostramos en pantalla:
+            const errorMsg = prefData?.message || prefData?.error || "Respuesta inválida de Mercado Pago.";
+            throw new Error(errorMsg);
+        }
 
     } catch (err) {
         console.error("Error al abrir la pasarela de Mercado Pago:", err);
-        alert("⚠️ No se pudo conectar con la pasarela de pago. Intenta de nuevo.");
+        alert("⚠️ No se pudo conectar con la pasarela de pago: " + err.message);
     }
 }
 

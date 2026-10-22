@@ -8,8 +8,7 @@ serve(async (req) => {
     // Mercado Pago envía notificaciones cuando se genera o actualiza un pago
     if (data.action === "payment.created" || data.type === "payment" || data.action === "payment.updated") {
       const paymentId = data.data?.id || data.id;
-      const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN") || "APP_USR-5830452230405605-100421-279442b033d45ef8d08595cb608be047-190181977";
-
+const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN") || "APP_USR-5830452230405605-100403-80ba0a7257f81d69c770efa3b6c02135-240030910";
       // 1. Consultar estado real del pago a la API de Mercado Pago
       const resMp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { "Authorization": `Bearer ${mpAccessToken}` }

@@ -12,8 +12,7 @@ serve(async (req) => {
 
   try {
     const { codigoPlan, monto, userId, originUrl } = await req.json()
-    const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN") || "APP_USR-5830452230405605-100421-279442b033d45ef8d08595cb608be047-190181977"
-
+  const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN") || "APP_USR-5830452230405605-100403-80ba0a7257f81d69c770efa3b6c02135-240030910";
     const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -31,7 +30,7 @@ serve(async (req) => {
         ],
         external_reference: userId,
         back_urls: {
-          success: `${originUrl}?plan=${codigoPlan}`,
+          success: `${originUrl}?plan=${codigoPlan}&collection_status=approved`,
           failure: `${originUrl}?pago=fallido`,
           pending: `${originUrl}?pago=pendiente`
         },
