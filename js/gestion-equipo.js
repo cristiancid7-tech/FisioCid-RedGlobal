@@ -455,7 +455,8 @@ document.getElementById('btnEnviarInvAPOYO')?.addEventListener('click', async ()
                 data: { 
                     display_name: nombre,
                     phone: telefono, 
-                    rol_sistema: rol  
+                    rol_sistema: rol,  
+                    es_staff: true
                 } 
             }
         });
