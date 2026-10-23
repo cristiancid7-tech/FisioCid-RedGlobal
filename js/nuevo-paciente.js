@@ -417,12 +417,12 @@ async function guardarTutorExpress() {
                 const consecutivoNum = datosFolio?.numero_consecutivo || 0;
 
                 await fisioNet.from('expedientes_clinicos').insert([{
-                    id_paciente: tutorFinalId,
-                    id_clinica: clinicaId,
-                    folio_personalizado: folioAsignado,
-                    numero_consecutivo: consecutivoNum,
-                    estado_expediente: 'ACTIVO'
-                }]);
+    id_paciente: tutorFinalId,
+    id_clinica: clinicaId,
+    folio_personalizado: folioAsignado,
+    numero_consecutivo: consecutivoNum, // 👈 Correcto
+    estado_expediente: 'ACTIVO'
+}]);
 
                 await fisioNet.from('pacientes_maestros').update({
                     numero_expediente_sede: folioAsignado
@@ -463,24 +463,21 @@ async function guardarTutorExpress() {
             }
 
             const payloadTutor = {
-                nombre: nombre,
-                apellido_paterno: paterno,
-                apellido_materno: materno,
-                fecha_nacimiento: fechaNac,
-                genero: genero,
-                estado_nacimiento: estado,
-                curp: curpCompleta,
-                telefono: tel,
-                correo_electronico: email,
-                creado_por: user?.id,
-                id_clinica: clinicaId,
-                id_clinica_origen: clinicaId,
-                nombre_clinica: localStorage.getItem('nombre_clinica'),
-                es_menor_edad: false,
-                acceso_red_activo: true,
-                numero_expediente_sede: folioAsignado, // 👈 CORRECCIÓN APLICADA: evita etiqueta S/F
-                fecha_registro: new Date().toISOString()
-            };
+    nombre: nombre,
+    apellido_paterno: paterno,
+    apellido_materno: materno,
+    fecha_nacimiento: fechaNac,
+    genero: genero,
+    curp: curpCompleta,
+    telefono: tel,
+    correo_electronico: email,
+    creado_por: user?.id,
+    id_clinica_origen: clinicaId,
+    nombre_clinica: localStorage.getItem('nombre_clinica'),
+    es_menor_edad: false,
+    acceso_red_activo: true,
+    fecha_registro: new Date().toISOString()
+};
 
             const { data: tutorInsertado, error: errTutor } = await fisioNet
                 .from('pacientes_maestros')
@@ -998,28 +995,42 @@ if (!chequeoCuota.permitido) {
         //console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
-        const payload = {
-            ...datos,
-            estado_nacimiento: estadoSeleccionado,
-            curp: curpFinal.length === 18 ? curpFinal : null,
-            creado_por: user.id, 
-            id_clinica: clinicaId, 
-            id_clinica_origen: clinicaId,
-            nombre_clinica: localStorage.getItem('nombre_clinica'),
-            es_menor_edad: esMenor,
-            id_tutor: esMenor ? uuidTutorSeleccionado : null,
-            nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
-            telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
-            parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
-            correo_tutor: esMenor ? emailTutor : null,
-            correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
-            numero_expediente_sede: folioSede,     
-            // 🛡️ CAMPOS OFICIALES DE CONSENTIMIENTO Y DESLINDE LEGAL
-            acceso_red_activo: accesoRed,
-            consentimiento_firmado: accesoRed,
-            fecha_firma_consentimiento: fechaConsentimiento,
-            notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null,
-        };
+    const payload = {
+    nombre: datos.nombre,
+    apellido_paterno: datos.apellido_paterno,
+    apellido_materno: datos.apellido_materno,
+    curp: curpFinal.length === 18 ? curpFinal : null,
+    fecha_nacimiento: datos.fecha_nacimiento || null,
+    genero: datos.genero,
+    creado_por: user.id,
+    id_clinica_origen: clinicaId,
+    nombre_clinica: localStorage.getItem('nombre_clinica'),
+    ocupacion: datos.ocupacion || null,
+    telefono: datos.telefono || null,
+    correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
+    direccion_completa: datos.direccion_completa || null,
+    contacto_emergencia_nombre: datos.contacto_emergencia_nombre || null,
+    contacto_emergencia_tel: datos.contacto_emergencia_tel || null,
+    es_menor_edad: esMenor,
+    id_tutor: esMenor ? uuidTutorSeleccionado : null,
+    nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
+    telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
+    parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
+    correo_tutor: esMenor ? emailTutor : null,
+    acceso_red_activo: accesoRed,
+    consentimiento_firmado: accesoRed,
+    fecha_firma_consentimiento: fechaConsentimiento,
+    tipo_sangre: datos.tipo_sangre || null,
+    lateralidad: datos.lateralidad || null,
+    alergias: datos.alergias || null,
+    antecedentes_quirurgicos: datos.antecedentes_quirurgicos || null,
+    antecedentes_patologicos: datos.antecedentes_patologicos || null,
+    antecedentes_no_patologicos: datos.antecedentes_no_patologicos || null,
+    antecedentes_heredofamiliares: datos.antecedentes_heredofamiliares || null,
+    farmacologia_activa: datos.farmacologia_activa || null,
+    alertas_seguridad: datos.alertas_seguridad || null,
+    notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null
+};
 
         let resultado;
         //console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
