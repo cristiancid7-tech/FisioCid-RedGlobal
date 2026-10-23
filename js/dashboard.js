@@ -2671,76 +2671,93 @@ function cerrarModalColega() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-   await cargarSedes();
-    // 1. Obtener usuario auténtico en tiempo real desde Supabase Auth
-    const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) { window.location.href = 'login.html'; return; }
+    try {
+        // 1. Usar getSession() en lugar de getUser() para la verificación asíncrona rápida en PWA/móvil
+        const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
 
-     iniciarCanalSalaEspera();
-
-    // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO (AHORA INCLUYE LA INSIGNIA)
-    const { data: perfilProf } = await fisioNet
-        .from('perfiles_profesionales')
-        .select('nombre_completo, insignia_especial')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    const nombreReal = perfilProf?.nombre_completo || user.user_metadata?.full_name || "COLABORADOR ACTIVO";
-    
-    // Sobrescribimos localStorage con la verdad de la base de datos
-    localStorage.setItem('nombre_completo', nombreReal);
-    localStorage.setItem('usuarioId', user.id);
-
-    // Actualizamos la bienvenida en pantalla
-    const txtSaludo = document.getElementById('txtSaludo');
-    if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
-
-    // ✨ LÓGICA DE LA INSIGNIA DORADA VIP
-    const contenedorInsignia = document.getElementById('contenedorInsigniaEspecial');
-    if (contenedorInsignia) {
-        if (perfilProf && perfilProf.insignia_especial) {
-            // Diseño premium dorado con sombra, gradiente y corona
-            contenedorInsignia.innerHTML = `
-                <span style="background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 900; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4); border: 1px solid #fef08a; text-transform: uppercase;">
-                    <i class="fas fa-crown" style="color: #fef08a; font-size: 0.8rem;"></i> ${perfilProf.insignia_especial}
-                </span>
-            `;
-            contenedorInsignia.style.display = 'block';
-        } else {
-            contenedorInsignia.style.display = 'none';
+        // Si no hay sesión o hay un error de autenticación, redirigimos al login
+        if (!session || sessionError) {
+            console.warn("No hay sesión activa en la PWA. Redirigiendo a login.html...");
+            window.location.replace('login.html');
+            return;
         }
+
+        const user = session.user;
+
+        // 2. Cargar las sedes
+        await cargarSedes();
+
+        // 3. Iniciar el canal de la sala de espera
+        iniciarCanalSalaEspera();
+
+        // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO (INCLUYE LA INSIGNIA)
+        const { data: perfilProf } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('nombre_completo, insignia_especial')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        const nombreReal = perfilProf?.nombre_completo || user.user_metadata?.full_name || "COLABORADOR ACTIVO";
+        
+        // Sobrescribimos localStorage con la verdad de la base de datos
+        localStorage.setItem('nombre_completo', nombreReal);
+        localStorage.setItem('usuarioId', user.id);
+
+        // Actualizamos la bienvenida en pantalla
+        const txtSaludo = document.getElementById('txtSaludo');
+        if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
+
+        // ✨ LÓGICA DE LA INSIGNIA DORADA VIP
+        const contenedorInsignia = document.getElementById('contenedorInsigniaEspecial');
+        if (contenedorInsignia) {
+            if (perfilProf && perfilProf.insignia_especial) {
+                contenedorInsignia.innerHTML = `
+                    <span style="background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 900; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4); border: 1px solid #fef08a; text-transform: uppercase;">
+                        <i class="fas fa-crown" style="color: #fef08a; font-size: 0.8rem;"></i> ${perfilProf.insignia_especial}
+                    </span>
+                `;
+                contenedorInsignia.style.display = 'block';
+            } else {
+                contenedorInsignia.style.display = 'none';
+            }
+        }
+
+        // 4. Asegurar la clínica activa en caso de que esté vacía en memoria
+        let clinicaActiva = localStorage.getItem('id_clinica_activa');
+        if (!clinicaActiva && typeof asegurarClinicaActiva === 'function') {
+            clinicaActiva = await asegurarClinicaActiva();
+        }
+
+        // Aplicar UI e Identidad Visual de la clínica seleccionada
+        await aplicarIdentidadVisual(); 
+        await actualizarInterfazSede(); 
+
+        if (clinicaActiva) {
+            await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
+        }
+
+        renderizarBotonesPorRol();
+
+        const inputFecha = document.getElementById('filtroFechaAgenda');
+        if (inputFecha) inputFecha.value = obtenerFechaLocal();
+
+        // Cargar los módulos secuenciales
+        await cargarAgenda('semana');
+        await cargarEstadisticas();
+        await cargarMonitorBoxes(); 
+        await cargarSolicitudesRecibidas();
+        await cargarSolicitudesRedPendientes();
+        await inicializarFormularioConvenio(); 
+
+        if (typeof renderizarTablaEquipo === 'function') await renderizarTablaEquipo();
+        if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas(); 
+        
+        await verificarInvitacionesPendientes(); 
+        await comprobarConfiguracionInicialRequerida();
+
+    } catch (err) {
+        console.error("Error crítico al inicializar el Dashboard:", err);
     }
-
-    const clinicaActiva = localStorage.getItem('id_clinica_activa');
-
-    // Aplicar UI básica e Identidad Visual de la clínica seleccionada
-    await aplicarIdentidadVisual(); 
-    await actualizarInterfazSede(); 
-
-    if (clinicaActiva) {
-        await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
-    }
-
-    renderizarBotonesPorRol();
-
-    const hoy = new Date();
-    const inputFecha = document.getElementById('filtroFechaAgenda');
-    if (inputFecha) inputFecha.value = obtenerFechaLocal();
-
-    // Cargar los módulos secuenciales
-    await cargarAgenda('semana');
-    await cargarEstadisticas();
-    await cargarMonitorBoxes(); 
-    await cargarSolicitudesRecibidas();
-    await cargarSolicitudesRedPendientes();
-    await inicializarFormularioConvenio(); 
-
-    if (typeof renderizarTablaEquipo === 'function') await renderizarTablaEquipo();
-    if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas(); 
-    
-    await verificarInvitacionesPendientes(); 
-    await comprobarConfiguracionInicialRequerida();
-  
 });
 
 async function verificarInvitacionesPendientes() {
