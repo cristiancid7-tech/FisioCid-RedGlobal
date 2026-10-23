@@ -1,10 +1,16 @@
-// A) LIMPIAR PERMISOS AL CARGAR LA PÁGINA (Si vienes de la lista de pacientes, se reinicia la seguridad)
+// ============================================================================
+// 🔒 A) LIMPIEZA DE PERMISOS OTP E INICIALIZACIÓN UNIFICADA
+// ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
     const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
     if (idPacienteLimpio) {
-        // Al entrar a una nueva consulta/recargar, eliminamos el pase anterior
         sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
     }
+    
+    // Ejecución inicial limpia
+    cargarExpedienteFijo();
+    inicializarEscuchaMotivo();
+    cargarDatosDesdeRecetaPendiente();
 });
 
 // B) LIMPIAR PERMISOS AL CERRAR O SALIR DE LA PÁGINA
@@ -1761,6 +1767,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const urlFirmada = urlData?.signedUrl || '';
 
+            // 🛡️ Búsqueda/Definición de la fecha de autorización del OTP
+            let fechaOtpStr = new Date().toISOString();
+            const otpActivoId = (typeof solicitudOTPActivaId !== 'undefined') ? solicitudOTPActivaId : null;
+
+            if (otpActivoId) {
+                const { data: datosOtp } = await fisioNet
+                    .from('solicitudes_acceso_otp')
+                    .select('fecha_autorizacion')
+                    .eq('id', otpActivoId)
+                    .maybeSingle();
+
+                if (datosOtp?.fecha_autorizacion) {
+                    fechaOtpStr = datosOtp.fecha_autorizacion;
+                }
+            }
+
             // 3. Insertar registro guardando la ruta del almacenamiento y la firma
             const { error: dbError } = await fisioNet
                 .from('paciente_evidencia_multimedia')
@@ -1774,9 +1796,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     descripcion: descripcion,
                     es_privado_clinica: true,
                     fecha_registro: new Date().toISOString(),
-
-                    id_otp_origen: solicitudOTPActivaId || null,
-        fecha_autorizacion_otp: fechaOtpStr || new Date().toISOString()
+                    id_otp_origen: otpActivoId,
+                    fecha_autorizacion_otp: fechaOtpStr
                 });
 
             if (dbError) throw dbError;
@@ -1800,7 +1821,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
-
 // =========================================================
 // 📂 CARGAR HISTORIAL CON GENERACIÓN DE URLS FIRMADAS DÍNAMICAS
 // =========================================================

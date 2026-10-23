@@ -150,6 +150,8 @@ function configurarBuscadorPaciente() {
             return;
         }
 
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
         debounceTimer = setTimeout(async () => {
             try {
                 const palabras = texto.split(/\s+/).filter(Boolean);
@@ -161,9 +163,16 @@ function configurarBuscadorPaciente() {
                     condiciones.push(`curp.ilike.%${palabra}%`);
                 });
 
+                // 🛡️ Consulta con INNER JOIN a expedientes_clinicos filtrado por sede activa
                 const { data: pacientes, error } = await fisioNet
                     .from('pacientes_maestros')
-                    .select('*')
+                    .select(`
+                        *,
+                        expedientes_clinicos!inner (
+                            id, folio_personalizado, numero_consecutivo, id_clinica
+                        )
+                    `)
+                    .eq('expedientes_clinicos.id_clinica', idClinicaActiva)
                     .or(condiciones.join(','))
                     .limit(8);
 
@@ -183,13 +192,19 @@ function configurarBuscadorPaciente() {
                             const apMat = p.apellido_materno || '';
                             const nombreCompleto = `${p.nombre} ${apPat} ${apMat}`.trim();
 
+                            const expLocal = Array.isArray(p.expedientes_clinicos) 
+                                ? p.expedientes_clinicos.find(e => String(e.id_clinica) === String(idClinicaActiva))
+                                : p.expedientes_clinicos;
+
+                            const folioStr = expLocal?.folio_personalizado || `EXP-${p.id}`;
+
                             btn.innerHTML = `
                                 <div class="d-flex justify-content-between align-items-center">
                                     <strong class="text-dark fs-7">${nombreCompleto.toUpperCase()}</strong>
-                                    <span class="badge bg-light text-secondary border">🎂 ${p.fecha_nacimiento || 'S/F'}</span>
+                                    <span class="badge bg-light text-primary border">📁 ${folioStr}</span>
                                 </div>
                                 <div class="text-muted mt-1" style="font-size: 0.65rem;">
-                                    <i class="fas fa-id-card me-1"></i>CURP: <span class="fw-bold text-primary">${p.curp || 'N/A'}</span>
+                                    <i class="fas fa-id-card me-1"></i>CURP: <span class="fw-bold text-secondary">${p.curp || 'N/A'}</span> | 🎂 ${p.fecha_nacimiento || 'S/F'}
                                 </div>
                             `;
 
@@ -208,7 +223,7 @@ function configurarBuscadorPaciente() {
                     if (listaSugerencias) listaSugerencias.classList.add('d-none');
                 }
             } catch (err) {
-                console.error("❌ Error en motor de búsqueda:", err.message || err);
+                console.error("❌ Error en motor de búsqueda de recetas:", err.message || err);
             }
         }, 300);
     });
@@ -262,7 +277,7 @@ function autorrellenarPaciente(p) {
     }
 
     congelarCamposIdentidad(true);
-    crearBotonDesbloqueoDinamico();
+    
     actualizarInterfazEdad();
     
     if (typeof gestionarFolioAutomatico === 'function') {
@@ -983,11 +998,10 @@ async function cargarPacienteDesdeEspera(item) {
     if (indEl && item.indicaciones_generales) indEl.value = item.indicaciones_generales;
 }
 
-// =====================================================================
-// 🤖 10. RENAPO Y BÚSQUEDA POR CURP
-// =====================================================================
 async function verificarPacienteExistentePorCurp(curp) {
     if (!curp || curp.length !== 18) return;
+    const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
     try {
         const { data: p, error } = await fisioNet
             .from('pacientes_maestros')
@@ -1000,8 +1014,13 @@ async function verificarPacienteExistentePorCurp(curp) {
         if (p) {
             autorrellenarPaciente(p);
             console.log("✅ Paciente localizado por CURP:", p.nombre);
+            
+            // 🛡️ Verificar si ya tiene folio asignado en esta sede o si requiere un expediente local
+            if (typeof gestionarFolioAutomatico === 'function') {
+                await gestionarFolioAutomatico(p.id);
+            }
         } else {
-            // 🎯 Si es paciente nuevo, se genera y muestra el folio consecutivo correspondiente
+            // 🎯 Paciente nuevo: generar y mostrar el folio consecutivo correspondiente de la sede
             if (!pacienteExistenteId && typeof gestionarFolioAutomatico === 'function') {
                 await gestionarFolioAutomatico(null);
             }

@@ -3108,15 +3108,16 @@ function renderizarBotonesPorRol() {
             esLongPress = false;
             btn.classList.add('presionando');
             
-            timerLongPress = setTimeout(() => {
-                esLongPress = true;
-                btn.classList.remove('presionando');
-                if (navigator.vibrate) navigator.vibrate(50); // Feedback háptico en móviles
-                
-                if (btnConfig.tieneQuickAction) {
-                    abrirBuscadorExpressPacientes();
-                }
-            }, 500); // 500ms para considerar mantenido
+            // Dentro de tu temporizador de Long-Press:
+timerLongPress = setTimeout(() => {
+    esLongPress = true;
+    btn.classList.remove('presionando');
+    if (navigator.vibrate) navigator.vibrate(50);
+    
+    if (btnConfig.tieneQuickAction) {
+        abrirBuscadorExpressPacientes(btn); // <-- Le pasamos 'btn' para saber dónde posicionarse
+    }
+}, 500);
         };
 
         const cancelarConteo = () => {
@@ -3154,133 +3155,223 @@ function renderizarBotonesPorRol() {
     });
 }
 
-// Abrir y construir modal flotante de búsqueda express
-function abrirBuscadorExpressPacientes() {
-    let modal = document.getElementById('modalQuickSearchPaciente');
+// Función para calcular edad desde fecha de nacimiento
+function calcularEdadQuick(fechaNac) {
+    if (!fechaNac) return 'N/E';
+    const hoy = new Date();
+    const nac = new Date(fechaNac);
+    let edad = hoy.getFullYear() - nac.getFullYear();
+    const m = hoy.getMonth() - nac.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+    return edad > 0 ? `${edad} años` : 'Menor a 1 año';
+}
+
+function abrirBuscadorExpressPacientes(elementoBoton) {
+    let popover = document.getElementById('popoverQuickSearch');
     
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'modalQuickSearchPaciente';
-        modal.className = 'modal-accion-rapida';
-        modal.innerHTML = `
-            <div class="modal-accion-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; font-size: 1rem; color: #0f172a; font-weight: 800;">⚡ Búsqueda Rápida de Paciente</h3>
-                    <button onclick="cerrarBuscadorExpress()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;">✕</button>
-                </div>
-                
-                <input type="text" id="inputQuickPaciente" placeholder="Escribe nombre o teléfono..." 
-                       style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.9rem; font-weight: 600; box-sizing: border-box; outline: none; margin-bottom: 12px;">
-                
-                <div id="resultadosQuickPaciente" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
-                    <small style="color: #94a3b8; text-align: center;">Escribe al menos 2 letras para buscar.</small>
-                </div>
+    if (!popover) {
+        popover = document.createElement('div');
+        popover.id = 'popoverQuickSearch';
+        popover.className = 'quick-popover-card';
+        document.body.appendChild(popover);
+    }
 
-                <div id="accionesPacienteSeleccionado" style="display: none; border-top: 1px solid #e2e8f0; padding-top: 15px;">
-                    <p id="lblPacienteSeleccionado" style="font-size: 0.8rem; font-weight: 800; color: #0f766e; margin: 0 0 10px 0; text-transform: uppercase;"></p>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <button onclick="ejecutarAccionExpress('expediente')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #1e293b; text-align: left;">📁 Abrir Historia</button>
-                        <button onclick="ejecutarAccionExpress('receta')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #1e293b; text-align: left;">📋 Crear Receta</button>
-                        <button onclick="ejecutarAccionExpress('gabinete')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #1e293b; text-align: left;">📡 Solicitar Estudio</button>
-                        <button onclick="ejecutarAccionExpress('cobro')" style="background: #dcfce7; border: 1px solid #86efac; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #166534; text-align: left;">💳 Registrar Cobro</button>
-                    </div>
-                </div>
+    popover.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 0.85rem; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Búsqueda Express</span>
+            <button onclick="cerrarBuscadorExpress()" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: #94a3b8;">✕</button>
+        </div>
+        
+        <input type="text" id="inputQuickPaciente" placeholder="Expediente, Nombre, CURP o Teléfono..." 
+               style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 600; box-sizing: border-box; outline: none; margin-bottom: 10px;">
+        
+        <div id="resultadosQuickPaciente" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+            <small style="color: #94a3b8; text-align: center; display: block; padding: 10px 0;">Escribe para buscar expediente en sede...</small>
+        </div>
+
+        <div id="panelAbanicoAcciones" class="abanico-acciones">
+            <div style="grid-column: span 2; margin-bottom: 6px;">
+                <p id="lblPacienteSeleccionado" style="font-size: 0.8rem; font-weight: 800; color: #0f766e; margin: 0; text-transform: uppercase;"></p>
+                <p id="lblDetallesPaciente" style="font-size: 0.72rem; color: #64748b; margin: 2px 0 0 0; font-weight: 600;"></p>
             </div>
-        `;
-        document.body.appendChild(modal);
+            
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('receta')">📋 Crear Receta</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('nota')">📝 Crear Nota</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('imagen')">📡 Estudio de Imagen</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('laboratorio')">🧪 Estudio Laboratorio</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('historial')" style="grid-column: span 2; background: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 800;">📁 Ver Historial Completo</button>
+        </div>
+    `;
 
-        // Búsqueda en tiempo real
-        document.getElementById('inputQuickPaciente').addEventListener('input', async (e) => {
-            const texto = e.target.value.trim().toUpperCase();
-            const contenedorRes = document.getElementById('resultadosQuickPaciente');
-            const clinicaId = localStorage.getItem('id_clinica_activa');
+    // POSICIONAMIENTO CONTEXTUAL
+    if (elementoBoton) {
+        const rect = elementoBoton.getBoundingClientRect();
+        const scrollY = window.scrollY || window.pageYOffset;
+        const scrollX = window.scrollX || window.pageXOffset;
 
-            if (texto.length < 2) {
-                contenedorRes.innerHTML = `<small style="color: #94a3b8; text-align: center;">Escribe al menos 2 letras para buscar.</small>`;
-                return;
-            }
+        let topPos = rect.top + scrollY - 240; 
+        if (topPos < scrollY + 10) {
+            topPos = rect.bottom + scrollY + 10;
+        }
 
-            contenedorRes.innerHTML = `<small style="color: #0f766e; text-align: center;">Buscando...</small>`;
+        let leftPos = rect.left + scrollX + (rect.width / 2) - 190;
+        if (leftPos < 10) leftPos = 10;
+        if (leftPos + 390 > window.innerWidth) leftPos = window.innerWidth - 400;
 
-            const { data: pacientes } = await fisioNet.from('pacientes_maestros')
-                .select('id, nombre, apellido_paterno, apellido_materno, telefono')
-                .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,telefono.ilike.%${texto}%`)
-                .eq('id_clinica', clinicaId)
-                .limit(4);
+        popover.style.top = `${topPos}px`;
+        popover.style.left = `${leftPos}px`;
+    }
+
+    setTimeout(() => popover.classList.add('activo'), 10);
+    const input = document.getElementById('inputQuickPaciente');
+    if (input) input.focus();
+
+    // LISTENER DE BÚSQUEDA CORREGIDO (CONSULTA DESDE PACIENTES_MAESTROS CON INNER JOIN A EXPEDIENTES_CLINICOS)
+    input.addEventListener('input', async (e) => {
+        const texto = e.target.value.trim().toUpperCase();
+        const contenedorRes = document.getElementById('resultadosQuickPaciente');
+        
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica');
+
+        const panelAbanico = document.getElementById('panelAbanicoAcciones');
+        if (panelAbanico) panelAbanico.classList.remove('desplegado');
+
+        if (texto.length < 2) {
+            contenedorRes.innerHTML = `<small style="color: #94a3b8; text-align: center; display: block; padding: 10px 0;">Escribe expediente, nombre, CURP o teléfono...</small>`;
+            return;
+        }
+
+        contenedorRes.innerHTML = `<small style="color: #0f766e; text-align: center; display: block; padding: 10px 0;">Buscando expedientes en sede...</small>`;
+
+        try {
+            // Buscamos en pacientes_maestros garantizando que exista en expedientes_clinicos de la sede activa
+            const { data: pacientes, error } = await fisioNet
+                .from('pacientes_maestros')
+                .select(`
+                    id,
+                    nombre,
+                    apellido_paterno,
+                    apellido_materno,
+                    curp,
+                    fecha_nacimiento,
+                    genero,
+                    telefono,
+                    expedientes_clinicos!inner (
+                        id,
+                        folio_personalizado,
+                        numero_consecutivo,
+                        id_clinica
+                    )
+                `)
+                .eq('expedientes_clinicos.id_clinica', idClinicaActiva)
+                .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,curp.ilike.%${texto}%,telefono.ilike.%${texto}%`);
+
+            if (error) throw error;
 
             contenedorRes.innerHTML = '';
 
             if (pacientes && pacientes.length > 0) {
                 pacientes.forEach(p => {
                     const div = document.createElement('div');
-                    div.style.cssText = "padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 700; color: #1e293b;";
-                    div.innerText = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
+                    div.className = 'quick-res-item';
                     
-                    div.onclick = () => seleccionarPacienteExpress(p);
+                    const edadStr = calcularEdadQuick(p.fecha_nacimiento);
+                    const curpStr = p.curp ? p.curp : 'SIN CURP';
+                    
+                    // Extraer expediente de la sede activa
+                    const expRel = Array.isArray(p.expedientes_clinicos) 
+                        ? p.expedientes_clinicos.find(e => String(e.id_clinica) === String(idClinicaActiva)) || p.expedientes_clinicos[0]
+                        : p.expedientes_clinicos;
+
+                    const folioExp = (expRel && expRel.folio_personalizado) 
+                        ? expRel.folio_personalizado 
+                        : (expRel && expRel.numero_consecutivo ? `EXP-${expRel.numero_consecutivo}` : `EXP-${p.id}`);
+
+                    div.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 800; color: #0f172a; font-size: 0.82rem;">${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}</span>
+                            <span style="background: #e0f2fe; color: #0369a1; font-size: 0.68rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; font-family: monospace;">📁 ${folioExp}</span>
+                        </div>
+                        <div style="font-size: 0.72rem; color: #64748b; margin-top: 3px;">
+                            <span>🎂 ${edadStr}</span> | <span style="font-family: monospace;">🆔 ${curpStr}</span>
+                        </div>
+                    `;
+                    
+                    div.onclick = () => seleccionarPacienteExpress({
+                        ...p,
+                        genero: p.genero || '',
+                        folio_expediente: folioExp
+                    });
+
                     contenedorRes.appendChild(div);
                 });
             } else {
-                contenedorRes.innerHTML = `<small style="color: #ef4444; text-align: center;">No se encontraron coincidencia.</small>`;
+                contenedorRes.innerHTML = `<small style="color: #ef4444; text-align: center; display: block; padding: 10px 0;">No existe expediente activo en esta sede.</small>`;
             }
-        });
-    }
-
-    setTimeout(() => modal.classList.add('activo'), 10);
-    document.getElementById('inputQuickPaciente').focus();
+        } catch (err) {
+            console.error("Error al consultar expedientes clínicas:", err);
+            contenedorRes.innerHTML = `<small style="color: #ef4444; text-align: center; display: block; padding: 10px 0;">Error al consultar expedientes.</small>`;
+        }
+    });
 }
 
 let pacienteSeleccionadoQuick = null;
 
 function seleccionarPacienteExpress(paciente) {
-    pacienteSeleccionadoQuick = paciente;
-    const lbl = document.getElementById('lblPacienteSeleccionado');
-    const panelAcciones = document.getElementById('accionesPacienteSeleccionado');
+    pacienteSeleccionadoQuick = {
+        ...paciente,
+        genero: paciente.genero || paciente.sexo || ''
+    };
 
-    lbl.innerText = `👤 PACIENTE: ${paciente.nombre} ${paciente.apellido_paterno}`;
-    panelAcciones.style.display = 'block';
+    const edadStr = calcularEdadQuick(paciente.fecha_nacimiento);
+    const folioExp = paciente.folio_expediente ? paciente.folio_expediente : `EXP-${paciente.id}`;
+
+    document.getElementById('lblPacienteSeleccionado').innerText = `👤 ${paciente.nombre} ${paciente.apellido_paterno}`;
+    document.getElementById('lblDetallesPaciente').innerText = `Expediente: ${folioExp} | Edad: ${edadStr}`;
+    
+    document.getElementById('panelAbanicoAcciones').classList.add('desplegado');
 }
 
 function cerrarBuscadorExpress() {
-    const modal = document.getElementById('modalQuickSearchPaciente');
-    if (modal) {
-        modal.classList.remove('activo');
+    const popover = document.getElementById('popoverQuickSearch');
+    if (popover) {
+        popover.classList.remove('activo');
         pacienteSeleccionadoQuick = null;
-        const panelAcciones = document.getElementById('accionesPacienteSeleccionado');
-        if (panelAcciones) panelAcciones.style.display = 'none';
-        const input = document.getElementById('inputQuickPaciente');
-        if (input) input.value = '';
     }
 }
 
-function ejecutarAccionExpress(tipo) {
-    if (!pacienteSeleccionadoQuick) return;
+window.ejecutarAccionExpress = function(tipo) {
+    if (!pacienteSeleccionadoQuick) {
+        alert("Por favor selecciona un paciente de la lista primero.");
+        return;
+    }
 
+    // Guardar contexto en localStorage
     localStorage.setItem('paciente_seleccionado_id', pacienteSeleccionadoQuick.id);
+    localStorage.setItem('id_paciente_activo', pacienteSeleccionadoQuick.id);
     localStorage.setItem('paciente_precargado', JSON.stringify(pacienteSeleccionadoQuick));
 
     cerrarBuscadorExpress();
 
+    // Redirección directa por ruta
     switch (tipo) {
-        case 'expediente':
-            window.location.href = 'historial-evolucion.html';
-            break;
         case 'receta':
             window.location.href = 'portal-recetas.html';
             break;
-        case 'gabinete':
+        case 'nota':
+            window.location.href = 'historia-clinica.html';
+            break;
+        case 'imagen':
             window.location.href = 'portal-gabinete.html';
             break;
-        case 'cobro':
-            const nombreFull = `${pacienteSeleccionadoQuick.nombre} ${pacienteSeleccionadoQuick.apellido_paterno}`;
-            if (typeof dispararModalCobroAsistido === 'function') {
-                dispararModalCobroAsistido(null, pacienteSeleccionadoQuick.id, nombreFull, 800, "CONSULTA FISIOTERAPIA");
-            } else {
-                window.location.href = 'finanzas.html';
-            }
+        case 'laboratorio':
+            window.location.href = 'portal-laboratorio.html';
+            break;
+        case 'historial':
+            window.location.href = 'historial-evolucion.html';
             break;
     }
-}
+};
 function cargarHorariosEnModal(dataHorarios) {
     const contenedor = document.getElementById('contenedorHorarios');
     if (!contenedor) return;
