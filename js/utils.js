@@ -76,7 +76,7 @@ export async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
 // ==========================================
 export async function verificarPerfilCompleto() {
     const rolActual = localStorage.getItem('rol_actual');
-    const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'DUENO' && rolActual !== 'INDEPENDIENTE' &&  rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
+    const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'DUENO' && rolActual !== 'INDEPENDIENTE' && rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
 
     if (esStaff) return;
 
@@ -89,31 +89,58 @@ export async function verificarPerfilCompleto() {
     if (paginaActual.includes('configuracion.html') || paginaActual.includes('suscripcion.html')) return;
 
     try {
-        const [perfilRes, clinicaRes] = await Promise.all([
-            fisioNet.from('perfiles_profesionales').select('*').eq('id', user.id).single(),
-            fisioNet.from('clinicas').select('*').eq('id_dueno', user.id).maybeSingle()
-        ]);
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
-        const perfil = perfilRes.data;
-        const clinica = clinicaRes.data;
+        // 🎯 1. CONSULTAR PERFIL PROFESIONAL (GLOBAL POR USER.ID)
+        const { data: perfil } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
 
-        // A. REVISIÓN DE PERFIL INCOMPLETO
-        const incompleto = 
+        // 🎯 2. CONSULTAR LA SUCURSAL ACTIVA (SI EXISTE ID EN LOCALSTORAGE)
+        let clinica = null;
+        if (idClinicaActiva) {
+            const { data: clinicaActivaData } = await fisioNet
+                .from('clinicas')
+                .select('*')
+                .eq('id', idClinicaActiva)
+                .maybeSingle();
+            clinica = clinicaActivaData;
+        }
+
+        // Si no hay idClinicaActiva o no existe la fila, buscamos por id_dueno como fallback
+        if (!clinica) {
+            const { data: clinicaDuenoData } = await fisioNet
+                .from('clinicas')
+                .select('*')
+                .eq('id_dueno', user.id)
+                .maybeSingle();
+            clinica = clinicaDuenoData;
+        }
+
+        // 🎯 3. EVALUACIÓN DE REQUISITOS OBLIGATORIOS
+        const perfilIncompleto = 
             !perfil?.nombre_completo || 
             !perfil?.cedula_profesional || 
             !perfil?.especialidad || 
-            !perfil?.deslinde_aceptado ||
+            !perfil?.deslinde_aceptado;
+
+        const clinicaIncompleta = 
             !clinica?.nombre_clinica || 
             !clinica?.direccion;
 
-        if (incompleto) {
-            console.warn("Perfil incompleto. Redirigiendo a configuración...");
+        if (perfilIncompleto || clinicaIncompleta) {
+            console.warn("Perfil o Clínica activa incompleta. Redirigiendo a configuración...");
             sessionStorage.setItem('mensaje_bloqueo', '⚠️ DEBES COMPLETAR TU CONFIGURACIÓN PROFESIONAL Y ACEPTAR EL DESLINDE LEGAL ANTES DE USAR EL SISTEMA.');
             window.location.href = 'configuracion.html';
             return;
+        } else {
+            // Si todo está correcto, limpiamos mensajes viejos para evitar alertas fantasma
+            sessionStorage.removeItem('mensaje_bloqueo');
         }
 
-        // B. REVISIÓN DE SUSCRIPCIÓN EXPIRADA O INACTIVA
+        // 🎯 4. REVISIÓN DE SUSCRIPCIÓN EXPIRADA O INACTIVA
         if (perfil) {
             const hoy = new Date();
             const fechaExp = perfil.fecha_expiracion ? new Date(perfil.fecha_expiracion) : null;

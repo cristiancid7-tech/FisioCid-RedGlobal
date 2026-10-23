@@ -282,6 +282,9 @@ async function llenarFormularioCompleto(p) {
 // =====================================================================
 // 🔍 VERIFICADOR CENTRAL DE CURP EN RED FISIOCID
 // =====================================================================
+// =====================================================================
+// 🔍 VERIFICADOR CENTRAL DE CURP EN RED FISIOCID
+// =====================================================================
 async function verificarPacienteExistentePorCurp(curpCompleta) {
     if (!curpCompleta || curpCompleta.length !== 18) return;
 
@@ -338,6 +341,205 @@ async function verificarPacienteExistentePorCurp(curpCompleta) {
         if (statusFolio) {
             statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error de conexión con expedientes';
         }
+    }
+}
+
+// =====================================================================
+// 💾 REGISTRO / GUARDADO DE TUTOR EXPRESS (MODAL)
+// =====================================================================
+async function guardarTutorExpress() {
+    const nombre = document.getElementById('tutExpNombre')?.value.trim().toUpperCase();
+    const paterno = document.getElementById('tutExpPaterno')?.value.trim().toUpperCase();
+    const materno = document.getElementById('tutExpMaterno')?.value.trim().toUpperCase() || "";
+    const fechaNac = document.getElementById('tutExpFecha')?.value;
+    const genero = document.getElementById('tutExpGenero')?.value;
+    const estado = document.getElementById('tutExpEstado')?.value;
+    const tel = document.getElementById('tutExpTel')?.value.trim();
+    const email = document.getElementById('tutExpEmail')?.value.trim().toLowerCase() || null;
+    
+    const curpBase = document.getElementById('tutExpCurpBase')?.value.trim().toUpperCase() || "";
+    const curpHomo = document.getElementById('tutExpCurpHomo')?.value.trim().toUpperCase() || "";
+    const curpCompleta = (curpBase + curpHomo).length === 18 ? (curpBase + curpHomo) : null;
+
+    if (!nombre || !paterno || !fechaNac || !tel || tel.length < 10) {
+        alert("⚠️ Por favor completa los campos obligatorios (*): Nombre, A. Paterno, Fecha Nac. y Teléfono a 10 dígitos.");
+        return;
+    }
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+        let tutorFinalId = tutorExpressExistenteId;
+        let nombreCompleto = `${nombre} ${paterno} ${materno}`.trim();
+        let folioInfoMensaje = "";
+
+        // 🛡️ BÚSQUEDA DE SEGURIDAD ANTI-DUPLICADOS (Por CURP o Nombre + Fecha)
+        if (!tutorFinalId && curpCompleta) {
+            const { data: tutorExiste } = await fisioNet
+                .from('pacientes_maestros')
+                .select('id')
+                .eq('curp', curpCompleta)
+                .maybeSingle();
+            if (tutorExiste) tutorFinalId = tutorExiste.id;
+        }
+
+        if (!tutorFinalId) {
+            const { data: tutorNombreExiste } = await fisioNet
+                .from('pacientes_maestros')
+                .select('id')
+                .ilike('nombre', nombre)
+                .ilike('apellido_paterno', paterno)
+                .eq('fecha_nacimiento', fechaNac)
+                .maybeSingle();
+            if (tutorNombreExiste) tutorFinalId = tutorNombreExiste.id;
+        }
+
+        // 🅰️ CASO 1: EL TUTOR YA EXISTE EN LA RED (REUTILIZAR Y VINCULAR A ESTA CLÍNICA)
+        if (tutorFinalId) {
+            await fisioNet.from('pacientes_maestros').update({
+                telefono: tel,
+                correo_electronico: email
+            }).eq('id', tutorFinalId);
+
+            const { data: expExistente } = await fisioNet
+                .from('expedientes_clinicos')
+                .select('folio_personalizado')
+                .eq('id_paciente', tutorFinalId)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle();
+
+            if (expExistente) {
+                folioInfoMensaje = `Expediente en sede: ${expExistente.folio_personalizado}`;
+            } else {
+                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+                const folioAsignado = datosFolio?.folio || null;
+                const consecutivoNum = datosFolio?.numero_consecutivo || 0;
+
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: tutorFinalId,
+                    id_clinica: clinicaId,
+                    folio_personalizado: folioAsignado,
+                    numero_consecutivo: consecutivoNum,
+                    estado_expediente: 'ACTIVO'
+                }]);
+
+                await fisioNet.from('pacientes_maestros').update({
+                    numero_expediente_sede: folioAsignado
+                }).eq('id', tutorFinalId);
+
+                folioInfoMensaje = `Nuevo expediente en sede asignado: ${folioAsignado}`;
+            }
+
+            const { data: vinculoExistente } = await fisioNet
+                .from('vinculos_clinicos')
+                .select('id')
+                .eq('paciente_id', tutorFinalId)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle();
+
+            if (!vinculoExistente) {
+                await fisioNet.from('vinculos_clinicos').insert([{
+                    paciente_id: tutorFinalId,
+                    profesional_id: user?.id,
+                    id_clinica: clinicaId,
+                    rol_en_relacion: 'OPERATIVO',
+                    estado_vinculo: 'ACTIVO'
+                }]);
+            }
+        } 
+        // 🅱️ CASO 2: ES UN TUTOR NUEVO ABSOLUTO EN LA RED
+        else {
+            let folioAsignado = document.getElementById('inputFolioTutorExpress')?.value;
+            let consecutivoNum = 0;
+
+            if (!folioAsignado) {
+                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+                folioAsignado = datosFolio?.folio || null;
+                consecutivoNum = datosFolio?.numero_consecutivo || 0;
+            } else {
+                const partes = folioAsignado.split('-');
+                consecutivoNum = parseInt((partes[partes.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+            }
+
+            const payloadTutor = {
+                nombre: nombre,
+                apellido_paterno: paterno,
+                apellido_materno: materno,
+                fecha_nacimiento: fechaNac,
+                genero: genero,
+                estado_nacimiento: estado,
+                curp: curpCompleta,
+                telefono: tel,
+                correo_electronico: email,
+                creado_por: user?.id,
+                id_clinica: clinicaId,
+                id_clinica_origen: clinicaId,
+                nombre_clinica: localStorage.getItem('nombre_clinica'),
+                es_menor_edad: false,
+                acceso_red_activo: true,
+                numero_expediente_sede: folioAsignado, // 👈 CORRECCIÓN APLICADA: evita etiqueta S/F
+                fecha_registro: new Date().toISOString()
+            };
+
+            const { data: tutorInsertado, error: errTutor } = await fisioNet
+                .from('pacientes_maestros')
+                .insert([payloadTutor])
+                .select();
+
+            if (errTutor) throw errTutor;
+
+            if (tutorInsertado && tutorInsertado.length > 0) {
+                tutorFinalId = tutorInsertado[0].id;
+
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: tutorFinalId,
+                    id_clinica: clinicaId,
+                    folio_personalizado: folioAsignado,
+                    numero_consecutivo: consecutivoNum,
+                    estado_expediente: 'ACTIVO'
+                }]);
+
+                await fisioNet.from('vinculos_clinicos').insert([{
+                    paciente_id: tutorFinalId,
+                    profesional_id: user?.id,
+                    id_clinica: clinicaId,
+                    rol_en_relacion: 'OPERATIVO',
+                    estado_vinculo: 'ACTIVO'
+                }]);
+
+                folioInfoMensaje = `Nuevo folio asignado: ${folioAsignado || 'S/N'}`;
+            }
+        }
+
+        // 🎯 INYECTAR DATOS DE TUTOR Y RECALCULAR FOLIO PRINCIPAL (PARA EL MENOR)
+        if (tutorFinalId) {
+            const inputNombreTutor = document.getElementById('tutor-nombre');
+            const inputTelTutor = document.getElementById('tutor-tel');
+            const inputEmailTutor = document.getElementById('correo-tutor');
+            const inputIdTutor = document.getElementById('idTutorSeleccionado');
+
+            if (inputNombreTutor) inputNombreTutor.value = nombreCompleto;
+            if (inputTelTutor) inputTelTutor.value = tel;
+            if (inputEmailTutor) inputEmailTutor.value = email || "";
+            if (inputIdTutor) inputIdTutor.value = tutorFinalId;
+
+            // 🔄 Recalcular el folio para el paciente menor en el formulario principal
+            await gestionarFolioAutomatico(null, 'inputFolioExpediente', 'statusFolio');
+
+            alert(`✅ ¡Tutor listo y enlazado!\n📄 ${folioInfoMensaje}\n🔗 Vinculado al expediente del menor y folio actualizado.`);
+
+            tutorExpressExistenteId = null;
+            const modalEl = document.getElementById('modalTutorExpress');
+            if (modalEl) {
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) modalInstance.hide();
+            }
+        }
+
+    } catch (err) {
+        console.error("💥 Error al procesar tutor express:", err);
+        alert("Error al registrar tutor: " + (err.message || "Error de conexión"));
     }
 }
 
@@ -1493,190 +1695,6 @@ document.getElementById('tutExpCurpHomo')?.addEventListener('input', async (e) =
 
 
 
-async function guardarTutorExpress() {
-    const nombre = document.getElementById('tutExpNombre')?.value.trim().toUpperCase();
-    const paterno = document.getElementById('tutExpPaterno')?.value.trim().toUpperCase();
-    const materno = document.getElementById('tutExpMaterno')?.value.trim().toUpperCase() || "";
-    const fechaNac = document.getElementById('tutExpFecha')?.value;
-    const genero = document.getElementById('tutExpGenero')?.value;
-    const estado = document.getElementById('tutExpEstado')?.value;
-    const tel = document.getElementById('tutExpTel')?.value.trim();
-    const email = document.getElementById('tutExpEmail')?.value.trim().toLowerCase() || null;
-    
-    const curpBase = document.getElementById('tutExpCurpBase')?.value.trim().toUpperCase() || "";
-    const curpHomo = document.getElementById('tutExpCurpHomo')?.value.trim().toUpperCase() || "";
-    const curpCompleta = (curpBase + curpHomo).length === 18 ? (curpBase + curpHomo) : null;
-
-    if (!nombre || !paterno || !fechaNac || !tel || tel.length < 10) {
-        alert("⚠️ Por favor completa los campos obligatorios (*): Nombre, A. Paterno, Fecha Nac. y Teléfono a 10 dígitos.");
-        return;
-    }
-
-    try {
-        const { data: { user } } = await fisioNet.auth.getUser();
-        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-
-        let tutorFinalId = tutorExpressExistenteId;
-        let nombreCompleto = `${nombre} ${paterno} ${materno}`.trim();
-        let folioInfoMensaje = "";
-
-        // 🛡️ BÚSQUEDA DE SEGURIDAD ANTI-DUPLICADOS (Por CURP o Nombre + Fecha)
-        if (!tutorFinalId && curpCompleta) {
-            const { data: tutorExiste } = await fisioNet
-                .from('pacientes_maestros')
-                .select('id')
-                .eq('curp', curpCompleta)
-                .maybeSingle();
-            if (tutorExiste) tutorFinalId = tutorExiste.id;
-        }
-
-        if (!tutorFinalId) {
-            const { data: tutorNombreExiste } = await fisioNet
-                .from('pacientes_maestros')
-                .select('id')
-                .ilike('nombre', nombre)
-                .ilike('apellido_paterno', paterno)
-                .eq('fecha_nacimiento', fechaNac)
-                .maybeSingle();
-            if (tutorNombreExiste) tutorFinalId = tutorNombreExiste.id;
-        }
-
-        // 🅰️ CASO 1: EL TUTOR YA EXISTE EN LA RED (REUTILIZAR Y VINCULAR A ESTA CLÍNICA)
-        if (tutorFinalId) {
-            // Actualizar teléfonos o correos si sufrieron cambios
-            await fisioNet.from('pacientes_maestros').update({
-                telefono: tel,
-                correo_electronico: email
-            }).eq('id', tutorFinalId);
-
-            // Verificar si el tutor ya tiene expediente activo en esta sede
-            const { data: expExistente } = await fisioNet
-                .from('expedientes_clinicos')
-                .select('folio_personalizado')
-                .eq('id_paciente', tutorFinalId)
-                .eq('id_clinica', clinicaId)
-                .maybeSingle();
-
-            if (expExistente) {
-                folioInfoMensaje = `Expediente en sede: ${expExistente.folio_personalizado}`;
-            } else {
-                // Generar expediente de esta clínica para el tutor reutilizado
-                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
-                const folioAsignado = datosFolio?.folio || null;
-                const consecutivoNum = datosFolio?.numero_consecutivo || 0;
-
-                await fisioNet.from('expedientes_clinicos').insert([{
-                    id_paciente: tutorFinalId,
-                    id_clinica: clinicaId,
-                    folio_personalizado: folioAsignado,
-                    numero_consecutivo: consecutivoNum,
-                    estado_expediente: 'ACTIVO'
-                }]);
-
-                folioInfoMensaje = `Nuevo expediente en sede asignado: ${folioAsignado}`;
-            }
-
-            // Asegurar vínculo clínico con el profesional activo
-            const { data: vinculoExistente } = await fisioNet
-                .from('vinculos_clinicos')
-                .select('id')
-                .eq('paciente_id', tutorFinalId)
-                .eq('id_clinica', clinicaId)
-                .maybeSingle();
-
-            if (!vinculoExistente) {
-                await fisioNet.from('vinculos_clinicos').insert([{
-                    paciente_id: tutorFinalId,
-                    profesional_id: user?.id,
-                    id_clinica: clinicaId,
-                    rol_en_relacion: 'OPERATIVO',
-                    estado_vinculo: 'ACTIVO'
-                }]);
-            }
-
-        } 
-        // 🅱️ CASO 2: ES UN TUTOR NUEVO ABSOLUTO EN LA RED
-        else {
-            const payloadTutor = {
-                nombre: nombre,
-                apellido_paterno: paterno,
-                apellido_materno: materno,
-                fecha_nacimiento: fechaNac,
-                genero: genero,
-                estado_nacimiento: estado,
-                curp: curpCompleta,
-                telefono: tel,
-                correo_electronico: email,
-                creado_por: user?.id,
-                id_clinica: clinicaId,
-                id_clinica_origen: clinicaId,
-                nombre_clinica: localStorage.getItem('nombre_clinica'),
-                es_menor_edad: false,
-                acceso_red_activo: true,
-                fecha_registro: new Date().toISOString()
-            };
-
-            const { data: tutorInsertado, error: errTutor } = await fisioNet
-                .from('pacientes_maestros')
-                .insert([payloadTutor])
-                .select();
-
-            if (errTutor) throw errTutor;
-
-            if (tutorInsertado && tutorInsertado.length > 0) {
-                tutorFinalId = tutorInsertado[0].id;
-
-                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
-                const folioAsignado = datosFolio?.folio || null;
-                const consecutivoNum = datosFolio?.numero_consecutivo || 0;
-
-                await fisioNet.from('expedientes_clinicos').insert([{
-                    id_paciente: tutorFinalId,
-                    id_clinica: clinicaId,
-                    folio_personalizado: folioAsignado,
-                    numero_consecutivo: consecutivoNum,
-                    estado_expediente: 'ACTIVO'
-                }]);
-
-                await fisioNet.from('vinculos_clinicos').insert([{
-                    paciente_id: tutorFinalId,
-                    profesional_id: user?.id,
-                    id_clinica: clinicaId,
-                    rol_en_relacion: 'OPERATIVO',
-                    estado_vinculo: 'ACTIVO'
-                }]);
-
-                folioInfoMensaje = `Nuevo folio asignado: ${folioAsignado || 'S/N'}`;
-            }
-        }
-
-        // 🎯 INYECTAR DATOS DE TUTOR EN EL FORMULARIO PRINCIPAL DEL MENOR
-        if (tutorFinalId) {
-            const inputNombreTutor = document.getElementById('tutor-nombre');
-            const inputTelTutor = document.getElementById('tutor-tel');
-            const inputEmailTutor = document.getElementById('correo-tutor');
-            const inputIdTutor = document.getElementById('idTutorSeleccionado');
-
-            if (inputNombreTutor) inputNombreTutor.value = nombreCompleto;
-            if (inputTelTutor) inputTelTutor.value = tel;
-            if (inputEmailTutor) inputEmailTutor.value = email || "";
-            if (inputIdTutor) inputIdTutor.value = tutorFinalId;
-
-            alert(`✅ ¡Tutor listo y enlazado!\n📄 ${folioInfoMensaje}\n🔗 Vinculado al expediente del menor.`);
-
-            tutorExpressExistenteId = null;
-            const modalEl = document.getElementById('modalTutorExpress');
-            if (modalEl) {
-                const modalInstance = bootstrap.Modal.getInstance(modalEl);
-                if (modalInstance) modalInstance.hide();
-            }
-        }
-
-    } catch (err) {
-        console.error("💥 Error al procesar tutor express:", err);
-        alert("Error al registrar tutor: " + (err.message || "Error de conexión"));
-    }
-}
 
 async function abrirModalTutorExpress() {
     const modalEl = document.getElementById('modalTutorExpress');

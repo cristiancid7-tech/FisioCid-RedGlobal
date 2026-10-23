@@ -304,52 +304,7 @@ function congelarCamposIdentidad(bloquear) {
     }
 }
 
-function crearBotonDesbloqueoDinamico() {
-    document.getElementById('btnDesbloquearFichaLab')?.remove();
-    const contenedorCurp = document.getElementById('curp-parte1')?.closest('.col-12');
-    if (!contenedorCurp) return;
 
-    const wrapper = document.createElement('div');
-    wrapper.id = 'btnDesbloquearFichaLab';
-    wrapper.className = 'mt-2 text-end';
-    
-    wrapper.innerHTML = `
-        <button type="button" class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" style="border-radius: 8px; background-color: #ecc94b; color: #000; border: none; font-size:0.75rem;">
-            <i class="fas fa-lock"></i> ✏️ Corregir Datos de Identidad
-        </button>
-    `;
-
-    contenedorCurp.appendChild(wrapper);
-
-    wrapper.querySelector('button').addEventListener('click', async () => {
-        const p = window.pacienteCargado;
-        const esMenor = !document.getElementById('seccion-tutor')?.classList.contains('d-none');
-        const telefonoDestino = esMenor ? (p?.telefono_tutor || document.getElementById('tutor-tel')?.value) : (p?.telefono || document.getElementById('tel-manual')?.value);
-        
-        if (!telefonoDestino || telefonoDestino.trim() === "") {
-            alert("⚠️ Error: El paciente no cuenta con un teléfono registrado para el envío del código OTP.");
-            return;
-        }
-
-        const tokenSeguridad = Math.floor(100000 + Math.random() * 900000);
-        alert(`🛡️ PROTOCOLO DE EDICIÓN FISIOCID:\nCódigo enviado al celular: ${telefonoDestino}\n👉 (Código de Autorización: ${tokenSeguridad})`);
-
-        const codigoIngresado = prompt("🔒 Ingrese el código OTP de 6 dígitos:");
-        
-        if (String(codigoIngresado) === String(tokenSeguridad)) {
-            edicionFichaAutorizada = true; 
-            congelarCamposIdentidad(false); 
-            
-            const btn = wrapper.querySelector('button');
-            btn.className = "btn btn-success btn-sm fw-bold px-3 disabled";
-            btn.innerHTML = '<i class="fas fa-lock-open"></i> Modo Edición Activo';
-            btn.style.backgroundColor = "#48bb78";
-            btn.style.color = "#ffffff";
-        } else {
-            alert("❌ Código incorrecto. Datos maestros protegidos.");
-        }
-    });
-}
 
 // ============================================================================
 // 4. AUTO-REGISTRO DE PACIENTE MAESTRO
@@ -380,6 +335,12 @@ async function registrarPacienteNuevo() {
         throw new Error("Por favor captura al menos el Nombre y Apellido Paterno.");
     }
 
+    // 🎯 Calcular el nuevo folio consecutivo
+    const resFolio = await gestionarFolioAutomatico(null);
+    const folioSede = resFolio?.folio || document.getElementById('inputFolioExpediente')?.value || null;
+    const partesFolio = (folioSede || "").split('-');
+    const consecutivoFinal = parseInt((partesFolio[partesFolio.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+
     const payloadPaciente = {
         nombre: nombreVal.toUpperCase(),
         apellido_paterno: paternoVal.toUpperCase(),
@@ -394,6 +355,7 @@ async function registrarPacienteNuevo() {
         id_clinica: clinicaId,
         id_clinica_origen: clinicaId,
         nombre_clinica: localStorage.getItem('nombre_clinica') || 'FisioCid',
+        numero_expediente_sede: folioSede, // 👈 Se asigna para sincronizar con la lista de pacientes
         fecha_registro: new Date().toISOString(),
         acceso_red_activo: true,
         consentimiento_firmado: true,
@@ -417,11 +379,6 @@ async function registrarPacienteNuevo() {
         rol_en_relacion: 'OPERATIVO',
         estado_vinculo: 'ACTIVO'
     }]);
-
-    const resFolio = await gestionarFolioAutomatico(null);
-    const folioSede = resFolio?.folio || document.getElementById('inputFolioExpediente')?.value || null;
-    const partesFolio = (folioSede || "").split('-');
-    const consecutivoFinal = parseInt((partesFolio[partesFolio.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
 
     await fisioNet.from('expedientes_clinicos').insert([{
         id_paciente: nuevoPacienteId,
@@ -1044,7 +1001,7 @@ async function verificarPacienteExistentePorCurp(curp) {
             autorrellenarPaciente(p);
             console.log("✅ Paciente localizado por CURP:", p.nombre);
         } else {
-            // 🎯 SOLUCIÓN: Si es paciente nuevo, se genera el folio consecutivo de la sede
+            // 🎯 Si es paciente nuevo, se genera y muestra el folio consecutivo correspondiente
             if (!pacienteExistenteId && typeof gestionarFolioAutomatico === 'function') {
                 await gestionarFolioAutomatico(null);
             }
@@ -1173,7 +1130,9 @@ async function guardarTutorExpress() {
 
         let tutorFinalId = tutorExpressExistenteId;
         let nombreCompleto = `${nombre} ${paterno} ${materno}`.trim();
+        let folioInfoMensaje = "";
 
+        // 🛡️ BÚSQUEDA ANTI-DUPLICADOS
         if (!tutorFinalId && curpCompleta) {
             const { data: tutorExiste } = await fisioNet
                 .from('pacientes_maestros')
@@ -1183,12 +1142,58 @@ async function guardarTutorExpress() {
             if (tutorExiste) tutorFinalId = tutorExiste.id;
         }
 
+        // 🅰️ CASO 1: REUTILIZAR TUTOR EXISTENTE
         if (tutorFinalId) {
             await fisioNet.from('pacientes_maestros').update({
                 telefono: tel,
                 correo_electronico: email
             }).eq('id', tutorFinalId);
-        } else {
+
+            const { data: expExistente } = await fisioNet
+                .from('expedientes_clinicos')
+                .select('folio_personalizado')
+                .eq('id_paciente', tutorFinalId)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle();
+
+            if (expExistente) {
+                folioInfoMensaje = `Expediente en sede: ${expExistente.folio_personalizado}`;
+            } else {
+                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+                const folioAsignado = datosFolio?.folio || null;
+                const consecutivoNum = datosFolio?.numero_consecutivo || 0;
+
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: tutorFinalId,
+                    id_clinica: clinicaId,
+                    folio_personalizado: folioAsignado,
+                    numero_consecutivo: consecutivoNum,
+                    estado_expediente: 'ACTIVO'
+                }]);
+
+                // 🎯 Guardar número en pacientes_maestros para evitar el S/F
+                await fisioNet.from('pacientes_maestros').update({
+                    numero_expediente_sede: folioAsignado
+                }).eq('id', tutorFinalId);
+
+                folioInfoMensaje = `Nuevo expediente en sede: ${folioAsignado}`;
+            }
+
+        } 
+        // 🅱️ CASO 2: TUTOR NUEVO ABSOLUTO
+        else {
+            let folioAsignado = document.getElementById('inputFolioTutorExpress')?.value;
+            let consecutivoNum = 0;
+
+            if (!folioAsignado) {
+                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
+                folioAsignado = datosFolio?.folio || null;
+                consecutivoNum = datosFolio?.numero_consecutivo || 0;
+            } else {
+                const partes = folioAsignado.split('-');
+                consecutivoNum = parseInt((partes[partes.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+            }
+
             const payloadTutor = {
                 nombre: nombre,
                 apellido_paterno: paterno,
@@ -1205,6 +1210,7 @@ async function guardarTutorExpress() {
                 nombre_clinica: localStorage.getItem('nombre_clinica'),
                 es_menor_edad: false,
                 acceso_red_activo: true,
+                numero_expediente_sede: folioAsignado, // 👈 Evita etiqueta S/F
                 fecha_registro: new Date().toISOString()
             };
 
@@ -1218,13 +1224,11 @@ async function guardarTutorExpress() {
             if (tutorInsertado && tutorInsertado.length > 0) {
                 tutorFinalId = tutorInsertado[0].id;
 
-                const datosFolio = await gestionarFolioAutomatico(null, 'inputFolioTutorExpress', 'statusFolioTutorExpress');
-                
                 await fisioNet.from('expedientes_clinicos').insert([{
                     id_paciente: tutorFinalId,
                     id_clinica: clinicaId,
-                    folio_personalizado: datosFolio?.folio || null,
-                    numero_consecutivo: datosFolio?.numero_consecutivo || 0,
+                    folio_personalizado: folioAsignado,
+                    numero_consecutivo: consecutivoNum,
                     estado_expediente: 'ACTIVO'
                 }]);
 
@@ -1235,9 +1239,12 @@ async function guardarTutorExpress() {
                     rol_en_relacion: 'OPERATIVO',
                     estado_vinculo: 'ACTIVO'
                 }]);
+
+                folioInfoMensaje = `Nuevo folio asignado: ${folioAsignado || 'S/N'}`;
             }
         }
 
+        // 🎯 INYECTAR TUTOR Y RECALCULAR FOLIO PRINCIPAL (PARA EL MENOR)
         if (tutorFinalId) {
             const inputNombreTutor = document.getElementById('tutor-nombre');
             const inputTelTutor = document.getElementById('tutor-tel');
@@ -1249,7 +1256,10 @@ async function guardarTutorExpress() {
             if (inputEmailTutor) inputEmailTutor.value = email || "";
             if (inputIdTutor) inputIdTutor.value = tutorFinalId;
 
-            alert(`✅ ¡Tutor registrado y enlazado con éxito!`);
+            // 🔥 PASO CLAVE: Refrescar folio para el menor en el recetario principal
+            await gestionarFolioAutomatico(null, 'inputFolioExpediente', 'statusFolio');
+
+            alert(`✅ ¡Tutor enlazado con éxito!\n📄 ${folioInfoMensaje}\n🔄 Folio del menor actualizado automáticamente.`);
 
             tutorExpressExistenteId = null;
             const modalEl = document.getElementById('modalTutorExpress');

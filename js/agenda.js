@@ -23,7 +23,7 @@ async function vincularGoogleCalendar() {
             alert("No se pudo iniciar sesión con Google. Inténtalo de nuevo.");
         }
     } catch (err) {
-        console.error("❌ Error inesperado:", err);
+        console.error("❌ Error inesperado en vinculación:", err);
     }
 }
 
@@ -48,7 +48,7 @@ async function verificarEstadoGoogle() {
     }
 }
 
-// Ejecutar verificación al cargar la ventana
+// Ejecutar verificación al cargar el DOM
 window.addEventListener('DOMContentLoaded', () => {
     verificarEstadoGoogle();
 });
@@ -56,7 +56,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ============================================================================
 // 🔄 SINCRONIZACIÓN AUTOMÁTICA CON GOOGLE CALENDAR / iPHONE
 // ============================================================================
-window.sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
+const sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
         let token = session?.provider_token || localStorage.getItem('google_provider_token');
@@ -66,16 +66,19 @@ window.sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud =
             return;
         }
 
-        let horaInicio = cita.hora_inicio_cita || cita.hora_cita;
+        let horaInicio = cita.hora_inicio_cita || cita.hora_cita || "00:00:00";
         if (horaInicio.length === 5) horaInicio += ":00";
 
         const fechaStr = cita.fecha || cita.fecha_cita;
         const fechaHoraInicioStr = `${fechaStr}T${horaInicio}`;
         
+        // Calculamos +30 minutos sobre el objeto fecha local
         const fechaFinObj = new Date(`${fechaStr}T${horaInicio}`);
         fechaFinObj.setMinutes(fechaFinObj.getMinutes() + 30);
-        const horaFinStr = `${String(fechaFinObj.getHours()).padStart(2, '0')}:${String(fechaFinObj.getMinutes()).padStart(2, '0')}:00`;
-        const fechaHoraFinStr = `${fechaStr}T${horaFinStr}`;
+
+        const hFin = String(fechaFinObj.getHours()).padStart(2, '0');
+        const mFin = String(fechaFinObj.getMinutes()).padStart(2, '0');
+        const fechaHoraFinStr = `${fechaStr}T${hFin}:${mFin}:00`;
 
         const eventoGoogle = {
             summary: `🩺 Cita FisioCid: ${nombrePaciente}`,
@@ -115,6 +118,7 @@ window.sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud =
         console.error("❌ Error de red con Google Calendar:", error);
     }
 };
+
 // ==========================================
 // 📅 GESTIÓN DE AGENDA MAESTRA
 // ==========================================
@@ -124,12 +128,10 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     
     if (!fechaInput) {
         fechaInput = obtenerFechaLocal();
-        if(document.getElementById('filtroFechaAgenda')) {
+        if (document.getElementById('filtroFechaAgenda')) {
             document.getElementById('filtroFechaAgenda').value = fechaInput;
         }
     }
-
-    const fechaBase = new Date(fechaInput + "T00:00:00");
 
     if (botonPresionado) {
         document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
@@ -175,22 +177,28 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     if (modo === 'dia') {
         queryCitas = queryCitas.eq('fecha', fechaInput);
         querySol = querySol.eq('fecha_cita', fechaInput);
-   } else {
-        const fechaFin = new Date(fechaBase);
-        fechaFin.setDate(fechaBase.getDate() + 5); 
+    } else {
+        // Cálculo seguro de rango de fechas sin desfasar zonas horarias
+        const [a, m, d] = fechaInput.split('-').map(Number);
+        const fInicioObj = new Date(a, m - 1, d);
+        const fFinObj = new Date(a, m - 1, d);
+        fFinObj.setDate(fFinObj.getDate() + 5);
 
-        const f1 = fechaBase.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-        const f2 = fechaFin.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-        if (tituloElemento) tituloElemento.innerText = `PRÓXIMOS DÍAS: ${f1.toUpperCase()} AL ${f2.toUpperCase()}`;
+        const fechaInicioStr = fInicioObj.toISOString().split('T')[0];
+        const fechaFinStr = fFinObj.toISOString().split('T')[0];
 
-        const fechaInicioStr = fechaBase.toISOString().split('T')[0];
-        const fechaFinStr = fechaFin.toISOString().split('T')[0];
+        const f1 = fInicioObj.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+        const f2 = fFinObj.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+        
+        if (tituloElemento) {
+            tituloElemento.innerText = `PRÓXIMOS DÍAS: ${f1.toUpperCase()} AL ${f2.toUpperCase()}`;
+        }
 
         queryCitas = queryCitas.gte('fecha', fechaInicioStr).lte('fecha', fechaFinStr);
         querySol = querySol.gte('fecha_cita', fechaInicioStr).lte('fecha_cita', fechaFinStr);
     }
 
-    // --- 4. EJECUTAMOS AMBAS AL MISMO TIEMPO ---
+    // --- 4. EJECUTAMOS AMBAS EN PARALELO ---
     const [resCitas, resSol] = await Promise.all([queryCitas, querySol]);
 
     if (resCitas.error) {
@@ -198,7 +206,7 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         return;
     }
 
-    // --- 5. DISFRAZAMOS A LOS PROSPECTOS PARA QUE ENTREN A LA AGENDA ---
+    // --- 5. DISFRAZAMOS A LOS PROSPECTOS PARA LA VISTA ---
     const citasProspectos = (resSol.data || []).map(sol => ({
         id_cita: sol.id,
         es_prospecto: true,
@@ -212,12 +220,12 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
             id: 'LIMBO',
             nombre: sol.nombre,
             apellido_paterno: sol.apellido_p,
-            apellido_materno: '(EXPRÉS)',
+            apellido_materno: sol.apellido_m ? `(${sol.apellido_m})` : '(EXPRÉS)',
             curp: null
         }
     }));
 
-    // --- 6. UNIMOS Y ORDENAMOS TODO JUNTO ---
+    // --- 6. UNIMOS Y ORDENAMOS POR FECHA Y HORA ---
     let agendaCompleta = [...(resCitas.data || []), ...citasProspectos];
     
     agendaCompleta.sort((a, b) => {
@@ -227,7 +235,7 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         return (a.fecha || '').localeCompare(b.fecha || '');
     });
 
-    // 🔥 METIÉNDOLE CHOCHOS: SÚPER RESUMEN DEL DÍA 🔥
+    // --- 7. SÚPER RESUMEN EN MODO DÍA ---
     if (modo === 'dia' && tituloElemento) {
         const total = agendaCompleta.length;
         
@@ -237,7 +245,8 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         const reagendados = agendaCompleta.filter(c => c.estatus === 'REAGENDADO').length;
         const noLlegaron = agendaCompleta.filter(c => c.estatus === 'NO_ASISTIO' || c.estatus === 'FALTO').length;
 
-        const fechaObjParaTitulo = new Date(fechaInput + "T00:00:00");
+        const [a, m, d] = fechaInput.split('-').map(Number);
+        const fechaObjParaTitulo = new Date(a, m - 1, d);
         const fechaBonita = fechaObjParaTitulo.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }).toUpperCase();
 
         tituloElemento.innerHTML = `
@@ -266,72 +275,12 @@ async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         `;
     }
 
-    // --- 7. MANDAMOS A PINTAR ---
+    // --- 8. MANDAMOS A RENDERIZAR EN DOM ---
     renderizarCitas(agendaCompleta, modo);
 }
 
-
-window.sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
-    try {
-        const { data: { session } } = await fisioNet.auth.getSession();
-        let token = session?.provider_token || localStorage.getItem('google_provider_token');
-        
-        if (!token) {
-            console.warn("⚠️ No hay token de Google Calendar activo.");
-            return;
-        }
-
-        let horaInicio = cita.hora_inicio_cita || cita.hora_cita;
-        if (horaInicio.length === 5) horaInicio += ":00";
-
-        const fechaStr = cita.fecha || cita.fecha_cita;
-        const fechaHoraInicioStr = `${fechaStr}T${horaInicio}`;
-        
-        const fechaFinObj = new Date(`${fechaStr}T${horaInicio}`);
-        fechaFinObj.setMinutes(fechaFinObj.getMinutes() + 30);
-        const horaFinStr = `${String(fechaFinObj.getHours()).padStart(2, '0')}:${String(fechaFinObj.getMinutes()).padStart(2, '0')}:00`;
-        const fechaHoraFinStr = `${fechaStr}T${horaFinStr}`;
-
-        const eventoGoogle = {
-            summary: `🩺 Cita FisioCid: ${nombrePaciente}`,
-            description: `Modalidad: ${cita.modalidad || 'CONSULTORIO'}\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid.`,
-            start: { dateTime: fechaHoraInicioStr, timeZone: 'America/Mexico_City' },
-            end: { dateTime: fechaHoraFinStr, timeZone: 'America/Mexico_City' }
-        };
-
-        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(eventoGoogle)
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            console.error("❌ Error al sincronizar con Google Calendar:", errData);
-        } else {
-            const dataGoogle = await response.json();
-            
-            // 🔑 Guardamos el ID de Google en la tabla correspondiente
-            if (dataGoogle.id) {
-                const idRegistro = cita.id_cita || cita.id;
-                const tablaDestino = esSolicitud ? 'solicitudes_citas' : 'agenda_maestra';
-                const columnaId = esSolicitud ? 'id' : 'id_cita';
-
-                await fisioNet.from(tablaDestino)
-                    .update({ google_event_id: dataGoogle.id })
-                    .eq(columnaId, idRegistro);
-            }
-            console.log("✨ ¡Cita sincronizada y ID de Google almacenado con éxito!");
-        }
-    } catch (error) {
-        console.error("❌ Error de red con Google Calendar:", error);
-    }
-};
 // ==========================================
-// 🚀 EXPOSICIÓN GLOBAL (AL FINAL DEL ARCHIVO)
+// 🚀 EXPOSICIÓN GLOBAL
 // ==========================================
 window.actualizarAgenda = cargarAgenda; 
 window.vincularGoogleCalendar = vincularGoogleCalendar;
