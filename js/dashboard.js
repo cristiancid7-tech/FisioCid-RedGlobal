@@ -1159,7 +1159,7 @@ let guardandoCita = false;
 document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // 🔒 CANDADO: Si ya se está guardando, ignoramos clics extra
+    // 🔒 CANDADO: Evitar envíos dobles por clics seguidos
     if (guardandoCita) return;
     guardandoCita = true;
 
@@ -1172,7 +1172,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         const clinicaId = localStorage.getItem('id_clinica_activa');
         const idPaciente = document.getElementById('idPacienteSeleccionado').value;
         const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
-        const telefonoInput = document.getElementById('telefonoExpress').value.trim();
+        const telefonoInput = document.getElementById('telefonoExpress')?.value.trim() || '';
         
         const modalidad = document.getElementById('modalidadCita').value;
         const horaElegida = document.getElementById('horaCita').value; 
@@ -1182,7 +1182,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         if (!horaElegida) { alert("Selecciona un horario disponible."); return; }
         if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
 
-        // 🎯 CORRECCIÓN MULTI-SEDE: Consultamos en colaboradores_clinica la configuración de ESTA sede
+        // 🎯 Configuración multi-sede del profesional
         const { data: colab, error: errColab } = await fisioNet
             .from('colaboradores_clinica')
             .select('costo_consulta_base, costo_domicilio_base, horario_atencion, intervalo_cita')
@@ -1195,14 +1195,13 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             return;
         }
 
-        // Validar horario laborable (MULTI-TURNO)
+        // 🕒 Validar horario laborable (MULTI-TURNO)
         if (colab.horario_atencion) {
             const horarios = typeof colab.horario_atencion === 'string' 
                 ? JSON.parse(colab.horario_atencion) 
                 : colab.horario_atencion;
                 
             const intervalo = parseInt(colab.intervalo_cita) || 30; 
-            
             const fechaObj = new Date(fechaElegida + "T12:00:00");
             const diaSemana = fechaObj.getDay();
             
@@ -1242,6 +1241,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             }
         }
 
+        // 🏷️ Cálculo de Costos y Convenios
         const selectorConvenio = document.getElementById('selectConvenioPaciente');
         let idConvenio = null;
         let porcentaje = 0;
@@ -1253,7 +1253,6 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             }
         }
 
-        // 🎯 Lógica de costos leídos desde la sede activa
         const costoConsultorio = colab.costo_consulta_base !== null ? Number(colab.costo_consulta_base) : 800;
         const costoDomicilio = colab.costo_domicilio_base !== null ? Number(colab.costo_domicilio_base) : 1200;
         const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
@@ -1261,19 +1260,34 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         const descuentoCalculado = (precioBase * porcentaje) / 100;
         const precioFinal = precioBase - descuentoCalculado;
 
+        // Función auxiliar para llamar al Sync en cualquier entorno (Módulo o Global)
+        const ejecutarSyncCalendar = async (citaObj, nombrePaciente, esExpress = false) => {
+            const funcionSync = typeof sincronizarConGoogleCalendar === 'function' 
+                ? sincronizarConGoogleCalendar 
+                : (typeof window.sincronizarConGoogleCalendar === 'function' ? window.sincronizarConGoogleCalendar : null);
+
+            if (funcionSync) {
+                await funcionSync(citaObj, nombrePaciente, esExpress);
+            } else {
+                console.warn("⚠️ La función sincronizarConGoogleCalendar no se encontró en el ámbito global.");
+            }
+        };
+
         // =========================================================
-        // 🔀 LA BIFURCACIÓN: ¿AGENDA DIRECTA O SALA DE ESPERA?
+        // 🔀 BIFURCACIÓN: PACIENTE NUEVO VS EXISTENTE
         // =========================================================
         
         if (!idPaciente || idPaciente === 'NUEVO_EXPRESS') {
             // --- CASO B: PACIENTE NUEVO -> A SALA DE ESPERA ---
             if (!telefonoInput) {
                 alert("⚠️ Al ser un paciente nuevo, es OBLIGATORIO pedirle su número de teléfono para guardarlo en la Sala de Espera.");
-                document.getElementById('telefonoExpress').focus();
+                document.getElementById('telefonoExpress')?.focus();
                 return;
             }
 
-            const resultado = procesarNombreMexicano(nombreInput); 
+            const resultado = typeof procesarNombreMexicano === 'function' 
+                ? procesarNombreMexicano(nombreInput) 
+                : { nombre: nombreInput, paterno: '', materno: '' }; 
 
             const { error: errSol } = await fisioNet.from('solicitudes_citas').insert({
                 nombre: resultado.nombre,
@@ -1298,8 +1312,8 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
                     hora_inicio_cita: horaElegida,
                     modalidad: 'SALA DE ESPERA (EXPRÉS)'
                 };
-                const nombreCompletoExpress = `${resultado.nombre} ${resultado.paterno} ${resultado.materno || ''}`;
-              await sincronizarConGoogleCalendar(citaExpressDisfrazada, nombreCompletoExpress.trim(), true);
+                const nombreCompletoExpress = `${resultado.nombre} ${resultado.paterno} ${resultado.materno || ''}`.trim();
+                await ejecutarSyncCalendar(citaExpressDisfrazada, nombreCompletoExpress, true);
             } catch (syncErr) {
                 console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
             }
@@ -1330,10 +1344,20 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             }
 
             try {
-                if (datosCita && datosCita.pacientes_maestros) {
-                    const nombreCompleto = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno} ${datosCita.pacientes_maestros.apellido_materno || ''}`;
-                    await sincronizarConGoogleCalendar(datosCita, nombreCompleto.trim());
+                // Si Supabase retornó el join se arma con él; si no, usaremos el texto ingresado en el buscador
+                let nombrePacienteSync = nombreInput.trim();
+                if (datosCita?.pacientes_maestros?.nombre) {
+                    nombrePacienteSync = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno} ${datosCita.pacientes_maestros.apellido_materno || ''}`.trim();
                 }
+
+                const citaParaSync = {
+                    ...datosCita,
+                    fecha: fechaElegida,
+                    hora_inicio_cita: horaElegida,
+                    modalidad: modalidad
+                };
+
+                await ejecutarSyncCalendar(citaParaSync, nombrePacienteSync, false);
             } catch (syncErr) {
                 console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
             }
@@ -1341,12 +1365,13 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID Y SINCRONIZADA! 📅✨");
         }
 
-        // Limpieza de Modal
-        document.getElementById('modalCita').style.display = 'none';
+        // Limpieza de Modal y Formularios
+        const modalCita = document.getElementById('modalCita');
+        if (modalCita) modalCita.style.display = 'none';
         document.getElementById('formNuevaCita').reset();
         document.getElementById('idPacienteSeleccionado').value = '';
         
-        // Refrescamos paneles
+        // Actualización de Paneles
         if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
         if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
         if (typeof cargarEstadisticas === 'function') await cargarEstadisticas();
