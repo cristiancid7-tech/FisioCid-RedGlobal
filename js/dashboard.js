@@ -3046,60 +3046,240 @@ function renderizarBotonesPorRol() {
     if (btnPrecios) btnPrecios.style.display = esAdmin ? 'flex' : 'none';
     if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'flex' : 'none';
 
+    // Definición de botones con su ruta y si soportan acción rápida (Long-Press)
     const catalogoBotones = {
-        nuevareceta: `<button class="btn-action" onclick="window.location.href='portal-recetas.html'">📋 Nueva Receta</button>`,
-        agregarPaciente: `<button class="btn-action" onclick="window.location.href='nuevo-paciente.html'">📝 Agregar/Editar Paciente</button>`,
-        listaPacientes: `<button class="btn-action" onclick="window.location.href='lista-pacientes.html'">👥 Lista de Pacientes</button>`,
-        inventario:      `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
-        nuevoEstudio:   `<button class="btn-action" onclick="window.location.href='portal-gabinete.html'">📡 Nuevo Estudio</button>`,
-        laboratorio:    `<button class="btn-action" onclick="lanzarLaboratorioGeneral()">🧪 Nuevo Laboratorio</button>`,
-        finanzas:       `<button class="btn-action" onclick="window.location.href='finanzas.html'">📊 Control de Caja</button>`
+        nuevareceta: { html: `📋 Nueva Receta`, url: 'portal-recetas.html', tieneQuickAction: false },
+        agregarPaciente: { html: `📝 Agregar/Editar Paciente`, url: 'nuevo-paciente.html', tieneQuickAction: false },
+        listaPacientes: { html: `👥 Lista de Pacientes`, url: 'lista-pacientes.html', tieneQuickAction: true },
+        inventario: { html: `📦 Inventario`, url: 'inventario.html', tieneQuickAction: false },
+        nuevoEstudio: { html: `📡 Nuevo Estudio`, url: 'portal-gabinete.html', tieneQuickAction: false },
+        laboratorio: { html: `🧪 Nuevo Laboratorio`, accion: () => lanzarLaboratorioGeneral(), tieneQuickAction: false },
+        finanzas: { html: `📊 Control de Caja`, url: 'finanzas.html', tieneQuickAction: false }
     };
 
-    let botonesAJS = [];
+    let listaBotones = [];
 
     switch(miRol) {
         case 'ADMIN_SISTEMA':
-            botonesAJS = [
-                catalogoBotones.nuevareceta, // 👈 Agregado aquí
-                catalogoBotones.agregarPaciente, catalogoBotones.listaPacientes,
-                catalogoBotones.inventario, catalogoBotones.nuevoEstudio,
-                catalogoBotones.laboratorio, catalogoBotones.finanzas
-            ];
-            break;
-
-        case 'ADMINISTRATIVO':
-            botonesAJS = [
-                catalogoBotones.nuevareceta, // 👈 (Opcional) Agregado aquí si también lo ocupan
-                catalogoBotones.agregarPaciente, 
-                catalogoBotones.listaPacientes, 
-                catalogoBotones.inventario,
+            listaBotones = [
+                catalogoBotones.nuevareceta, catalogoBotones.agregarPaciente,
+                catalogoBotones.listaPacientes, catalogoBotones.inventario,
+                catalogoBotones.nuevoEstudio, catalogoBotones.laboratorio,
                 catalogoBotones.finanzas
             ];
             break;
-
+        case 'ADMINISTRATIVO':
+            listaBotones = [
+                catalogoBotones.nuevareceta, catalogoBotones.agregarPaciente, 
+                catalogoBotones.listaPacientes, catalogoBotones.inventario,
+                catalogoBotones.finanzas
+            ];
+            break;
         case 'STAFF_CLINICO':
-            botonesAJS = [
-                catalogoBotones.nuevareceta, // 👈 Agregado aquí para que los terapeutas/doctores lo vean
-                catalogoBotones.agregarPaciente, 
-                catalogoBotones.listaPacientes, 
-                catalogoBotones.nuevoEstudio, 
+            listaBotones = [
+                catalogoBotones.nuevareceta, catalogoBotones.agregarPaciente, 
+                catalogoBotones.listaPacientes, catalogoBotones.nuevoEstudio, 
                 catalogoBotones.laboratorio
             ];
             break;
-
         case 'OPERATIVO':
-            botonesAJS = [
-                catalogoBotones.listaPacientes
-            ]; 
-            break;
-
         default:
-            botonesAJS = [catalogoBotones.listaPacientes];
+            listaBotones = [catalogoBotones.listaPacientes];
             break;
     }
 
-    contenedor.innerHTML = botonesAJS.join('');
+    // Limpiar contenedor
+    contenedor.innerHTML = '';
+
+    // Generación dinámica e inyección de eventos Long-Press
+    listaBotones.forEach((btnConfig, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-action';
+        btn.innerHTML = btnConfig.html;
+        
+        // Retraso escalonado (staggered animation)
+        btn.style.animationDelay = `${index * 0.06}s`;
+
+        // Lógica de detección de clic normal vs mantenido
+        let timerLongPress = null;
+        let esLongPress = false;
+
+        const iniciarConteo = (e) => {
+            esLongPress = false;
+            btn.classList.add('presionando');
+            
+            timerLongPress = setTimeout(() => {
+                esLongPress = true;
+                btn.classList.remove('presionando');
+                if (navigator.vibrate) navigator.vibrate(50); // Feedback háptico en móviles
+                
+                if (btnConfig.tieneQuickAction) {
+                    abrirBuscadorExpressPacientes();
+                }
+            }, 500); // 500ms para considerar mantenido
+        };
+
+        const cancelarConteo = () => {
+            btn.classList.remove('presionando');
+            if (timerLongPress) clearTimeout(timerLongPress);
+        };
+
+        const ejecutarClick = (e) => {
+            cancelarConteo();
+            if (esLongPress) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Clic normal
+            if (btnConfig.accion) {
+                btnConfig.accion();
+            } else if (btnConfig.url) {
+                window.location.href = btnConfig.url;
+            }
+        };
+
+        // Escuchadores táctiles y de mouse
+        btn.addEventListener('mousedown', iniciarConteo);
+        btn.addEventListener('touchstart', iniciarConteo, { passive: true });
+
+        btn.addEventListener('mouseup', ejecutarClick);
+        btn.addEventListener('touchend', ejecutarClick);
+
+        btn.addEventListener('mouseleave', cancelarConteo);
+        btn.addEventListener('touchmove', cancelarConteo, { passive: true });
+
+        contenedor.appendChild(btn);
+    });
+}
+
+// Abrir y construir modal flotante de búsqueda express
+function abrirBuscadorExpressPacientes() {
+    let modal = document.getElementById('modalQuickSearchPaciente');
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modalQuickSearchPaciente';
+        modal.className = 'modal-accion-rapida';
+        modal.innerHTML = `
+            <div class="modal-accion-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; font-size: 1rem; color: #0f172a; font-weight: 800;">⚡ Búsqueda Rápida de Paciente</h3>
+                    <button onclick="cerrarBuscadorExpress()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;">✕</button>
+                </div>
+                
+                <input type="text" id="inputQuickPaciente" placeholder="Escribe nombre o teléfono..." 
+                       style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.9rem; font-weight: 600; box-sizing: border-box; outline: none; margin-bottom: 12px;">
+                
+                <div id="resultadosQuickPaciente" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px;">
+                    <small style="color: #94a3b8; text-align: center;">Escribe al menos 2 letras para buscar.</small>
+                </div>
+
+                <div id="accionesPacienteSeleccionado" style="display: none; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                    <p id="lblPacienteSeleccionado" style="font-size: 0.8rem; font-weight: 800; color: #0f766e; margin: 0 0 10px 0; text-transform: uppercase;"></p>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button onclick="ejecutarAccionExpress('expediente')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #1e293b; text-align: left;">📁 Abrir Historia</button>
+                        <button onclick="ejecutarAccionExpress('receta')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #1e293b; text-align: left;">📋 Crear Receta</button>
+                        <button onclick="ejecutarAccionExpress('gabinete')" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #1e293b; text-align: left;">📡 Solicitar Estudio</button>
+                        <button onclick="ejecutarAccionExpress('cobro')" style="background: #dcfce7; border: 1px solid #86efac; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; color: #166534; text-align: left;">💳 Registrar Cobro</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Búsqueda en tiempo real
+        document.getElementById('inputQuickPaciente').addEventListener('input', async (e) => {
+            const texto = e.target.value.trim().toUpperCase();
+            const contenedorRes = document.getElementById('resultadosQuickPaciente');
+            const clinicaId = localStorage.getItem('id_clinica_activa');
+
+            if (texto.length < 2) {
+                contenedorRes.innerHTML = `<small style="color: #94a3b8; text-align: center;">Escribe al menos 2 letras para buscar.</small>`;
+                return;
+            }
+
+            contenedorRes.innerHTML = `<small style="color: #0f766e; text-align: center;">Buscando...</small>`;
+
+            const { data: pacientes } = await fisioNet.from('pacientes_maestros')
+                .select('id, nombre, apellido_paterno, apellido_materno, telefono')
+                .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,telefono.ilike.%${texto}%`)
+                .eq('id_clinica', clinicaId)
+                .limit(4);
+
+            contenedorRes.innerHTML = '';
+
+            if (pacientes && pacientes.length > 0) {
+                pacientes.forEach(p => {
+                    const div = document.createElement('div');
+                    div.style.cssText = "padding: 8px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 700; color: #1e293b;";
+                    div.innerText = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
+                    
+                    div.onclick = () => seleccionarPacienteExpress(p);
+                    contenedorRes.appendChild(div);
+                });
+            } else {
+                contenedorRes.innerHTML = `<small style="color: #ef4444; text-align: center;">No se encontraron coincidencia.</small>`;
+            }
+        });
+    }
+
+    setTimeout(() => modal.classList.add('activo'), 10);
+    document.getElementById('inputQuickPaciente').focus();
+}
+
+let pacienteSeleccionadoQuick = null;
+
+function seleccionarPacienteExpress(paciente) {
+    pacienteSeleccionadoQuick = paciente;
+    const lbl = document.getElementById('lblPacienteSeleccionado');
+    const panelAcciones = document.getElementById('accionesPacienteSeleccionado');
+
+    lbl.innerText = `👤 PACIENTE: ${paciente.nombre} ${paciente.apellido_paterno}`;
+    panelAcciones.style.display = 'block';
+}
+
+function cerrarBuscadorExpress() {
+    const modal = document.getElementById('modalQuickSearchPaciente');
+    if (modal) {
+        modal.classList.remove('activo');
+        pacienteSeleccionadoQuick = null;
+        const panelAcciones = document.getElementById('accionesPacienteSeleccionado');
+        if (panelAcciones) panelAcciones.style.display = 'none';
+        const input = document.getElementById('inputQuickPaciente');
+        if (input) input.value = '';
+    }
+}
+
+function ejecutarAccionExpress(tipo) {
+    if (!pacienteSeleccionadoQuick) return;
+
+    localStorage.setItem('paciente_seleccionado_id', pacienteSeleccionadoQuick.id);
+    localStorage.setItem('paciente_precargado', JSON.stringify(pacienteSeleccionadoQuick));
+
+    cerrarBuscadorExpress();
+
+    switch (tipo) {
+        case 'expediente':
+            window.location.href = 'historial-evolucion.html';
+            break;
+        case 'receta':
+            window.location.href = 'portal-recetas.html';
+            break;
+        case 'gabinete':
+            window.location.href = 'portal-gabinete.html';
+            break;
+        case 'cobro':
+            const nombreFull = `${pacienteSeleccionadoQuick.nombre} ${pacienteSeleccionadoQuick.apellido_paterno}`;
+            if (typeof dispararModalCobroAsistido === 'function') {
+                dispararModalCobroAsistido(null, pacienteSeleccionadoQuick.id, nombreFull, 800, "CONSULTA FISIOTERAPIA");
+            } else {
+                window.location.href = 'finanzas.html';
+            }
+            break;
+    }
 }
 function cargarHorariosEnModal(dataHorarios) {
     const contenedor = document.getElementById('contenedorHorarios');
