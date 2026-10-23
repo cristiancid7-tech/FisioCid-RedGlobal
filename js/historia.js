@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ejecución inicial limpia
     cargarExpedienteFijo();
     inicializarEscuchaMotivo();
+     adaptarInterfazPorEspecialidad();
     cargarDatosDesdeRecetaPendiente();
 });
 
@@ -280,12 +281,7 @@ if (btnAsistente) {
 }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    cargarExpedienteFijo();
-    inicializarEscuchaMotivo();
-    adaptarInterfazPorEspecialidad();
-    cargarDatosDesdeRecetaPendiente();
-});
+
 
 window.calcularIMC = () => {
     const peso = parseFloat(document.getElementById('valPeso').value);
@@ -513,7 +509,7 @@ if (btnClonar) {
                  llenarSiExiste('diagnostico_funcional', u.diagnostico_funcional);
                 llenarSiExiste('codigo_cie_final', u.codigo_cie10);
                 llenarSiExiste('plan', u.nota_evolucion);
-                   llenarSiExiste('plan_tratamiento', u.plan_tratamiento);
+            
                 btnClonar.innerHTML = '<i class="fas fa-check"></i> ¡CLONADO!';
             } else {
                 alert("No hay notas previas.");
@@ -523,78 +519,6 @@ if (btnClonar) {
     };
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const campoMotivo = document.getElementById('motivo');
-
-    const gestionarBotonInteligente = (protocolo = null) => {
-    let btn = document.getElementById('btn-fisiocid-inteligente');
-    
-    if (!protocolo) {
-        if (btn) btn.remove();
-        return;
-    }
-
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.id = 'btn-fisiocid-inteligente';
-        btn.type = "button";
-        
-        const colorClinica = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#d4af37';
-        
-        btn.style.cssText = `
-            background-color: ${colorClinica}; 
-            color: white; 
-            border: none; 
-            padding: 5px 15px; 
-            border-radius: 8px 8px 0 0; 
-            font-weight: 900; 
-            cursor: pointer; 
-            font-size: 0.65rem;
-            float: right; 
-            margin-bottom: 0px; 
-            position: relative;
-            z-index: 10;
-            transition: 0.3s;
-            text-transform: uppercase;
-            box-shadow: -2px -2px 5px rgba(0,0,0,0.1);
-        `;
-
-        campoMotivo.parentNode.insertBefore(btn, campoMotivo);
-    }
-
-    btn.innerHTML = `✨ APOYO SÍNTOMAS: ${protocolo.titulo}`;
-
-    btn.onclick = (e) => {
-        e.preventDefault();
-        if (typeof modalEngine !== 'undefined') {
-            modalEngine.abrirAsistente('anamnesis', protocolo);
-        }
-    };
-};
-
-    if (campoMotivo) {
-        campoMotivo.addEventListener('input', (e) => {
-            const texto = e.target.value.toLowerCase().trim();
-            const especialidadReal = (localStorage.getItem('especialidadUsuario') || "GENERAL").toUpperCase().trim();
-            
-            if (texto.length < 3) {
-                gestionarBotonInteligente(null);
-                return;
-            }
-
-            const biblioteca = window.BIBLIOTECA_PROTOCOLOS || window.protocolos;
-            let encontrado = null;
-
-            if (biblioteca && biblioteca[especialidadReal]) {
-                encontrado = biblioteca[especialidadReal].find(p => 
-                    p.triggers.some(t => texto.includes(t.toLowerCase()))
-                );
-            }
-
-            gestionarBotonInteligente(encontrado);
-        });
-    }
-});
 
 
 const configUsuario = {
@@ -692,11 +616,6 @@ function inicializarEscuchaMotivo() {
     motivoInput.addEventListener('input', (e) => procesarInput(e.target.value));
 }
 
-
-
-document.addEventListener('DOMContentLoaded', () => {
-    inicializarEscuchaMotivo();
-});
 
 
 
@@ -1307,68 +1226,7 @@ window.inyectarEstudioAExploracion = (tipo, hallazgos, fecha) => {
         }, 800);
     }
 };
-window.enviarSolicitudLab = async () => {
-    const tipoServicio = document.getElementById('tipoServicioExterno').value;
-    const estudioTexto = document.getElementById('txtQueEstudio').value.trim().toUpperCase();
-    const idSocioDestino = document.getElementById('selectLabDestino').value;
-    const btn = document.getElementById('btnEnviarLab');
 
-    if (!estudioTexto) { alert("⚠️ Especifica qué estudio necesitas."); return; }
-    if (!idSocioDestino) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENVIANDO...';
-
-    try {
-        const { data: { user } } = await fisioNet.auth.getUser();
-        
-        // Extraemos variables existentes
-        const idPacienteActual = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
-        const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
-        const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
-
-        if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
-
-        if (tipoServicio === 'LAB') {
-            // 🧪 INSERCIÓN EN TABLA DE LABORATORIO
-            const { error: errLab } = await fisioNet.from('estudios_laboratorio').insert([{
-                paciente_id: idPacienteActual,
-                id_doctor_referente: user.id,
-                doctor_referente_nombre: nombreDocStr,
-                id_socio_emisor: idSocioDestino, // Aquí guardamos el ID de la química
-                estudios_etiquetas: estudioTexto, // Lo que pidió el doc
-                paciente_nombre: nombrePacienteStr,
-                estado: 'PENDIENTE', // Estado inicial para que la química lo vea
-                fecha_captura: new Date().toISOString()
-            }]);
-            if (errLab) throw errLab;
-
-        } else {
-            // 🩻 INSERCIÓN EN TABLA DE GABINETE
-            const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
-                paciente_id: idPacienteActual,
-                doctor_emisor_id: user.id,
-                medico_solicitante_manual: nombreDocStr,
-                id_socio_emisor: idSocioDestino, // Aquí guardamos el ID del gabinete
-                tipo_estudio: estudioTexto,
-                paciente_nombre_manual: nombrePacienteStr,
-                estado_dictamen: 'PENDIENTE', // Estado inicial para el gabinete
-                fecha_registro: new Date().toISOString()
-            }]);
-            if (errGab) throw errGab;
-        }
-
-        alert("✅ ¡Estudio enviado directo a la sala de espera del socio comercial!");
-        document.getElementById('modalEstudioExpress').style.display = 'none';
-
-    } catch (err) {
-        console.error("Error al enviar solicitud:", err);
-        alert("Fallo la conexión: " + err.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = "ENVIAR SOLICITUD 🚀";
-    }
-};
 // =================================================================
 // 🧪 MÓDULO: LABORATORIO INTELIGENTE (CERO REGISTROS)
 // =================================================================
@@ -1430,15 +1288,14 @@ window.abrirModalEstudioExpress = async () => {
 };
 
 window.enviarSolicitudLab = async () => {
-    const tipoServicio = document.getElementById('tipoServicioExterno').value;
-    const estudioTexto = document.getElementById('txtQueEstudio').value.trim().toUpperCase();
-    const inputLabVal = document.getElementById('inputLabDestino').value;
+    const tipoServicio = document.getElementById('tipoServicioExterno')?.value;
+    const estudioTexto = document.getElementById('txtQueEstudio')?.value.trim().toUpperCase();
+    const inputLabVal = document.getElementById('inputLabDestino')?.value;
     const btn = document.getElementById('btnEnviarLab');
 
     if (!estudioTexto) { alert("⚠️ Especifica qué estudio necesitas."); return; }
     if (!inputLabVal) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
 
-    // Truco para extraer el ID oculto basado en el texto que seleccionó/escribió el usuario
     const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${inputLabVal}"]`);
     const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
 
@@ -1447,13 +1304,11 @@ window.enviarSolicitudLab = async () => {
         return; 
     }
 
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENVIANDO...';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENVIANDO...'; }
 
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
-        
-        const idPacienteActual = typeof idPaciente !== 'undefined' ? idPaciente : (window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id'));
+        const idPacienteActual = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
         const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
         const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
 
@@ -1471,7 +1326,6 @@ window.enviarSolicitudLab = async () => {
                 fecha_captura: new Date().toISOString()
             }]);
             if (errLab) throw errLab;
-
         } else {
             const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
                 paciente_id: idPacienteActual,
@@ -1493,8 +1347,7 @@ window.enviarSolicitudLab = async () => {
         console.error("Error al enviar solicitud:", err);
         alert("Fallo la conexión: " + err.message);
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = "ENVIAR SOLICITUD 🚀";
+        if (btn) { btn.disabled = false; btn.innerHTML = "ENVIAR SOLICITUD 🚀"; }
     }
 };
 
