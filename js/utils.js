@@ -76,7 +76,7 @@ export async function validarCuotaPaciente(idUsuarioAuth, codigoPlan) {
 // ==========================================
 export async function verificarPerfilCompleto() {
     const rolActual = localStorage.getItem('rol_actual');
-    const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
+    const esStaff = (rolActual !== 'DUEÑO' && rolActual !== 'DUENO' && rolActual !== 'INDEPENDIENTE' &&  rolActual !== 'ADMIN_SISTEMA' && rolActual !== null);
 
     if (esStaff) return;
 

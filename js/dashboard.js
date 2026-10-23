@@ -1,3 +1,6 @@
+let sedesDisponibles = [];
+
+
 import './agenda.js';
 // Verificar estado de sesión al cargar la página
 async function verificarSesionSegura() {
@@ -3237,3 +3240,195 @@ function urlBase64ToUint8Array(base64String) {
 }
     return outputArray;
 }
+
+export async function cargarSedes() {
+    try {
+        const { data: { session } } = await fisioNet.auth.getSession();
+        if (!session) return;
+
+        // 🔍 Consultar sucursales donde el usuario es el dueño en tu tabla 'clinicas'
+        const { data: clinicas, error } = await fisioNet
+            .from('clinicas')
+            .select('id, nombre_clinica, color_institucional, id_clinica_padre')
+            .eq('id_dueno', session.user.id)
+            .eq('estado', true)
+            .order('nombre_clinica', { ascending: true });
+
+        if (error) throw error;
+
+        sedesDisponibles = clinicas || [];
+        const select = document.getElementById('selectSedeActual');
+        if (!select) return;
+
+        select.innerHTML = '';
+
+        if (sedesDisponibles.length === 0) {
+            select.innerHTML = `<option value="">Sin sucursales registradas</option>`;
+            return;
+        }
+
+        // Poblar las opciones del selector
+        sedesDisponibles.forEach(c => {
+            const option = document.createElement('option');
+            option.value = c.id;
+            option.textContent = c.nombre_clinica;
+            select.appendChild(option);
+        });
+
+        // Recuperar la sucursal activa de localStorage o tomar la primera
+        let sedeGuardada = localStorage.getItem('id_clinica_activa');
+        const existeSede = sedesDisponibles.some(c => c.id === sedeGuardada);
+
+        if (!sedeGuardada || !existeSede) {
+            sedeGuardada = sedesDisponibles[0].id;
+            localStorage.setItem('id_clinica_activa', sedeGuardada);
+            localStorage.setItem('nombre_clinica', sedesDisponibles[0].nombre_clinica);
+            if (sedesDisponibles[0].color_institucional) {
+                localStorage.setItem('clinica_color', sedesDisponibles[0].color_institucional);
+            }
+        }
+
+        select.value = sedeGuardada;
+        
+        // Aplicar el color visual correspondiente
+        aplicarColorSede(sedeGuardada);
+
+    } catch (err) {
+        console.error("❌ Error al cargar sucursales:", err.message);
+    }
+}
+
+/**
+ * Cambia la sede activa en memoria/localStorage y recarga los componentes operativos
+ */
+export function cambiarSedeActiva(sedeId) {
+    if (!sedeId) return;
+
+    const sedeSeleccionada = sedesDisponibles.find(s => s.id === sedeId);
+    if (sedeSeleccionada) {
+        localStorage.setItem('id_clinica_activa', sedeSeleccionada.id);
+        localStorage.setItem('nombre_clinica', sedeSeleccionada.nombre_clinica);
+        if (sedeSeleccionada.color_institucional) {
+            localStorage.setItem('clinica_color', sedeSeleccionada.color_institucional);
+        }
+    }
+
+    aplicarColorSede(sedeId);
+
+    // Recargar la agenda, los boxes y las estadísticas con la nueva sede
+    if (typeof window.cargarAgenda === 'function') window.cargarAgenda('semana');
+    if (typeof window.cargarMonitorBoxes === 'function') window.cargarMonitorBoxes();
+    if (typeof window.cargarEstadisticas === 'function') window.cargarEstadisticas();
+    if (typeof window.cargarSalaEspera === 'function') window.cargarSalaEspera();
+}
+
+/**
+ * Aplica el color institucional dinámico
+ */
+function aplicarColorSede(sedeId) {
+    const sedeObj = sedesDisponibles.find(s => s.id === sedeId);
+    if (sedeObj && sedeObj.color_institucional) {
+        document.documentElement.style.setProperty('--primary', sedeObj.color_institucional);
+        document.documentElement.style.setProperty('--medical-blue', sedeObj.color_institucional);
+    }
+}
+
+/**
+ * Control del Modal de Nueva Sucursal
+ */
+window.abrirModalNuevaSede = function() {
+    document.getElementById('modalNuevaSede').style.display = 'flex';
+};
+
+window.cerrarModalNuevaSede = function() {
+    document.getElementById('modalNuevaSede').style.display = 'none';
+    document.getElementById('formNuevaSede').reset();
+};
+
+/**
+ * Procesa la creación de una nueva sucursal con la especialidad DINÁMICA del usuario
+ */
+document.getElementById('formNuevaSede')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btnSubmit = document.getElementById('btnGuardarSede');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Guardando...';
+
+    try {
+        const { data: { session } } = await fisioNet.auth.getSession();
+        if (!session) return;
+
+        // 1. Obtener la especialidad REAL del usuario (desde localStorage o Supabase)
+        let especialidadUsuario = localStorage.getItem('especialidadUsuario');
+
+        if (!especialidadUsuario || especialidadUsuario === 'null') {
+            const { data: perfilProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('especialidad')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+            especialidadUsuario = perfilProf?.especialidad || 'FISIOTERAPIA';
+        }
+
+        // 2. Obtener el ID de la clínica matriz desde el perfil general
+        const { data: perfilGen } = await fisioNet
+            .from('perfiles')
+            .select('id_clinica_principal')
+            .eq('id', session.user.id)
+            .single();
+
+        const idMatriz = perfilGen?.id_clinica_principal || localStorage.getItem('id_clinica_activa');
+
+        // 3. Crear el nuevo registro en la tabla "clinicas" con datos reales
+        const nuevaSucursal = {
+            nombre_clinica: document.getElementById('sedeNombre').value.trim().toUpperCase(),
+            direccion: document.getElementById('sedeDireccion').value.trim(),
+            telefono_contacto: document.getElementById('sedeTelefono').value.trim(),
+            color_institucional: document.getElementById('sedeColor').value,
+            especialidad_principal: especialidadUsuario.toUpperCase().trim(), // 🎯 Especialidad Dinámica
+            id_dueno: session.user.id,
+            id_clinica_padre: idMatriz, // 🔗 Enlace con la clínica matriz
+            estado: true,
+            plan_actual: 'GRATUITO'
+        };
+
+        const { data: clinicaCreada, error: errClinica } = await fisioNet
+            .from('clinicas')
+            .insert([nuevaSucursal])
+            .select()
+            .single();
+
+        if (errClinica) throw errClinica;
+
+        // 4. Crear el vínculo como Administrador en "colaboradores_clinica"
+        const nuevoColaborador = {
+            id_clinica: clinicaCreada.id,
+            id_profesional: session.user.id,
+            rol_sistema: 'ADMIN_SISTEMA',
+            cargo_clinico: 'ADMINISTRADOR',
+            estado: 'ACTIVO',
+            fecha_inicio: new Date().toISOString().split('T')[0],
+            tipo_vinculo: 'INTERNO'
+        };
+
+        const { error: errColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .insert([nuevoColaborador]);
+
+        if (errColab) throw errColab;
+
+        alert('✅ Sucursal registrada correctamente.');
+        window.cerrarModalNuevaSede();
+
+        // Recargar el selector y cambiar a la nueva sucursal creada
+        await cargarSedes();
+        cambiarSedeActiva(clinicaCreada.id);
+
+    } catch (err) {
+        alert('❌ Error al guardar la sucursal: ' + err.message);
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = '✅ Registrar Sede';
+    }
+});

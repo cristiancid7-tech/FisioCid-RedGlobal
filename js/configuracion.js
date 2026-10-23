@@ -448,11 +448,18 @@ document.getElementById('formConfiguracion').addEventListener('submit', async (e
             leyenda_pie: vLeyendaPie
         };
 
-        // 🚀 D. UPSERT EN TABLA CLINICAS
+        // =========================================================================
+        // 🎯 D. ACTUALIZAR SUCURSAL ACTIVA EN TABLA CLINICAS (CORREGIDO PARA MULTISEDE)
+        // =========================================================================
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+        if (!idClinicaActiva) {
+            throw new Error("No hay una sucursal activa seleccionada para actualizar.");
+        }
+
         const { data: nuevaClinica, error: errClinica } = await fisioNet
             .from('clinicas')
-            .upsert({
-                id_dueno: user.id,
+            .update({
                 nombre_clinica: vNombreClinica,
                 dominio_corporativo: vDominio || null,
                 direccion: vDir,
@@ -467,7 +474,8 @@ document.getElementById('formConfiguracion').addEventListener('submit', async (e
                 estado: true,
                 entidad_federativa: vEntidad,
                 config_pdf: configPdfObjeto
-            }, { onConflict: 'id_dueno' })
+            })
+            .eq('id', idClinicaActiva) // 🎯 Filtra únicamente por el ID de la sucursal que estás editando
             .select()
             .single();
 
