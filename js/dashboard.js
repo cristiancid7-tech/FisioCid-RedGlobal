@@ -2672,25 +2672,41 @@ function cerrarModalColega() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // 1. Usar getSession() en lugar de getUser() para la verificación asíncrona rápida en PWA/móvil
-        const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
+        // 1. Intento principal con getSession()
+        let { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
 
-        // Si no hay sesión o hay un error de autenticación, redirigimos al login
-        if (!session || sessionError) {
-            console.warn("No hay sesión activa en la PWA. Redirigiendo a login.html...");
+        // 2. 🛡️ RESCATE ESPECIAL PARA PWA EN iOS: Si vino nulo, forzamos recuperar la sesión guardada
+        if (!session) {
+            console.warn("⚠️ PWA iOS: getSession() vino nulo. Buscando sesión de respaldo...");
+            const localSession = await fisioNet.auth.getUser();
+            if (localSession?.data?.user) {
+                // Forzamos refresh del token de Supabase
+                const { data: refreshed } = await fisioNet.auth.refreshSession();
+                session = refreshed.session;
+            }
+        }
+
+        // 3. Si de plano NO hay usuario en ningún lado, entonces sí redirigimos
+        if (!session && !localStorage.getItem('sb-wboknacojtrfehlwswhh-auth-token')) {
+            console.warn("Sin credenciales en PWA. Redirigiendo a login.html...");
             window.location.replace('login.html');
             return;
         }
 
-        const user = session.user;
+        // Si el objeto session sigue nulo por lag de red pero el token existía, jalamos el usuario de getUser()
+        const user = session?.user || (await fisioNet.auth.getUser())?.data?.user;
 
-        // 2. Cargar las sedes
+        if (!user) {
+            window.location.replace('login.html');
+            return;
+        }
+
+        // ==========================================
+        // A PARTIR DE AQUÍ SIGUE TU CÓDIGO NORMAL
+        // ==========================================
         await cargarSedes();
-
-        // 3. Iniciar el canal de la sala de espera
         iniciarCanalSalaEspera();
 
-        // 🔒 RECONSULTA OBLIGATORIA DEL USUARIO AUTÉNTICO (INCLUYE LA INSIGNIA)
         const { data: perfilProf } = await fisioNet
             .from('perfiles_profesionales')
             .select('nombre_completo, insignia_especial')
@@ -2699,14 +2715,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const nombreReal = perfilProf?.nombre_completo || user.user_metadata?.full_name || "COLABORADOR ACTIVO";
         
-        // Sobrescribimos localStorage con la verdad de la base de datos
         localStorage.setItem('nombre_completo', nombreReal);
         localStorage.setItem('usuarioId', user.id);
 
-        // Actualizamos la bienvenida en pantalla
         const txtSaludo = document.getElementById('txtSaludo');
         if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
-
         // ✨ LÓGICA DE LA INSIGNIA DORADA VIP
         const contenedorInsignia = document.getElementById('contenedorInsigniaEspecial');
         if (contenedorInsignia) {
