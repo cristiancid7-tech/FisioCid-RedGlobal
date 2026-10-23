@@ -1,6 +1,7 @@
-
-
 document.addEventListener('DOMContentLoaded', () => {
+    // Si venimos regresando de un Login de Google, comprobamos si ya hay sesión activa
+    comprobarSesionExistente();
+
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -11,52 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const linkOlvide = document.getElementById('olvidePass'); 
-    if (linkOlvide) {
-        linkOlvide.onclick = async (e) => {
-            e.preventDefault();
-            const email = prompt("INGRESA TU CORREO PARA RESTABLECER:");
-            if (email) await recuperarPassword(email);
-        };
-    }
-});
-
-// ============================================================================
-// 🎛️ SWITCH INTERACTIVO DE PESTAÑAS (CONTROL VISUAL)
-// ============================================================================
-function switchLoginTab(rol) {
-    const formDoc = document.getElementById('loginFormDoctor');
-    const formStaff = document.getElementById('loginFormStaff');
-    const formPac = document.getElementById('loginFormPaciente');
-    
-    const tabDoc = document.getElementById('tabDoctor');
-    const tabStaff = document.getElementById('tabStaff');
-    const tabPac = document.getElementById('tabPaciente');
-
-    // Inicializamos todos ocultos y con fondo transparente
-    if (formDoc) formDoc.style.display = 'none';
-    if (formStaff) formStaff.style.display = 'none';
-    if (formPac) formPac.style.display = 'none';
-    
-    if (tabDoc) { tabDoc.style.background = 'transparent'; tabDoc.style.color = 'var(--secondary)'; }
-    if (tabStaff) { tabStaff.style.background = 'transparent'; tabStaff.style.color = 'var(--secondary)'; }
-    if (tabPac) { tabPac.style.background = 'transparent'; tabPac.style.color = 'var(--secondary)'; }
-
-    // Activamos únicamente el seleccionado
-    if (rol === 'DOCTOR') {
-        if (formDoc) formDoc.style.display = 'block';
-        if (tabDoc) { tabDoc.style.background = 'var(--primary)'; tabDoc.style.color = 'white'; }
-    } else if (rol === 'STAFF') {
-        if (formStaff) formStaff.style.display = 'block';
-        if (tabStaff) { tabStaff.style.background = '#3b82f6'; tabStaff.style.color = 'white'; }
-    } else if (rol === 'PACIENTE') {
-        if (formPac) formPac.style.display = 'block';
-        if (tabPac) { tabPac.style.background = '#ecc94b'; tabPac.style.color = '#1a202c'; }
-    }
-}
-
-// Escuchador para recuperar contraseña común al cargar el DOM
-document.addEventListener('DOMContentLoaded', () => {
     const linkOlvide = document.getElementById('olvidePass'); 
     if (linkOlvide) {
         linkOlvide.onclick = async (e) => {
@@ -77,89 +32,128 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Función para capturar logins automáticos (ej. regreso de Google OAuth)
+async function comprobarSesionExistente() {
+    const { data: { session } } = await fisioNet.auth.getSession();
+    if (session?.user) {
+        // Si el usuario ya está autenticado por Google, procesamos su acceso directo
+        await procesarAccesoDirecto(session.user);
+    }
+}
+
 // ============================================================================
-// 👨‍⚕️ FLUJO 1: INICIO DE SESIÓN EXCLUSIVO PARA PROFESIONALES E INVERSIONISTAS
+// 🎛️ SWITCH INTERACTIVO DE PESTAÑAS (CONTROL VISUAL)
+// ============================================================================
+function switchLoginTab(rol) {
+    const formDoc = document.getElementById('loginFormDoctor');
+    const formStaff = document.getElementById('loginFormStaff');
+    const formPac = document.getElementById('loginFormPaciente');
+    
+    const tabDoc = document.getElementById('tabDoctor');
+    const tabStaff = document.getElementById('tabStaff');
+    const tabPac = document.getElementById('tabPaciente');
+
+    if (formDoc) formDoc.style.display = 'none';
+    if (formStaff) formStaff.style.display = 'none';
+    if (formPac) formPac.style.display = 'none';
+    
+    if (tabDoc) { tabDoc.style.background = 'transparent'; tabDoc.style.color = 'var(--secondary)'; }
+    if (tabStaff) { tabStaff.style.background = 'transparent'; tabStaff.style.color = 'var(--secondary)'; }
+    if (tabPac) { tabPac.style.background = 'transparent'; tabPac.style.color = 'var(--secondary)'; }
+
+    if (rol === 'DOCTOR') {
+        if (formDoc) formDoc.style.display = 'block';
+        if (tabDoc) { tabDoc.style.background = 'var(--primary)'; tabDoc.style.color = 'white'; }
+    } else if (rol === 'STAFF') {
+        if (formStaff) formStaff.style.display = 'block';
+        if (tabStaff) { tabStaff.style.background = '#3b82f6'; tabStaff.style.color = 'white'; }
+    } else if (rol === 'PACIENTE') {
+        if (formPac) formPac.style.display = 'block';
+        if (tabPac) { tabPac.style.background = '#ecc94b'; tabPac.style.color = '#1a202c'; }
+    }
+}
+
+// ============================================================================
+// 👨‍⚕️ FLUJO 1: INICIO DE SESIÓN CON CORREO Y CONTRASEÑA
 // ============================================================================
 async function procesarLoginDoctor(event) {
-    
     event.preventDefault();
     
-    // 🧹 LIMPIEZA ABSOLUTA DE RESIDUOS PREVIOS
-    localStorage.clear();
-    sessionStorage.clear();
-
     const btn = document.getElementById('btnEntrarDoc');
     const email = document.getElementById('docEmail').value.trim();
     const pass = document.getElementById('docPass').value;
 
-    btn.disabled = true;
-    btn.innerText = "VERIFICANDO CREDENCIALES...";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "VERIFICANDO CREDENCIALES...";
+    }
 
     try {
+        // ⚠️ REMOVIDO localStorage.clear() PARA PRESERVAR SESIONES DE GOOGLE Y PWA
         const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email, password: pass });
         if (authError) throw authError;
 
-        // Sobrescribimos el ID autenticado real
-        localStorage.setItem('usuarioId', user.id);
-
-        // ====================================================================
-        // 🚀 BÚNKER EJECUTIVO: VERIFICACIÓN DE ROL INVERSIONISTA / SUPER ADMIN
-        // ====================================================================
-        const { data: perfilProf } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('rol, nombre_completo')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (perfilProf?.rol === 'INVERSIONISTA' || perfilProf?.rol === 'SUPER_ADMIN') {
-            //console.log("👑 [BOARD] Acceso concedido a Panel de Control de Inversionista.");
-            localStorage.setItem('rol_actual', perfilProf.rol);
-            localStorage.setItem('nombre_completo', perfilProf.nombre_completo || 'Inversionista FisioCid');
-            
-            // Redirección directa al panel de métricas financieras
-            window.location.href = 'panel-inversionista.html';
-            return; // 👈 Detiene el flujo para no buscar sedes médicas
-        }
-        // ====================================================================
-
-        //console.log("🏢 [CLÍNICO] Buscando sedes para profesional:", user.id);
-        const [resDueno, resColab] = await Promise.all([
-            fisioNet.from('clinicas').select('id, nombre_clinica, color_institucional, logo_url').eq('id_dueno', user.id),
-            fisioNet.from('colaboradores_clinica').select('id_clinica, clinicas(nombre_clinica, color_institucional, logo_url)').eq('id_profesional', user.id)
-        ]);
-
-        let sedesUnicas = new Map();
-        resDueno?.data?.forEach(c => sedesUnicas.set(c.id, { id: c.id, nombre: c.nombre_clinica, color: c.color_institucional || '#10b981', logo: c.logo_url || 'img/default-logo.png', tipo: 'DUEÑO' }));
-        resColab?.data?.forEach(c => {
-            if (c.id_clinica && c.clinicas && !sedesUnicas.has(c.id_clinica)) {
-                sedesUnicas.set(c.id_clinica, { id: c.id_clinica, nombre: c.clinicas.nombre_clinica, color: c.clinicas.color_institucional || '#10b981', logo: c.clinicas.logo_url || 'img/default-logo.png', tipo: 'COLABORADOR' });
-            }
-        });
-
-        const listaFinalSedes = Array.from(sedesUnicas.values());
-
-        if (listaFinalSedes.length === 0) {
-            alert("⚠️ Acceso correcto, pero esta cuenta no está dada de alta en ninguna sede de FisioCid.");
-            await fisioNet.auth.signOut();
-            btn.disabled = false; btn.innerText = "ENTRAR AL SISTEMA";
-            return;
-        }
-
-        if (listaFinalSedes.length === 1) {
-            const s = listaFinalSedes[0];
-            finalizarLoginSede(s.id, s.nombre, s.color, s.logo);
-        } else {
-            // Si tiene múltiples clínicas asignadas, se dispara tu modal original
-            mostrarSelectorSedes(listaFinalSedes, null);
-        }
+        await procesarAccesoDirecto(user);
 
     } catch (err) {
         alert("Error de acceso clínico: " + err.message);
-        btn.disabled = false; btn.innerText = "ENTRAR AL SISTEMA";
+        if (btn) {
+            btn.disabled = false; 
+            btn.innerText = "ENTRAR AL SISTEMA";
+        }
     }
 }
+
+// Lógica unificada para procesar el usuario (sea por Correo o por Google)
+async function procesarAccesoDirecto(user) {
+    localStorage.setItem('usuarioId', user.id);
+
+    // 1. Verificación de Inversionista o Super Admin
+    const { data: perfilProf } = await fisioNet
+        .from('perfiles_profesionales')
+        .select('rol, nombre_completo')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    if (perfilProf?.rol === 'INVERSIONISTA' || perfilProf?.rol === 'SUPER_ADMIN') {
+        localStorage.setItem('rol_actual', perfilProf.rol);
+        localStorage.setItem('nombre_completo', perfilProf.nombre_completo || 'Inversionista FisioCid');
+        window.location.href = 'panel-inversionista.html';
+        return;
+    }
+
+    // 2. Buscamos sedes asignadas al profesional
+    const [resDueno, resColab] = await Promise.all([
+        fisioNet.from('clinicas').select('id, nombre_clinica, color_institucional, logo_url').eq('id_dueno', user.id),
+        fisioNet.from('colaboradores_clinica').select('id_clinica, clinicas(nombre_clinica, color_institucional, logo_url)').eq('id_profesional', user.id)
+    ]);
+
+    let sedesUnicas = new Map();
+    resDueno?.data?.forEach(c => sedesUnicas.set(c.id, { id: c.id, nombre: c.nombre_clinica, color: c.color_institucional || '#10b981', logo: c.logo_url || 'img/default-logo.png', tipo: 'DUEÑO' }));
+    resColab?.data?.forEach(c => {
+        if (c.id_clinica && c.clinicas && !sedesUnicas.has(c.id_clinica)) {
+            sedesUnicas.set(c.id_clinica, { id: c.id_clinica, nombre: c.clinicas.nombre_clinica, color: c.clinicas.color_institucional || '#10b981', logo: c.clinicas.logo_url || 'img/default-logo.png', tipo: 'COLABORADOR' });
+        }
+    });
+
+    const listaFinalSedes = Array.from(sedesUnicas.values());
+
+    if (listaFinalSedes.length === 0) {
+        alert("⚠️ Acceso correcto, pero esta cuenta no está dada de alta en ninguna sede de FisioCid.");
+        await fisioNet.auth.signOut();
+        return;
+    }
+
+    if (listaFinalSedes.length === 1) {
+        const s = listaFinalSedes[0];
+        finalizarLoginSede(s.id, s.nombre, s.color, s.logo, user);
+    } else {
+        mostrarSelectorSedes(listaFinalSedes, null, user);
+    }
+}
+
 // ============================================================================
-// 🤒 FLUJO 2: INICIO DE SESIÓN EXCLUSIVO PARA PACIENTES MAESTROS
+// 🤒 FLUJO 2: INICIO DE SESIÓN PACIENTES
 // ============================================================================
 async function procesarLoginPaciente(event) {
     event.preventDefault();
@@ -173,66 +167,48 @@ async function procesarLoginPaciente(event) {
     }
 
     try {
-        // 1. Autenticación en Supabase Auth
         const { data: { user }, error: authError } = await fisioNet.auth.signInWithPassword({ email: emailInput, password: pass });
         if (authError) throw authError;
 
-        //console.log("🔎 [PORTAL] Usuario Auth verificado. ID:", user.id, "Correo:", user.email);
-
-        // 🚨 2. DIAGNÓSTICO PROFUNDO CON CONSOLE LOGS
-        // Intento A: Por ID de Usuario Auth
         const resAuth = await fisioNet
             .from('pacientes_maestros')
             .select('id, nombre, apellido_paterno, id_usuario_auth')
             .eq('id_usuario_auth', user.id)
             .maybeSingle();
-        //console.log("🔍 [LOG 1] Búsqueda por id_usuario_auth ->", resAuth);
 
-        // Intento B: Por correo_electronico (Adulto)
         const resCorreo = await fisioNet
             .from('pacientes_maestros')
             .select('id, nombre, apellido_paterno, id_usuario_auth')
             .ilike('correo_electronico', user.email.trim())
             .maybeSingle();
-        //console.log("🔍 [LOG 2] Búsqueda por correo_electronico ->", resCorreo);
 
-        // Intento C: Por correo_tutor (Menor de edad)
         const resTutor = await fisioNet
             .from('pacientes_maestros')
             .select('id, nombre, apellido_paterno, id_usuario_auth')
             .ilike('correo_tutor', user.email.trim())
             .maybeSingle();
-        //console.log("🔍 [LOG 3] Búsqueda por correo_tutor ->", resTutor);
 
-        // Evaluamos cuál devolvió datos exitosos
         let pacienteData = resAuth.data || resCorreo.data || resTutor.data;
 
-        // Si no encontró nada en ninguna de las 3 opciones:
         if (!pacienteData) {
-            alert("⚠️ Credenciales válidas en Auth, pero no se encontró la ficha en 'pacientes_maestros'. Revisa los [LOGS] en la consola.");
+            alert("⚠️ Credenciales válidas, pero no se encontró expediente clínico maestro en el sistema.");
             await fisioNet.auth.signOut();
             if (btn) { btn.disabled = false; btn.innerText = "INGRESAR AL PORTAL"; }
             return;
         }
 
-        // 3. AUTO-VÍNCULO: Asignamos el id_usuario_auth si aún estaba vacío
         if (!pacienteData.id_usuario_auth) {
-            //console.log("🔗 Enlazando expediente clínico maestro ID:", pacienteData.id, "con user.id de Auth...");
-            const { error: errUpdate } = await fisioNet
+            await fisioNet
                 .from('pacientes_maestros')
                 .update({ id_usuario_auth: user.id })
                 .eq('id', pacienteData.id);
-            
-            if (errUpdate) console.error("⚠️ Error en auto-vínculo (revisar RLS Update):", errUpdate);
         }
 
-        // 4. Configuración de sesión para el portal
         localStorage.setItem('rol_actual', 'PACIENTE');
         localStorage.setItem('nombre_completo', `${pacienteData.nombre} ${pacienteData.apellido_paterno}`.toUpperCase());
         localStorage.setItem('usuarioId', user.id);
         localStorage.setItem('paciente_maestro_id', pacienteData.id);
         
-        //console.log("🚀 Acceso concedido. Redirigiendo a portal-paciente.html");
         window.location.href = 'portal-paciente.html';
 
     } catch (err) {
@@ -244,8 +220,8 @@ async function procesarLoginPaciente(event) {
         }
     }
 }
-function mostrarSelectorSedes(sedes, datosPaciente) {
-    // 1. Limpiar si ya existe uno
+
+function mostrarSelectorSedes(sedes, datosPaciente, user) {
     const old = document.getElementById('selectorSedesOverlay');
     if (old) old.remove();
 
@@ -277,7 +253,6 @@ function mostrarSelectorSedes(sedes, datosPaciente) {
 
     const lista = modal.querySelector('#contenedorSedesBtns');
 
-    // --- SECCIÓN PROFESIONAL (SEDES) ---
     sedes.forEach(s => {
         const btn = document.createElement('button');
         btn.style = `
@@ -294,78 +269,23 @@ function mostrarSelectorSedes(sedes, datosPaciente) {
             </div>
         `;
 
-        btn.onmouseover = () => { 
-            btn.style.borderColor = s.color; 
-            btn.style.background = `${s.color}10`; 
-            btn.style.transform = 'translateY(-2px)';
-        };
-        btn.onmouseout = () => { 
-            btn.style.borderColor = '#e2e8f0'; 
-            btn.style.background = '#f8fafc'; 
-            btn.style.transform = 'translateY(0)';
-        };
-
-        btn.onclick = () => finalizarLoginSede(s.id, s.nombre, s.color, s.logo);
+        btn.onclick = () => finalizarLoginSede(s.id, s.nombre, s.color, s.logo, user);
         lista.appendChild(btn);
     });
-
-    // 🚀 --- SECCIÓN DE PACIENTE (Solo si el doctor también es paciente) ---
-    if (datosPaciente) {
-        // Separador visual
-        const hr = document.createElement('div');
-        hr.style = `
-            margin: 20px 0 10px; display: flex; align-items: center; 
-            gap: 10px; color: #cbd5e1; font-size: 0.7rem; font-weight: 800;
-        `;
-        hr.innerHTML = `<div style="flex:1; height:1px; background:#e2e8f0;"></div> O TAMBIÉN <div style="flex:1; height:1px; background:#e2e8f0;"></div>`;
-        lista.appendChild(hr);
-
-        const btnPac = document.createElement('button');
-        btnPac.style = `
-            background: #eef2ff; color: #4338ca; border: 2px solid #c7d2fe;
-            padding: 18px; border-radius: 18px; font-weight: 800; cursor: pointer;
-            transition: all 0.3s ease; display: flex; align-items: center; gap: 15px;
-        `;
-
-        btnPac.innerHTML = `
-            <div style="background: white; width: 35px; height: 35px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🩺</div>
-            <div style="text-align: left;">
-                <div style="font-size: 0.95rem;">MODO PACIENTE</div>
-                <small style="font-size: 0.7rem; color: #6366f1;">VER MIS CITAS Y EJERCICIOS</small>
-            </div>
-        `;
-
-        btnPac.onmouseover = () => { 
-            btnPac.style.transform = 'translateY(-2px)';
-            btnPac.style.boxShadow = '0 10px 15px -3px rgba(99, 102, 241, 0.2)';
-        };
-        btnPac.onmouseout = () => { 
-            btnPac.style.transform = 'translateY(0)';
-            btnPac.style.boxShadow = 'none';
-        };
-
-        btnPac.onclick = () => {
-            //console.log("Entrando como paciente...");
-            localStorage.setItem('rol_actual', 'PACIENTE');
-           localStorage.setItem('nombre_completo', datosPaciente.nombre_mostrar);
-            // 🎯 Cambia esto a la ruta real de tu portal de pacientes
-            window.location.href = 'portal-paciente.html'; 
-        };
-        lista.appendChild(btnPac);
-    }
 }
 
-
-async function finalizarLoginSede(id, nombre, color, logo) {
-    //console.log("📦 Configurando sesión para:", nombre);
-    
+// 🛡️ FINALIZADOR DE LOGIN SEGURO (Acepta el objeto 'user' directamente)
+async function finalizarLoginSede(id, nombre, color, logo, userParam = null) {
     try {
-        // 1. Obtenemos el usuario actual de forma segura
-        const { data: { user }, error: userError } = await fisioNet.auth.getUser();
-        
-        if (userError || !user) throw new Error("No se pudo obtener el usuario autenticado");
+        // Usamos el usuario pasado por parámetro o lo recuperamos con getSession() en lugar de getUser()
+        let user = userParam;
+        if (!user) {
+            const { data: { session } } = await fisioNet.auth.getSession();
+            user = session?.user;
+        }
 
-        // 2. Buscamos el rol del colaborador en esta sede
+        if (!user) throw new Error("No se pudo obtener la sesión del usuario.");
+
         const { data: colab } = await fisioNet
             .from('colaboradores_clinica')
             .select('rol_sistema')
@@ -373,24 +293,16 @@ async function finalizarLoginSede(id, nombre, color, logo) {
             .eq('id_profesional', user.id)
             .maybeSingle();
 
-        // 3. 🚩 GUARDADO MAESTRO EN LOCALSTORAGE
         localStorage.setItem('id_clinica_activa', id);
         localStorage.setItem('nombre_clinica', nombre);
         localStorage.setItem('clinica_color', color);
         localStorage.setItem('clinica_logo', logo);
-        
-        // --- ESTA ES LA LÍNEA CRÍTICA QUE CORREGIMOS ---
         localStorage.setItem('usuarioId', user.id); 
-        // ----------------------------------------------
 
-        // 4. Asignación de Roles para permisos
         const rolFinal = colab ? colab.rol_sistema : 'ADMIN_SISTEMA';
         localStorage.setItem('rol_actual', rolFinal);
         localStorage.setItem('rol_usuario', 'PROFESIONAL_FISIO');
 
-        //console.log("✅ Sesión lista. Especialista ID:", user.id);
-
-        // Redirección al Dashboard
         window.location.href = 'dashboard.html';
 
     } catch (err) {
