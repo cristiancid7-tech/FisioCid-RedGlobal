@@ -99,11 +99,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🎯 MODAL RENAPO DE RESPALDO
+// 🎯 VERIFICACIÓN AUTOMÁTICA DE HOMOCLAVE / RENAPO
     document.getElementById('btnAutoHomo')?.addEventListener('click', (e) => {
         e.preventDefault();
-        document.getElementById('modalRenapo').style.display = 'flex';
+        autocompletarHomoclaveRenapo(); // 👈 Llama a la validación automática
     });
+
+    // 🎯 Cierre del Modal RENAPO (si se abre en otra parte como respaldo)
     document.getElementById('cerrarRenapo')?.addEventListener('click', () => {
         document.getElementById('modalRenapo').style.display = 'none';
     });
@@ -636,12 +638,10 @@ function crearBotonDesbloqueoDinamico() {
                 return;
             }
 
-            // 🎯 Si es menor, enviamos la solicitud al ID del tutor para que le aparezca en su Portal
+            // 🎯 Si es menor, enviamos la solicitud al ID del tutor
             const idDestinatarioOTP = (esMenor && pacienteData.id_tutor) 
                 ? pacienteData.id_tutor 
                 : pacienteData.id;
-
-            //console.log("📲 Destinatario OTP -> ID:", idDestinatarioOTP, esMenor ? "(TUTOR)" : "(PACIENTE)");
 
             btnKey.disabled = true;
             btnKey.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Solicitando OTP...';
@@ -652,9 +652,11 @@ function crearBotonDesbloqueoDinamico() {
                 const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
                 const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-                //console.log("🔑 [FISIOCID OTP]: Generando clave interna para edición ->", codigoOTP);
+                // 🛡️ Detección de teléfono de contingencia/presencial
+                const telRegistrado = (pacienteData.telefono || "").trim();
+                const esEmergenciaPresencial = !telRegistrado || /^0+$/.test(telRegistrado);
 
-                // Insert directo mapeando exactamente a tus 11 columnas
+                // Insert dinámico permitiendo canal alternativo
                 const { data: solInsert, error: errOTP } = await fisioNet
                     .from('solicitudes_acceso_otp')
                     .insert([{
@@ -665,7 +667,8 @@ function crearBotonDesbloqueoDinamico() {
                         permisos_concedidos: { 
                             edicion_ficha: true, 
                             paciente_afectado_id: pacienteData.id,
-                            paciente_nombre: `${pacienteData.nombre || ''} ${pacienteData.apellido_paterno || ''}`.trim()
+                            paciente_nombre: `${pacienteData.nombre || ''} ${pacienteData.apellido_paterno || ''}`.trim(),
+                            metodo_verificacion: esEmergenciaPresencial ? 'PRESENCIAL_EMERGENCIA' : 'OTP_DIGITAL'
                         },
                         estado_solicitud: 'PENDIENTE',
                         expira_en: expiraEn,
@@ -677,7 +680,7 @@ function crearBotonDesbloqueoDinamico() {
 
                 tokenSeguridadActivo = codigoOTP;
 
-                // Abrir modal de entrada de OTP en la pantalla del médico
+                // Si es contingencia presencial (sin cel / 0000000000), mostramos el código en consola/alerta de apoyo o directo al modal
                 const inputCodigo = document.getElementById('inputCodigoIngresadoOTP');
                 const msgError = document.getElementById('msgErrorOTP');
                 
@@ -850,7 +853,6 @@ function ocultarListaSiEsExterno(targetNode) {
 document.getElementById('formRegistroPaciente')?.addEventListener('submit', async (e) => {
     e.preventDefault(); // Frenamos el envío para validar primero
 
-    // Capturamos el botón al inicio
     const btnSubmit = e.target.querySelector('button[type="submit"]');
 
     try {
@@ -862,31 +864,30 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             return;
         }
 
+        // --- 2. CAPTURA Y EVALUACIÓN DE MENOR DE EDAD ---
+        const inputTutor = document.getElementById('tutor-tel');
+        const esMenorEdad = (inputTutor && inputTutor.offsetWidth > 0) || window.pacienteCargado?.es_menor_edad === true;
+
         const telefonoAdulto = document.getElementById('valTelefono')?.value.trim() || "";
         let emailAdulto = document.getElementById('valemail')?.value.trim() || ""; 
         const telefonoTutor = document.getElementById('tutor-tel')?.value.trim() || "";
         const correoTutor = document.getElementById('correo-tutor')?.value.trim() || "";
 
-        const inputTutor = document.getElementById('tutor-tel');
-        const esMenorEdad = (inputTutor && inputTutor.offsetWidth > 0) || window.pacienteCargado?.es_menor_edad === true;
-
-        //console.log("🛡️ Validando políticas de contacto FisioCid. Menor de edad:", esMenorEdad);
+        // --- 3. REGLAS DE CALIDAD DE DATOS (ACEPTA 10 DÍGITOS O COMODÍN '0000000000') ---
+        const esTelefonoValido = (tel) => tel.length >= 10 || /^0+$/.test(tel);
 
         let faltaContacto = false;
         let mensajeError = "";
 
-      // --- 2. REGLAS ESTRICTAS DE CALIDAD DE DATOS ---
         if (esMenorEdad) {
-            // Evaluamos únicamente que exista el teléfono del tutor con al menos 10 dígitos
-            if (!telefonoTutor || telefonoTutor.length < 10) {
+            if (!telefonoTutor || !esTelefonoValido(telefonoTutor)) {
                 faltaContacto = true;
-                mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nTodo paciente MENOR DE EDAD debe contar obligatoriamente con el teléfono de contacto de su tutor.\n\nPor favor capture:\n• Teléfono celular válido (10 dígitos).`;
+                mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nTodo paciente MENOR DE EDAD debe contar obligatoriamente con el teléfono de contacto de su tutor.\n\nPor favor capture:\n• Teléfono celular válido (10 dígitos) o '0000000000' en caso de emergencia presencial.`;
             }
         } else {
-            // Evaluamos únicamente que exista el teléfono del paciente adulto con al menos 10 dígitos
-            if (!telefonoAdulto || telefonoAdulto.length < 10) {
+            if (!telefonoAdulto || !esTelefonoValido(telefonoAdulto)) {
                 faltaContacto = true;
-                mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nEs necesario registrar un canal de comunicación.\n\nPor favor capture de forma obligatoria:\n• Teléfono celular válido (10 dígitos).`;
+                mensajeError = `❌ PROTOCOLO DE SEGURIDAD FISIOCID:\n\nEs necesario registrar un canal de comunicación.\n\nPor favor capture de forma obligatoria:\n• Teléfono celular válido (10 dígitos) o '0000000000' para registro presencial de emergencia.`;
             }
         }
 
@@ -895,25 +896,19 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
             console.error("🛑 Registro bloqueado internamente por falta de datos maestros de comunicación.");
             
             if (esMenorEdad) {
-                if (!telefonoTutor || telefonoTutor.length < 10) document.getElementById('tutor-tel')?.focus();
-                else document.getElementById('correo-tutor')?.focus();
+                document.getElementById('tutor-tel')?.focus();
             } else {
-                if (!telefonoAdulto || telefonoAdulto.length < 10) document.getElementById('valTelefono')?.focus();
-                else document.getElementById('valemail')?.focus();
+                document.getElementById('valTelefono')?.focus();
             }
             return; 
         }
 
-        //console.log("🎬 [LOG 1] ¡Submit detectado! Iniciando proceso de guardado...");
-        
         if (btnSubmit) {
             btnSubmit.disabled = true; 
             btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESANDO...';
         }
 
-        //console.log("🔑 [LOG 2] Solicitando usuario activo de Auth...");
         const { data: { user } } = await fisioNet.auth.getUser();
-        //console.log("👤 [LOG 3] Usuario obtenido con éxito ID:", user?.id);
 
         if (!user) {
             alert("⚠️ Sesión no encontrada. Por favor inicie sesión nuevamente.");
@@ -924,9 +919,8 @@ document.getElementById('formRegistroPaciente')?.addEventListener('submit', asyn
         // =====================================================================
         // 🔒 BÚNKER DE CONTROL DE PLANES FISIOCID (MATRIZ DINÁMICA DE SUSCRIPCIÓN)
         // =====================================================================
-      const esPacienteExistente = Boolean(pacienteExistenteId || window.pacienteCargado?.id);
-const idRealPaciente = pacienteExistenteId || window.pacienteCargado?.id;
-
+        const esPacienteExistente = Boolean(pacienteExistenteId || window.pacienteCargado?.id);
+        const idRealPaciente = pacienteExistenteId || window.pacienteCargado?.id;
 
         if (!esPacienteExistente) {
             const { data: perfProf } = await fisioNet
@@ -935,24 +929,18 @@ const idRealPaciente = pacienteExistenteId || window.pacienteCargado?.id;
                 .eq('id', user.id)
                 .maybeSingle();
 
-           
             const nivelActual = (perfProf?.nivel_suscripcion || 'GRATUITO').toUpperCase();
-
             const chequeoCuota = await validarCuotaPaciente(user.id, nivelActual);
 
-            // ✅ CÓDIGO ACTUALIZADO CON REDIRECCIÓN DIRECTA:
-if (!chequeoCuota.permitido) {
-    alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
-    window.location.href = "suscripcion.html"; // 👈 Te redirige directamente aquí
-    return;
-}
+            if (!chequeoCuota.permitido) {
+                alert("🚀 ¡TU CONSULTORIO ESTÁ CRECIENDO!\n\n" + chequeoCuota.motivo);
+                window.location.href = "suscripcion.html";
+                return;
+            }
         }
-        // =====================================================================
 
         const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica');
-        //console.log("🏢 [LOG 4] ID de clínica activa desde LocalStorage:", clinicaId);
 
-        //console.log("🔍 [LOG 5] Consultando rol del colaborador en DB...");
         const { data: colaborador } = await fisioNet
             .from('colaboradores_clinica')
             .select('rol_sistema')
@@ -961,14 +949,11 @@ if (!chequeoCuota.permitido) {
             .maybeSingle();
 
         const rolReal = colaborador?.rol_sistema || 'OPERATIVO';
-        //console.log("💼 [LOG 6] Rol del sistema asignado:", rolReal);
 
         // Captura de datos de interfaz
         const curpFinal = (document.getElementById('curpAuto').value + document.getElementById('curpHomo').value).toUpperCase();
         const formData = new FormData(e.target);
         const datos = Object.fromEntries(formData.entries());
-        const estadoSeleccionado = document.getElementById('valEstado')?.value || null;
-        
 
         delete datos.homoclave_curp; 
         delete datos.id_convenio;
@@ -988,64 +973,57 @@ if (!chequeoCuota.permitido) {
         const folioSede = document.getElementById('inputFolioExpediente')?.value || null;
         const emailTutor = document.getElementById('correo-tutor')?.value?.toLowerCase().trim() || null;
         const accesoRed = aceptaPrivacidad; 
-        const fechaConsentimiento = new Date().toISOString(); // Timestamp legal exacto
+        const fechaConsentimiento = new Date().toISOString();
 
-     
         emailAdulto = emailAdulto ? emailAdulto.toLowerCase() : null;
-
-        //console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
-  const payload = {
-    nombre: datos.nombre,
-    apellido_paterno: datos.apellido_paterno,
-    apellido_materno: datos.apellido_materno,
-    curp: curpFinal.length === 18 ? curpFinal : null,
-    fecha_nacimiento: datos.fecha_nacimiento || null,
-    genero: datos.genero,
-    estado_nacimiento: document.getElementById('valEstado')?.value || datos.estado_nacimiento || null,
-    creado_por: user.id,
-    id_clinica: clinicaId,
-    id_clinica_origen: clinicaId,
-    nombre_clinica: localStorage.getItem('nombre_clinica'),
-    numero_expediente_sede: folioSede,
-    ocupacion: datos.ocupacion || null,
-    telefono: datos.telefono || null,
-    correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
-    direccion_completa: datos.direccion_completa || null,
-    
-    // 🔧 LECTURA CORREGIDA POR ID DIRECTO AL DOM
-    contacto_emergencia_nombre: document.getElementById('valEmergenciaNom')?.value?.toUpperCase() || null,
-    contacto_emergencia_parentesco: document.getElementById('valEmergenciaPar')?.value?.toUpperCase() || null,
-    contacto_emergencia_tel: document.getElementById('valEmergenciaTel')?.value || null,
-    
-    es_menor_edad: esMenor,
-    id_tutor: esMenor ? uuidTutorSeleccionado : null,
-    nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
-    telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
-    parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
-    correo_tutor: esMenor ? emailTutor : null,
-    acceso_red_activo: accesoRed,
-    consentimiento_firmado: accesoRed,
-    fecha_firma_consentimiento: fechaConsentimiento,
-    tipo_sangre: datos.tipo_sangre || null,
-    lateralidad: datos.lateralidad || null,
-    alergias: datos.alergias || null,
-    antecedentes_quirurgicos: datos.antecedentes_quirurgicos || null,
-    antecedentes_patologicos: datos.antecedentes_patologicos || null,
-    antecedentes_no_patologicos: datos.antecedentes_no_patologicos || null,
-    antecedentes_heredofamiliares: datos.antecedentes_heredofamiliares || null,
-    farmacologia_activa: datos.farmacologia_activa || null,
-    alertas_seguridad: datos.alertas_seguridad || null,
-    notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null
-};
+        const payload = {
+            nombre: datos.nombre,
+            apellido_paterno: datos.apellido_paterno,
+            apellido_materno: datos.apellido_materno,
+            curp: curpFinal.length === 18 ? curpFinal : null,
+            fecha_nacimiento: datos.fecha_nacimiento || null,
+            genero: datos.genero,
+            estado_nacimiento: document.getElementById('valEstado')?.value || datos.estado_nacimiento || null,
+            creado_por: user.id,
+            id_clinica: clinicaId,
+            id_clinica_origen: clinicaId,
+            nombre_clinica: localStorage.getItem('nombre_clinica'),
+            numero_expediente_sede: folioSede,
+            ocupacion: datos.ocupacion || null,
+            telefono: datos.telefono || null,
+            correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
+            direccion_completa: datos.direccion_completa || null,
+            
+            contacto_emergencia_nombre: document.getElementById('valEmergenciaNom')?.value?.toUpperCase() || null,
+            contacto_emergencia_parentesco: document.getElementById('valEmergenciaPar')?.value?.toUpperCase() || null,
+            contacto_emergencia_tel: document.getElementById('valEmergenciaTel')?.value || null,
+            
+            es_menor_edad: esMenor,
+            id_tutor: esMenor ? uuidTutorSeleccionado : null,
+            nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
+            telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
+            parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
+            correo_tutor: esMenor ? emailTutor : null,
+            acceso_red_activo: accesoRed,
+            consentimiento_firmado: accesoRed,
+            fecha_firma_consentimiento: fechaConsentimiento,
+            tipo_sangre: datos.tipo_sangre || null,
+            lateralidad: datos.lateralidad || null,
+            alergias: datos.alergias || null,
+            antecedentes_quirurgicos: datos.antecedentes_quirurgicos || null,
+            antecedentes_patologicos: datos.antecedentes_patologicos || null,
+            antecedentes_no_patologicos: datos.antecedentes_no_patologicos || null,
+            antecedentes_heredofamiliares: datos.antecedentes_heredofamiliares || null,
+            farmacologia_activa: datos.farmacologia_activa || null,
+            alertas_seguridad: datos.alertas_seguridad || null,
+            notas_precaucion: document.querySelector('[name="notas_precaucion"]')?.value || datos.notas_precaucion || null
+        };
 
         let resultado;
-        //console.log("🧐 [LOG 8] ¿El paciente ya existe en el sistema maestro?:", esPacienteExistente);
 
         if (esPacienteExistente) {
-
-            
             const camposCriticos = ['alergias', 'antecedentes_patologicos', 'antecedentes_heredofamiliares', 'farmacologia_activa'];
             const huboCambiosCriticos = camposCriticos.some(campo => {
                 return (window.pacienteCargado[campo] || "").trim() !== (datos[campo] || "").trim();
@@ -1070,9 +1048,9 @@ if (!chequeoCuota.permitido) {
                     .eq('id_clinica', clinicaId)
                     .maybeSingle();
 
-              const partesFolioActual = (folioSede || "").split('-');
-const numExtraido = parseInt((partesFolioActual[partesFolioActual.length - 1] || "").replace(/\D/g, ''), 10);
-const consecutivoFinal = isNaN(numExtraido) ? 0 : numExtraido;
+                const partesFolioActual = (folioSede || "").split('-');
+                const numExtraido = parseInt((partesFolioActual[partesFolioActual.length - 1] || "").replace(/\D/g, ''), 10);
+                const consecutivoFinal = isNaN(numExtraido) ? 0 : numExtraido;
 
                 if (expExistente) {
                     await fisioNet.from('expedientes_clinicos')
@@ -1090,7 +1068,6 @@ const consecutivoFinal = isNaN(numExtraido) ? 0 : numExtraido;
                         estado_expediente: 'ACTIVO'
                     }]);
                 }
-                //console.log("✅ Paciente y Expediente sincronizados.");
 
             } else {
                 if (btnSubmit) {
@@ -1101,7 +1078,6 @@ const consecutivoFinal = isNaN(numExtraido) ? 0 : numExtraido;
             }
         } else {
             // PACIENTE NUEVO ABSOLUTO
-            //console.log("⚡ [LOG 9B] Entrando al flujo de PACIENTE NUEVO ABSOLUTO...");
             payload.fecha_registro = new Date().toISOString();
             
             resultado = await fisioNet.from('pacientes_maestros').insert([payload]).select();

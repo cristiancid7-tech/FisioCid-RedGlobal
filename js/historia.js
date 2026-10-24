@@ -88,21 +88,20 @@ const cargarExpedienteFijo = async () => {
     const idLimpio = idPaciente.trim();
     const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
 
-    // 4. CÓDIGO RESTANTE PARA JALAR PACIENTE MAESTRO Y EXPEDIENTE
-    const { data, error } = await fisioNet
+    // 4. CÓDIGO CORREGIDO PARA JALAR PACIENTE MAESTRO (Sin filtro erróneo de id_clinica)
+    const { data: pacienteData, error: errorPaciente } = await fisioNet
         .from('pacientes_maestros')
         .select('*')
         .eq('id', idLimpio)
-        .eq('id_clinica', idClinica)
         .single();
 
-    if (error || !data) {
-        console.error("Error de Supabase o acceso denegado:", error?.message);
-        alert("⚠️ No se encontró la información del paciente o no pertenece a esta clínica.");
+    if (errorPaciente || !pacienteData) {
+        console.error("Error de Supabase al consultar paciente maestro:", errorPaciente?.message);
+        alert("⚠️ No se encontró la información del paciente.");
         return;
     }
 
-    const p = data; 
+    const p = pacienteData; 
     if (document.getElementById('nombre')) {
         document.getElementById('nombre').innerText = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.toUpperCase();
     }
@@ -138,16 +137,14 @@ const cargarExpedienteFijo = async () => {
         `;
     }
 
-  
-
-    // 📂 4. TRAER NÚMERO DE EXPEDIENTE
+    // 📂 5. BUSCAR EXPEDIENTE MÉRITAMENTE DESDE "expedientes_clinicos"
     try {
         const { data: dataExp, error: errorExp } = await fisioNet
             .from('expedientes_clinicos')
             .select('folio_personalizado, numero_consecutivo')
             .eq('id_paciente', idLimpio)
             .eq('id_clinica', idClinica)
-            .single();
+            .maybeSingle();
 
         const elExp = document.getElementById('num-expediente');
         if (elExp) {

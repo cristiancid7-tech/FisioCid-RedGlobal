@@ -1,5 +1,7 @@
 // --- lista.js ---
 
+// --- lista.js (Corregido para Multisede y Relación de Expedientes) ---
+
 async function verificarAcceso() {
     const { data: { session } } = await fisioNet.auth.getSession();
     if (!session) { window.location.href = 'index.html'; return; }
@@ -20,53 +22,66 @@ async function verificarAcceso() {
             nombre = "ESPECIALISTA";
         }
     }
-    document.getElementById('saludoFisio').innerText = `HOLA, ${nombre.toUpperCase()}`;
+    const elSaludo = document.getElementById('saludoFisio');
+    if (elSaludo) elSaludo.innerText = `HOLA, ${nombre.toUpperCase()}`;
 }
 
 async function obtenerPacientes(terminoBusqueda = "") {
     const idClinicaActiva = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
-
-    //console.log("🔍 [DEBUG] Iniciando obtenerPacientes...");
-    //console.log("🏢 Clínica Activa ID:", idClinicaActiva);
-    //console.log("⌨️ Texto ingresado por el usuario:", `"${terminoBusqueda}"`);
 
     if (!idClinicaActiva) {
         console.warn("⚠️ No se encontró ID de clínica activa");
         return [];
     }
 
-    let consulta = fisioNet
-        .from('pacientes_maestros')
-        .select('*')
-        .eq('id_clinica', idClinicaActiva);
+    try {
+        // 🛡️ CORRECCIÓN: Se realiza JOIN con expedientes_clinicos filtrado por la sede activa
+        const { data: pacientes, error } = await fisioNet
+            .from('pacientes_maestros')
+            .select(`
+                *,
+                expedientes_clinicos!inner (
+                    id,
+                    folio_personalizado,
+                    numero_consecutivo,
+                    id_clinica
+                )
+            `)
+            .eq('expedientes_clinicos.id_clinica', idClinicaActiva)
+            .order('nombre', { ascending: true });
 
-    if (terminoBusqueda && terminoBusqueda.trim() !== "") {
-        const t = terminoBusqueda.trim();
-        //console.log("🎯 Filtrando por:", t);
-  
-        // Prueba esta versión de la consulta que es más "agresiva" buscando:
-consulta = consulta.or(`nombre.ilike.%${t}%,apellido_paterno.ilike.%${t}%,numero_expediente_sede.ilike.%${t}%`);
-   }
+        if (error) {
+            console.error("❌ Error en Supabase al consultar lista de pacientes:", error.message);
+            return [];
+        }
 
-    const { data: pacientes, error } = await consulta
-        .order('nombre', { ascending: true });
+        // Mapeamos los datos para obtener el folio asignado en esta sede
+        const listaMapeada = pacientes.map(p => {
+            const exp = Array.isArray(p.expedientes_clinicos) ? p.expedientes_clinicos[0] : p.expedientes_clinicos;
+            return {
+                ...p,
+                folio_display: exp?.folio_personalizado || exp?.numero_consecutivo || 'S/F'
+            };
+        });
 
-    if (error) {
-        console.error("❌ Error en Supabase:", error.message);
+        // Búsqueda dinámica por Nombre, CURP o Folio de Sede
+        if (terminoBusqueda && terminoBusqueda.trim() !== "") {
+            const t = terminoBusqueda.toUpperCase().trim();
+            return listaMapeada.filter(p => {
+                const nom = (p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`).toUpperCase();
+                const curp = (p.curp || '').toUpperCase();
+                const folio = (p.folio_display || '').toUpperCase();
+                return nom.includes(t) || curp.includes(t) || folio.includes(t);
+            });
+        }
+
+        return listaMapeada;
+
+    } catch (e) {
+        console.error("Error inesperado en obtenerPacientes:", e);
         return [];
     }
-
-    // LOG CLAVE: ¿Qué nos devolvió la base de datos?
-    //console.log("📊 Datos recibidos de Supabase:", pacientes);
-    
-    if (pacientes.length === 0) {
-        //console.log("❓ La consulta no devolvió nada. Verifica si el folio existe EXACTAMENTE así en Supabase.");
-    }
-
-    return pacientes;
 }
-
-
 
 function dibujarTabla(lista) {
     const tabla = document.getElementById('tablaPacientes');
@@ -74,7 +89,7 @@ function dibujarTabla(lista) {
     tabla.innerHTML = '';
 
     if (lista.length === 0) {
-        tabla.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No se encontraron pacientes.</td></tr>';
+        tabla.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No se encontraron pacientes en esta sede.</td></tr>';
         return;
     }
 
@@ -82,7 +97,7 @@ function dibujarTabla(lista) {
         const nombreCompleto = p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`;
         const idPaciente = p.id;
         
-        // 🚀 CÁLCULO DE EDAD DINÁMICA
+        // CÁLCULO DE EDAD DINÁMICA
         let edadTexto = "---";
         if (p.fecha_nacimiento) {
             const hoy = new Date();
@@ -99,14 +114,12 @@ function dibujarTabla(lista) {
             }
         }
 
-        // 🛡️ VERIFICACIÓN DE EXPEDIENTE COMPLETO
         const esRegistroCompleto = p.curp && p.curp.length === 18 && !p.curp.includes('??');
 
         const fila = document.createElement('tr');
         let contenidoBotones = "";
 
         if (esRegistroCompleto) {
-            // 🎨 DISEÑO COMPACTO, ELEGANTE Y CON BOTONES CONECTADOS
             contenidoBotones = `
                 <button onclick="verFichaContacto('${idPaciente}')" title="Ficha de Contacto"
                     style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
@@ -137,7 +150,7 @@ function dibujarTabla(lista) {
         fila.innerHTML = `
             <td style="padding: 12px; border-bottom: 1px solid #eee;">
                 <div style="font-size: 0.75rem; font-weight: 800; color: var(--primary); font-family: monospace; margin-bottom: 2px;">
-                    ${p.numero_expediente_sede || 'S/F'}
+                    ${p.folio_display}
                 </div>
                 <div style="font-weight: bold; color: #1e293b; font-size: 0.9rem;">${nombreCompleto.toUpperCase()}</div>
                 <div style="font-size: 0.65rem; color: #94a3b8;">${p.curp || 'FALTA CURP'}</div>
@@ -156,6 +169,43 @@ function dibujarTabla(lista) {
         tabla.appendChild(fila);
     });
 }
+
+// FUNCIONES DE NAVEGACIÓN
+window.verHistorial = (id) => {
+    localStorage.setItem('paciente_seleccionado_id', id);
+    window.location.href = `historial-evolucion.html?id=${id}`;
+};
+
+window.abrirReceta = (id) => {
+    localStorage.setItem('paciente_seleccionado_id', id);
+    window.location.href = `portal-recetas.html?id=${id}`;
+};
+
+window.abrirNuevaNota = (id) => {
+    localStorage.setItem('paciente_seleccionado_id', id);
+    window.location.href = `historia-clinica.html?id=${id}`;
+};
+
+// INICIALIZACIÓN
+document.addEventListener('DOMContentLoaded', async () => {
+    await verificarAcceso();
+    let todosLosPacientes = await obtenerPacientes();
+    dibujarTabla(todosLosPacientes);
+
+    const inputBusqueda = document.getElementById('buscador');
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', async (e) => {
+            const termino = e.target.value;
+            const filtrados = await obtenerPacientes(termino);
+            dibujarTabla(filtrados);
+        });
+    }
+});
+
+
+
+
+
 
 
 // 🎯 FUNCIONES DE NAVEGACIÓN BLINDADAS (Envían el ID en la URL y guardan en localStorage por respaldo)
