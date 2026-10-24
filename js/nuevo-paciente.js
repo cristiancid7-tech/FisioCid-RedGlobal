@@ -968,7 +968,7 @@ if (!chequeoCuota.permitido) {
         const datos = Object.fromEntries(formData.entries());
         const estadoSeleccionado = document.getElementById('valEstado')?.value || null;
         
-        delete datos.estado_nacimiento; 
+
         delete datos.homoclave_curp; 
         delete datos.id_convenio;
         delete datos.checkConsentimiento;
@@ -1002,6 +1002,7 @@ if (!chequeoCuota.permitido) {
     curp: curpFinal.length === 18 ? curpFinal : null,
     fecha_nacimiento: datos.fecha_nacimiento || null,
     genero: datos.genero,
+    estado_nacimiento: estadoSeleccionado,
     creado_por: user.id,
     id_clinica_origen: clinicaId,
     nombre_clinica: localStorage.getItem('nombre_clinica'),
@@ -1010,6 +1011,7 @@ if (!chequeoCuota.permitido) {
     correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
     direccion_completa: datos.direccion_completa || null,
     contacto_emergencia_nombre: datos.contacto_emergencia_nombre || null,
+    contacto_emergencia_parentesco: document.getElementById('valEmergenciaPar')?.value.toUpperCase() || datos.contacto_emergencia_parentesco || null,
     contacto_emergencia_tel: datos.contacto_emergencia_tel || null,
     es_menor_edad: esMenor,
     id_tutor: esMenor ? uuidTutorSeleccionado : null,
