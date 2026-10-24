@@ -468,6 +468,7 @@ async function guardarTutorExpress() {
     apellido_materno: materno,
     fecha_nacimiento: fechaNac,
     genero: genero,
+    estado_nacimiento: estado,
     curp: curpCompleta,
     telefono: tel,
     correo_electronico: email,
@@ -1573,9 +1574,7 @@ async function autocompletarHomoclaveRenapo() {
     const generoFull = document.getElementById('valGenero')?.value || "";
     const estadoSelect = document.getElementById('valEstado');
     const estadoClave = estadoSelect?.value?.toUpperCase() || "";
-    const estadoTexto = (estadoSelect && estadoSelect.selectedIndex >= 0) 
-        ? estadoSelect.options[estadoSelect.selectedIndex].text.toUpperCase() 
-        : "";
+ 
 
     // Parpadeo de validación visual
     if (typeof hacerParpadearCamposBase === 'function') {
