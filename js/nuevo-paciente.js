@@ -995,7 +995,7 @@ if (!chequeoCuota.permitido) {
         //console.log("📋 [LOG 7] Datos capturados en el formulario. Folio actual en pantalla:", folioSede);
         const uuidTutorSeleccionado = document.getElementById('idTutorSeleccionado')?.value?.trim() || null;
 
-    const payload = {
+  const payload = {
     nombre: datos.nombre,
     apellido_paterno: datos.apellido_paterno,
     apellido_materno: datos.apellido_materno,
@@ -1010,9 +1010,12 @@ if (!chequeoCuota.permitido) {
     telefono: datos.telefono || null,
     correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
     direccion_completa: datos.direccion_completa || null,
-    contacto_emergencia_nombre: datos.contacto_emergencia_nombre || null,
-    contacto_emergencia_parentesco: document.getElementById('valEmergenciaPar')?.value.toUpperCase() || datos.contacto_emergencia_parentesco || null,
-    contacto_emergencia_tel: datos.contacto_emergencia_tel || null,
+    
+    // 🔧 LECTURA CORREGIDA POR ID DIRECTO AL DOM
+    contacto_emergencia_nombre: document.getElementById('valEmergenciaNom')?.value?.toUpperCase() || null,
+    contacto_emergencia_parentesco: document.getElementById('valEmergenciaPar')?.value?.toUpperCase() || null,
+    contacto_emergencia_tel: document.getElementById('valEmergenciaTel')?.value || null,
+    
     es_menor_edad: esMenor,
     id_tutor: esMenor ? uuidTutorSeleccionado : null,
     nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
@@ -1064,8 +1067,9 @@ if (!chequeoCuota.permitido) {
                     .eq('id_clinica', clinicaId)
                     .maybeSingle();
 
-                const partesFolioActual = (folioSede || "").split('-');
-                const consecutivoFinal = parseInt((partesFolioActual[partesFolioActual.length - 1] || "0").replace(/\D/g, ''), 10) || 0;
+              const partesFolioActual = (folioSede || "").split('-');
+const numExtraido = parseInt((partesFolioActual[partesFolioActual.length - 1] || "").replace(/\D/g, ''), 10);
+const consecutivoFinal = isNaN(numExtraido) ? 0 : numExtraido;
 
                 if (expExistente) {
                     await fisioNet.from('expedientes_clinicos')
@@ -1568,7 +1572,7 @@ async function autocompletarHomoclaveRenapo() {
     const fechaNacimiento = document.getElementById('valFecha')?.value || ""; 
     const generoFull = document.getElementById('valGenero')?.value || "";
     const estadoSelect = document.getElementById('valEstado');
-    
+    const estadoClave = estadoSelect?.value?.toUpperCase() || "";
     const estadoTexto = (estadoSelect && estadoSelect.selectedIndex >= 0) 
         ? estadoSelect.options[estadoSelect.selectedIndex].text.toUpperCase() 
         : "";
@@ -1636,7 +1640,7 @@ async function autocompletarHomoclaveRenapo() {
                 apellidoMaterno, 
                 fechaNacimiento, 
                 genero: generoTlaloc, 
-                estado: estadoTexto 
+                estado: estadoClave 
             }
         });
 
