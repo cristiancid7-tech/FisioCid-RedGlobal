@@ -852,12 +852,15 @@ window.integrarDictamenRadiologicoAlExpediente = integrarDictamenRadiologicoAlEx
 // ============================================================================
 // 🆕 REGISTRO COMPLETO DE PACIENTE NUEVO + VÍNCULO + EXPEDIENTE (GABINETE / PACS)
 // ============================================================================
+// ============================================================================
+// 🆕 REGISTRO COMPLETO DE PACIENTE NUEVO + VINCULO + EXPEDIENTE (GABINETE / PACS)
+// ============================================================================
 async function registrarPacienteNuevo() {
     const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
+    if (!user) throw new Error("Sesion expirada. Por favor vuelve a ingresar.");
 
     const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-    if (!clinicaId) throw new Error("No se detectó una clínica activa en la sesión.");
+    if (!clinicaId) throw new Error("No se detecto una clinica activa en la sesion.");
 
     // Captura de datos de identidad
     const nombreVal = document.getElementById('valNombre')?.value.trim() || '';
@@ -869,7 +872,7 @@ async function registrarPacienteNuevo() {
     const telefonoVal = document.getElementById('tel-manual')?.value.trim() || null;
     const emailVal = document.getElementById('valEmail')?.value.trim() || null;
 
-    // Reconstrucción de CURP desde los 4 campos
+    // Reconstruccion de CURP desde los 4 campos
     const p1 = document.getElementById('curp-parte1')?.value || '';
     const p2 = document.getElementById('curp-estado')?.value || '';
     const p3 = document.getElementById('curp-consonantes')?.value || '';
@@ -880,7 +883,7 @@ async function registrarPacienteNuevo() {
         throw new Error("Por favor captura al menos el Nombre y el Apellido Paterno del paciente.");
     }
 
-    // Cálculo de minoría de edad (Pediátrico)
+    // Calculo de minoria de edad (Pediatrico)
     let esMenor = false;
     if (fechaNacVal) {
         const fechaNac = new Date(fechaNacVal + "T00:00:00");
@@ -902,7 +905,6 @@ async function registrarPacienteNuevo() {
         telefono: telefonoVal,
         correo_electronico: emailVal,
         creado_por: user.id,
-        id_clinica: clinicaId,
         id_clinica_origen: clinicaId,
         nombre_clinica: localStorage.getItem('nombre_clinica') || 'FisioCid',
         fecha_registro: new Date().toISOString(),
@@ -950,9 +952,9 @@ async function registrarPacienteNuevo() {
         estado_expediente: 'ACTIVO'
     }]);
 
-    if (errExpediente) console.warn("⚠️ Advertencia al crear expediente clínico:", errExpediente.message);
+    if (errExpediente) console.warn("⚠️ Advertencia al crear expediente clinico:", errExpediente.message);
 
-    // Asignar variables globales de sesión
+    // Asignar variables globales de sesion
     pacienteExistenteId = nuevoPacienteId;
     window.pacienteCargado = resPaciente[0];
     window.pacienteSeleccionado = resPaciente[0];
@@ -965,23 +967,26 @@ async function registrarPacienteNuevo() {
 // ============================================================================
 // 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO Y EXPEDIENTE LOCAL DE SEDE (CORREGIDO)
 // ============================================================================
+// ============================================================================
+// 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO Y EXPEDIENTE LOCAL DE SEDE
+// ============================================================================
 async function guardarEstudioGabinete(event) {
     if (event) event.preventDefault();
     const btn = document.getElementById('btn-finalizar');
 
-    // 1. OBTENCIÓN SEGURA DE SESIÓN
+    // 1. OBTENCION SEGURA DE SESION
     const { data: { user }, error: authErr } = await fisioNet.auth.getUser();
-    if (authErr || !user) { alert("Error: No se detectó sesión activa."); return; }
+    if (authErr || !user) { alert("Error: No se detecto sesion activa."); return; }
 
     const idClinicaActiva = localStorage.getItem('id_clinica_activa');
     const radiologoId = document.getElementById('select-radiologo-asignado')?.value;
 
-    // 2. LECTURA CORRECTA DE MÉDICO SOLICITANTE (RED / EXTERNO)
+    // 2. LECTURA CORRECTA DE MEDICO SOLICITANTE (RED / EXTERNO)
     const doctorEmisorVinculado = document.getElementById('idDoctorSolicitanteVinculado')?.value || null;
     const medicoSolicitanteTexto = document.getElementById('input-doctor-solicitante')?.value.trim().toUpperCase() || 'MEDICO EXTERNO';
 
     // 3. Validaciones obligatorias
-    if (!idClinicaActiva) { alert("Error: Falta ID de clínica activa."); return; }
+    if (!idClinicaActiva) { alert("Error: Falta ID de clinica activa."); return; }
     const radiologoFinal = radiologoId || user.id;
 
     if (btn) {
@@ -990,18 +995,42 @@ async function guardarEstudioGabinete(event) {
     }
 
     try {
-        // 4. PACIENTE NUEVO VS EXISTENTE (Creación de Ficha Maestra + Vínculo + Expediente)
+        // 4. PACIENTE NUEVO VS EXISTENTE (Creacion de Ficha Maestra + Vinculo + Expediente)
         if (!pacienteExistenteId) {
             pacienteExistenteId = await registrarPacienteNuevo(); 
         }
 
-        // 5. CÁLCULO Y LIMPIEZA DE DATOS MAESTROS
+        // 🎯 VERIFICAR O CREAR EXPEDIENTE CLINICO EN LA SEDE ACTIVA
+        const { data: expExistente } = await fisioNet
+            .from('expedientes_clinicos')
+            .select('folio_personalizado')
+            .eq('id_paciente', pacienteExistenteId)
+            .eq('id_clinica', idClinicaActiva)
+            .maybeSingle();
+
+        let folioSede = expExistente?.folio_personalizado;
+
+        if (!folioSede) {
+            const resFolio = await gestionarFolioAutomatico(pacienteExistenteId);
+            folioSede = resFolio?.folio;
+
+            if (resFolio?.nuevo) {
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: pacienteExistenteId,
+                    id_clinica: idClinicaActiva,
+                    folio_personalizado: folioSede,
+                    numero_consecutivo: resFolio.numero_consecutivo,
+                    estado_expediente: 'ACTIVO'
+                }]);
+            }
+        }
+
+        // 5. CALCULO Y LIMPIEZA DE DATOS MAESTROS
         const p1 = document.getElementById('curp-parte1')?.value || "";
         const p2 = document.getElementById('curp-estado')?.value || "";
         const p3 = document.getElementById('curp-consonantes')?.value || "";
         const p4 = document.getElementById('curp-homo')?.value || "";
         const curpFinal = `${p1}${p2}${p3}${p4}`.trim().toUpperCase();
-        const folioSede = document.getElementById('inputFolioExpediente')?.value || null;
 
         let edadFinal = '';
         let generoFinal = '';
@@ -1022,7 +1051,7 @@ async function guardarEstudioGabinete(event) {
         const listaNombresArchivos = await subirArchivosASupabase(pacienteExistenteId, idClinicaActiva, "ESTUDIO_" + Date.now());
 
         if (listaNombresArchivos.length === 0 && archivosParaSubir.length > 0) {
-            throw new Error("No se pudo subir ningún archivo de estudio al servidor.");
+            throw new Error("No se pudo subir ningun archivo de estudio al servidor.");
         }
 
         // 7. PAYLOAD COMPLETO A ESTUDIOS_GABINETE
@@ -1053,7 +1082,7 @@ async function guardarEstudioGabinete(event) {
         window.location.reload();
 
     } catch (err) {
-        console.error("❌ ERROR CRÍTICO AL GUARDAR ESTUDIO:", err);
+        console.error("❌ ERROR CRITICO AL GUARDAR ESTUDIO:", err);
         alert("Error al guardar el estudio: " + err.message);
     } finally {
         if (btn) {
@@ -2152,18 +2181,21 @@ function iniciarNuevoRegistro() {
 // =====================================================================
 // 🔍 1. FUNCIÓN CENTRAL: BÚSQUEDA EN BASE DE DATOS POR CURP COMPLETA
 // =====================================================================
+// =====================================================================
+// 🔍 1. FUNCION CENTRAL: BUSQUEDA EN BASE DE DATOS POR CURP COMPLETA
+// =====================================================================
 async function verificarPacienteExistentePorCurp(curpCompleta) {
     if (!curpCompleta || curpCompleta.length !== 18) return;
 
     const statusFolio = document.getElementById('statusFolio');
     const msjAuto = document.getElementById('msjHomoclaveAuto');
+    const idClinica = localStorage.getItem('id_clinica_activa');
 
     if (statusFolio) {
         statusFolio.innerHTML = '<i class="fas fa-spinner fa-spin text-primary"></i> Consultando base de datos...';
     }
 
     try {
-        // Consultamos en Supabase si esta CURP ya existe en la red FisioCid
         const { data: paciente, error } = await fisioNet
             .from('pacientes_maestros')
             .select('*')
@@ -2173,17 +2205,33 @@ async function verificarPacienteExistentePorCurp(curpCompleta) {
         if (error) throw error;
 
         if (paciente) {
-            // 🎉 ¡EXISTE EN BASE MAESTRA! Cargar perfil y expediente local
-            autorrellenarPaciente(paciente); // 👈 Corregido para Gabinete
+            autorrellenarPaciente(paciente);
             
-            if (statusFolio) {
-                statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> PACIENTE REGISTRADO EN RED - EXPEDIENTE RECURSADO';
+            // Verificar si el paciente ya tiene expediente en esta sede
+            const { data: exp } = await fisioNet
+                .from('expedientes_clinicos')
+                .select('folio_personalizado')
+                .eq('id_paciente', paciente.id)
+                .eq('id_clinica', idClinica)
+                .maybeSingle();
+
+            if (exp) {
+                if (statusFolio) {
+                    statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> PACIENTE REGISTRADO EN RED - EXPEDIENTE LOCALIZADO';
+                }
+            } else {
+                if (typeof gestionarFolioAutomatico === 'function') {
+                    gestionarFolioAutomatico(paciente.id);
+                }
+                if (statusFolio) {
+                    statusFolio.innerHTML = '<i class="fas fa-info-circle text-primary"></i> PACIENTE DE RED REGISTRADO - NUEVO EXPEDIENTE LOCAL';
+                }
             }
+
             if (msjAuto) {
-                msjAuto.innerHTML = "<span class='text-success'>✅ ¡Paciente localizado y expediente cargado!</span>";
+                msjAuto.innerHTML = "<span class='text-success'>✅ ¡Paciente localizado y datos cargados!</span>";
             }
         } else {
-            // 🆕 NO EXISTE: Es un paciente nuevo absoluto
             pacienteExistenteId = null;
             
             if (statusFolio) {
@@ -2200,11 +2248,10 @@ async function verificarPacienteExistentePorCurp(curpCompleta) {
     } catch (err) {
         console.error("❌ Error verificando CURP en DB:", err.message);
         if (statusFolio) {
-            statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error de conexión con expedientes';
+            statusFolio.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error de conexion con expedientes';
         }
     }
 }
-
 
 // =====================================================================
 // 🤖 2. BOTÓN AUTOCOMPLETAR HOMOCLAVE (RENAPO + CONSULTA BD)
