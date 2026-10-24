@@ -490,12 +490,12 @@ async function guardarTutorExpress() {
                 tutorFinalId = tutorInsertado[0].id;
 
                 await fisioNet.from('expedientes_clinicos').insert([{
-                    id_paciente: tutorFinalId,
-                    id_clinica: clinicaId,
-                    folio_personalizado: folioAsignado,
-                    numero_consecutivo: consecutivoNum,
-                    estado_expediente: 'ACTIVO'
-                }]);
+    id_paciente: tutorFinalId,
+    id_clinica: clinicaId,
+    folio_personalizado: folioAsignado,
+    numero_consecutivo: consecutivoNum,
+    estado_expediente: 'ACTIVO'
+}]);
 
                 await fisioNet.from('vinculos_clinicos').insert([{
                     paciente_id: tutorFinalId,
