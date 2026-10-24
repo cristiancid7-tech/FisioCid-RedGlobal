@@ -949,7 +949,7 @@ if (!chequeoCuota.permitido) {
         }
         // =====================================================================
 
-        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica');
         //console.log("🏢 [LOG 4] ID de clínica activa desde LocalStorage:", clinicaId);
 
         //console.log("🔍 [LOG 5] Consultando rol del colaborador en DB...");
@@ -1003,10 +1003,12 @@ if (!chequeoCuota.permitido) {
     curp: curpFinal.length === 18 ? curpFinal : null,
     fecha_nacimiento: datos.fecha_nacimiento || null,
     genero: datos.genero,
-    estado_nacimiento: estadoSeleccionado,
+    estado_nacimiento: document.getElementById('valEstado')?.value || datos.estado_nacimiento || null,
     creado_por: user.id,
+    id_clinica: clinicaId,
     id_clinica_origen: clinicaId,
     nombre_clinica: localStorage.getItem('nombre_clinica'),
+    numero_expediente_sede: folioSede,
     ocupacion: datos.ocupacion || null,
     telefono: datos.telefono || null,
     correo_electronico: !esMenor ? emailAdulto : (datos.correo_electronico || null),
