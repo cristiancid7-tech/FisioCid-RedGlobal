@@ -287,11 +287,11 @@ function agregarCampoEspecialidad(numero = "", nombre = "") {
     contenedor.appendChild(div);
 }
 
-function verificarEnSep() {
-    const num = document.getElementById('cedulaProf').value.trim();
-    if(!num) return alert("Ingresa tu cédula principal.");
-    window.open(`https://www.buholegal.com/consultasep/?cedula=${num}`, '_blank');
-}
+//function verificarEnSep() {
+//    const num = document.getElementById('cedulaProf').value.trim();
+//    if(!num) return alert("Ingresa tu cédula principal.");
+ //   window.open(`https://www.buholegal.com/consultasep/?cedula=${num}`, '_blank');
+//}
 
 function mostrarPreview(url) {
     const img = document.getElementById('previewLogo');
