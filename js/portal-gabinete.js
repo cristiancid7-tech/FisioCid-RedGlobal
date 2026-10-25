@@ -620,6 +620,7 @@ function autorrellenarPaciente(p) {
     crearBotonDesbloqueoDinamico();
 
     actualizarInterfazEdad();
+    verificarSolicitudesPendientesGabinete(p.id);
     
     // Ejecutamos la búsqueda o cálculo del folio de la sede para el nuevo expediente local
     if (typeof gestionarFolioAutomatico === 'function') {
@@ -964,11 +965,9 @@ async function registrarPacienteNuevo() {
 
 
 
+
 // ============================================================================
-// 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO Y EXPEDIENTE LOCAL DE SEDE (CORREGIDO)
-// ============================================================================
-// ============================================================================
-// 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO Y EXPEDIENTE LOCAL DE SEDE
+// 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO GABINETE + MULTIMEDIA DE DOCTOR (SI APLICA)
 // ============================================================================
 async function guardarEstudioGabinete(event) {
     if (event) event.preventDefault();
@@ -1054,8 +1053,11 @@ async function guardarEstudioGabinete(event) {
             throw new Error("No se pudo subir ningun archivo de estudio al servidor.");
         }
 
+        const tipoEstudioCapturado = (document.getElementById('tipo-estudio')?.value || 'N/A').toUpperCase();
+        const zonaAnatomicaCapturada = (document.getElementById('zona-estudio')?.value || 'N/A').toUpperCase();
+
         // 7. PAYLOAD COMPLETO A ESTUDIOS_GABINETE
-        const payload = {
+        const payloadGabinete = {
             paciente_id: pacienteExistenteId,
             id_socio_emisor: idClinicaActiva,
             doctor_emisor_id: doctorEmisorVinculado || null,
@@ -1065,8 +1067,8 @@ async function guardarEstudioGabinete(event) {
             tecnico_captura: user.email, 
             paciente_nombre_manual: nombrePacManual,
             curp: curpFinal.length === 18 ? curpFinal : null,
-            tipo_estudio: document.getElementById('tipo-estudio')?.value || 'N/A',
-            zona_anatomica: document.getElementById('zona-estudio')?.value.toUpperCase() || 'N/A',
+            tipo_estudio: tipoEstudioCapturado,
+            zona_anatomica: zonaAnatomicaCapturada,
             estado_dictamen: 'PENDIENTE',
             archivo_url: listaNombresArchivos.join(','),
             fecha_registro: new Date().toISOString(),
@@ -1075,8 +1077,37 @@ async function guardarEstudioGabinete(event) {
             folio_expediente: folioSede
         };
 
-        const { error: errEst } = await fisioNet.from('estudios_gabinete').insert([payload]);
+        const { data: resEstudio, error: errEst } = await fisioNet
+            .from('estudios_gabinete')
+            .insert([payloadGabinete])
+            .select('id')
+            .single();
+
         if (errEst) throw errEst;
+
+        // 🛡️ 8. VINCULACION AUTOMATICA A GALERIA MULTIMEDIA (SOLO SI VIENE DE UN DOCTOR DE LA RED)
+        if (doctorEmisorVinculado && doctorEmisorVinculado !== "" && listaNombresArchivos.length > 0) {
+            const registrosEvidencia = listaNombresArchivos.map(rutaStorage => ({
+                id_paciente: pacienteExistenteId,
+                id_profesional: doctorEmisorVinculado,
+                id_clinica: idClinicaActiva,
+                categoria_especial: 'GABINETE',
+                url_imagen: rutaStorage,
+                ruta_storage: rutaStorage,
+                descripcion: `ESTUDIO DE GABINETE: ${tipoEstudioCapturado} - ZONA: ${zonaAnatomicaCapturada}`,
+                fecha_registro: new Date().toISOString(),
+                es_privado_clinica: false,
+                id_estudio_gabinete: resEstudio?.id || null
+            }));
+
+            const { error: errEvidencia } = await fisioNet
+                .from('paciente_evidencia_multimedia')
+                .insert(registrosEvidencia);
+
+            if (errEvidencia) {
+                console.warn("⚠️ Advertencia al registrar evidencia multimedia para el doctor:", errEvidencia.message);
+            }
+        }
 
         alert("🏆 ¡Estudio de Gabinete capturado y expediente registrado correctamente!");
         window.location.reload();
@@ -2207,6 +2238,7 @@ async function verificarPacienteExistentePorCurp(curpCompleta) {
         if (paciente) {
             autorrellenarPaciente(paciente);
             
+            
             // Verificar si el paciente ya tiene expediente en esta sede
             const { data: exp } = await fisioNet
                 .from('expedientes_clinicos')
@@ -2384,3 +2416,113 @@ document.getElementById('curp-homo')?.addEventListener('input', async (e) => {
         }
     }
 });
+
+// ============================================================================
+// 🩺 EVENTO PARA MANEJAR LA SUBIDA Y ANEXO DE UN ESTUDIO SELECCIONADO
+// ============================================================================
+async function ejecutarAnexoEstudioDesdeModal(idEstudioGabinete, categoria) {
+    await anexarEstudioAExpedienteClinica(
+        idEstudioGabinete,
+        categoria || 'GABINETE',
+        'evidencia_archivo_estudio',
+        'evidencia_desc_estudio',
+        'btnGuardarEstudioExpediente'
+    );
+}
+
+// ============================================================================
+// 🔔 DETECTOR AUTOMÁTICO DE SOLICITUDES PENDIENTES DE GABINETE / LABORATORIO
+// ============================================================================
+async function verificarSolicitudesPendientesGabinete(idPaciente) {
+    if (!idPaciente) return;
+
+    try {
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+        // Buscar estudios en estado SOLICITADO para este paciente
+        const { data: solicitudes, error } = await fisioNet
+            .from('estudios_gabinete')
+            .select(`
+                *,
+                medico:creado_por ( id, raw_user_meta_data ),
+                clinica_emisora:id_socio_emisor ( nombre_clinica )
+            `)
+            .eq('paciente_id', idPaciente)
+            .eq('estado_estudio', 'SOLICITADO')
+            .order('fecha_registro', { ascending: false });
+
+        if (error) throw error;
+
+        // Si existen solicitudes pendientes, disparar la Alerta Visual
+        if (solicitudes && solicitudes.length > 0) {
+            const sol = solicitudes[0]; // Tomamos la más reciente
+            
+            // Extraer nombre del médico solicitante
+            const nombreMedico = sol.medico?.raw_user_meta_data?.full_name || 
+                                 sol.medico?.raw_user_meta_data?.nombre || 
+                                 'DR(A). SOLICITANTE';
+
+            const fechaSolicitud = new Date(sol.fecha_registro).toLocaleDateString('es-MX', {
+                day: '2-digit', month: 'short', year: 'numeric'
+            });
+
+            // Swal / Alerta Visual deslumbrante para el Radiólogo
+            Swal.fire({
+                title: '🚨 ¡SOLICITUD DE ESTUDIO DETECTADA!',
+                html: `
+                    <div class="text-start p-2">
+                        <div class="alert alert-primary mb-3" role="alert">
+                            <i class="fas fa-user-md me-2 fs-5"></i><strong>Solicitado por:</strong> ${nombreMedico.toUpperCase()}
+                        </div>
+                        <p class="mb-1"><strong>📋 Estudio Requerido:</strong></p>
+                        <h5 class="text-danger fw-bold mb-3">${sol.estudio_solicitado.toUpperCase()}</h5>
+                        <p class="mb-1 text-muted small"><i class="fas fa-microscope me-1"></i><strong>Tipo:</strong> ${sol.tipo_estudio}</p>
+                        <p class="mb-0 text-muted small"><i class="far fa-calendar-alt me-1"></i><strong>Fecha de orden:</strong> ${fechaSolicitud}</p>
+                    </div>
+                `,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: '⚡ VINCULAR Y SUBIR RESULTADO',
+                cancelButtonText: 'OMITIR DE MOMENTO',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#64748b',
+                allowOutsideClick: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Autovinculación de datos en el modal de subida de imágenes
+                    autovincularEstudioParaSubida(sol);
+                }
+            });
+        }
+    } catch (err) {
+        console.error("❌ Error al verificar solicitudes de gabinete:", err.message || err);
+    }
+}
+
+// ============================================================================
+// 🔗 AUTOVINCULACIÓN DE DATOS Y APERTURA DE MODAL DE SUBIDA
+// ============================================================================
+function autovincularEstudioParaSubida(solicitud) {
+    window.estudioGabineteActivoId = solicitud.id;
+    window.categoriaEstudioActiva = solicitud.tipo_estudio || 'GABINETE';
+
+    // Precargar tipo y zona anatomica en el formulario principal
+    const selectTipo = document.getElementById('tipo-estudio');
+    if (selectTipo && solicitud.tipo_estudio) {
+        selectTipo.value = solicitud.tipo_estudio;
+    }
+
+    const inputZona = document.getElementById('zona-estudio');
+    if (inputZona && solicitud.estudio_solicitado) {
+        inputZona.value = solicitud.estudio_solicitado.toUpperCase();
+    }
+
+    // Si utilizas un modal Bootstrap de evidencia:
+    const modalEvidencia = document.getElementById('modalSubirEvidenciaGabinete');
+    if (modalEvidencia && typeof bootstrap !== 'undefined') {
+        const bsModal = bootstrap.Modal.getInstance(modalEvidencia) || new bootstrap.Modal(modalEvidencia);
+        bsModal.show();
+    } else if (typeof abrirModalEvidenciaMultimedia === 'function') {
+        abrirModalEvidenciaMultimedia();
+    }
+}

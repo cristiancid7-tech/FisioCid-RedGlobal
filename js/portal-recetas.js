@@ -2053,3 +2053,155 @@ function cerrarVisorFullscreen() {
         if (contenedor) contenedor.innerHTML = '';
     }
 }
+
+
+
+// ============================================================================
+// 📁 ANEXAR ESTUDIO DE GABINETE / LABORATORIO AL EXPEDIENTE CLÍNICO
+// ============================================================================
+async function anexarEstudioAExpedienteClinica(idEstudioGabinete, categoriaEspecialidad, archivoInputId, descripcionInputId, btnAccionId) {
+    const fileInput = document.getElementById(archivoInputId);
+    const descripcionInput = document.getElementById(descripcionInputId);
+    const btnAccion = document.getElementById(btnAccionId);
+
+    const descripcion = descripcionInput ? descripcionInput.value.trim() : '';
+    const pacienteActualId = pacienteExistenteId || localStorage.getItem('paciente_seleccionado_id') || new URLSearchParams(window.location.search).get('id');
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id') || 'sin_clinica';
+
+    if (!pacienteActualId) {
+        alert("⚠️ No se detectó el ID del paciente. Por favor selecciona o busca un paciente.");
+        return;
+    }
+
+    if (!fileInput || !fileInput.files.length) {
+        alert("⚠️ Por favor selecciona un archivo o fotografía del estudio.");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const nombreArchivoSaneado = sanearNombreArchivo(file.name);
+    const filePath = `${pacienteActualId}/${idClinicaActiva}/${categoriaEspecialidad}/${nombreArchivoSaneado}`;
+
+    try {
+        if (btnAccion) {
+            btnAccion.disabled = true;
+            btnAccion.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Anexando a Expediente...';
+        }
+
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        // 1. Subir el archivo al bucket de almacenamiento
+        const { error: storageError } = await fisioNet.storage
+            .from('expedientes-multimedia')
+            .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+        if (storageError) throw storageError;
+
+        // 2. Generar URL firmada para previsualización instantánea
+        const { data: urlData } = await fisioNet.storage
+            .from('expedientes-multimedia')
+            .createSignedUrl(filePath, 3600);
+
+        const urlFirmada = urlData?.signedUrl || '';
+
+        // 3. Registrar en la bitácora de evidencias multimedia del paciente
+        const { error: dbError } = await fisioNet
+            .from('paciente_evidencia_multimedia')
+            .insert({
+                id_paciente: pacienteActualId,
+                id_profesional: user?.id,
+                id_clinica: idClinicaActiva,
+                categoria_especialidad: categoriaEspecialidad,
+                url_imagen: urlFirmada,
+                ruta_storage: filePath,
+                descripcion: descripcion || `Estudio de ${categoriaEspecialidad} anexado desde gabinete`,
+                es_privado_clinica: true,
+                fecha_registro: new Date().toISOString(),
+                id_otp_origen: solicitudOTPActivaId || sessionStorage.getItem(`otp_id_paciente_${pacienteActualId}`) || null,
+                fecha_autorizacion_otp: fechaOtpStr || new Date().toISOString()
+            });
+
+        if (dbError) throw dbError;
+
+        // 4. Actualizar el estado del estudio en la tabla de gabinete/laboratorio
+        if (idEstudioGabinete) {
+            const { error: updateGabineteErr } = await fisioNet
+                .from('estudios_gabinete')
+                .update({
+                    estado_estudio: 'ENTREGADO_EXPEDIENTE',
+                    ruta_resultado_expediente: filePath,
+                    fecha_entrega_resultado: new Date().toISOString()
+                })
+                .eq('id', idEstudioGabinete);
+
+            if (updateGabineteErr) console.warn("⚠️ No se pudo actualizar estado en estudios_gabinete:", updateGabineteErr.message);
+        }
+
+        alert("🔒 ¡Estudio anexado con éxito al expediente clínico del paciente!");
+
+        // Recargar el historial si el módulo está disponible
+        if (typeof cargarHistorialEvidencias === 'function') {
+            cargarHistorialEvidencias();
+        }
+
+    } catch (err) {
+        console.error("❌ Error al anexar estudio al expediente:", err);
+        alert(`Error al guardar expediente: ${err.message || 'Error desconocido'}`);
+    } finally {
+        if (btnAccion) {
+            btnAccion.disabled = false;
+            btnAccion.innerHTML = '<i class="fas fa-paperclip me-2"></i> ANEXAR A EXPEDIENTE';
+        }
+    }
+}
+
+
+// ============================================================================
+// 🔔 VERIFICADOR DE NUEVA EVIDENCIA / ESTUDIOS NO VISTOS (EXCLUSIVO DEL DOCTOR)
+// ============================================================================
+async function verificarNotificacionesEstudios(idPacienteActual) {
+    if (!idPacienteActual) return;
+
+    try {
+        // 1. Obtener la sesión del usuario activo
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+
+        // 🎯 FILTRO ESTRUCTURAL ESTRICTO:
+        // Solo cuenta registros donde id_paciente coincida Y id_profesional sea EXCLUSIVAMENTE el doctor en sesión
+       const { count, error } = await fisioNet
+    .from('paciente_evidencia_multimedia')
+    .select('id', { count: 'exact', head: true })
+    .eq('id_paciente', idPacienteActual)
+    .eq('id_profesional', user.id)
+    .in('categoria_especialidad', ['GABINETE', 'LABORATORIO']);
+
+
+        if (error) throw error;
+
+        // Si hay estudios dirigidos a este doctor, inyectamos la alerta visual únicamente para él
+        if (count && count > 0) {
+            inyectarBadgeBoton('btn-historial-galeria', count);
+            inyectarBadgeBoton('btn-acciones-clinicas', count);
+        }
+    } catch (err) {
+        console.error("❌ Error consultando notificaciones exclusivas de estudios:", err.message);
+    }
+}
+
+function inyectarBadgeBoton(idBoton, cantidad) {
+    const btn = document.getElementById(idBoton);
+    if (!btn) return;
+
+    // Evitamos duplicar badges si ya existe
+    let badge = btn.querySelector('.badge-notificacion-estudio');
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'badge-notificacion-estudio badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle shadow-sm';
+        badge.style.fontSize = '0.70rem';
+        badge.style.zIndex = '10';
+        btn.style.position = 'relative';
+        btn.appendChild(badge);
+    }
+    badge.innerText = cantidad;
+}

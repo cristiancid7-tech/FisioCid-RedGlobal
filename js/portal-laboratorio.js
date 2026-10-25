@@ -600,6 +600,9 @@ function autorrellenarCamposLaboratorio(p) {
 // ============================================================================
 // 🆕 REGISTRO DE PACIENTE NUEVO + VÍNCULO + EXPEDIENTE (PORTAL LABORATORIO)
 // ============================================================================
+// ============================================================================
+// 🆕 REGISTRO DE PACIENTE NUEVO + VÍNCULO + EXPEDIENTE (PORTAL LABORATORIO)
+// ============================================================================
 async function registrarPacienteNuevo() {
     const { data: { user } } = await fisioNet.auth.getUser();
     if (!user) throw new Error("Sesión expirada. Por favor vuelve a ingresar.");
@@ -650,7 +653,6 @@ async function registrarPacienteNuevo() {
         telefono: telefonoVal,
         correo_electronico: emailVal,
         creado_por: user.id,
-        id_clinica: clinicaId,
         id_clinica_origen: clinicaId,
         nombre_clinica: localStorage.getItem('nombre_clinica') || 'FisioCid',
         fecha_registro: new Date().toISOString(),
@@ -706,6 +708,11 @@ async function registrarPacienteNuevo() {
 
     return nuevoPacienteId;
 }
+
+
+// ============================================================================
+// 💾 ENTRADA MAESTRA: GUARDAR ESTUDIO LABORATORIO + MULTIMEDIA DE DOCTOR (SI APLICA)
+// ============================================================================
 async function guardarEstudioLaboratorio(event) {
     if (event) event.preventDefault();
     const btn = document.getElementById('btn-finalizar-laboratorio');
@@ -715,9 +722,9 @@ async function guardarEstudioLaboratorio(event) {
     const inputQuimicoTexto = document.getElementById('buscador-quimico')?.value.trim();
     const inputDoctorTexto = document.getElementById('buscador-doctor')?.value.trim();
 
-    // Validar selección de Químico y Doctor
+    // Validar seleccion de Quimico y Doctor
     if (!inputQuimicoTexto) {
-        alert("⚠️ ¡Error! Debes ingresar o seleccionar al Químico / Especialista asignado.");
+        alert("⚠️ ¡Error! Debes ingresar o seleccionar al Quimico / Especialista asignado.");
         return;
     }
     if (!inputDoctorTexto) {
@@ -737,16 +744,42 @@ async function guardarEstudioLaboratorio(event) {
     }
     
     try {
-        // 1. Obtener usuario en sesión
+        // 1. Obtener usuario en sesion
         const { data: { user }, error: authError } = await fisioNet.auth.getUser();
-        if (authError || !user) throw new Error("No hay sesión activa.");
+        if (authError || !user) throw new Error("No hay sesion activa.");
 
         const idClinicaActiva = localStorage.getItem('id_clinica_activa');
+        if (!idClinicaActiva) throw new Error("Falta ID de clinica activa.");
 
-        // 2. Registrar o recuperar Paciente en la Ficha Maestra + Vínculo + Expediente
+        // 2. Registrar o recuperar Paciente en la Ficha Maestra
         let idPacienteActual = pacienteExistenteId; 
         if (!idPacienteActual) {
             idPacienteActual = await registrarPacienteNuevo(); 
+        }
+
+        // 🎯 VERIFICAR O CREAR EXPEDIENTE CLINICO EN LA SEDE ACTIVA
+        const { data: expExistente } = await fisioNet
+            .from('expedientes_clinicos')
+            .select('folio_personalizado')
+            .eq('id_paciente', idPacienteActual)
+            .eq('id_clinica', idClinicaActiva)
+            .maybeSingle();
+
+        let folioSede = expExistente?.folio_personalizado;
+
+        if (!folioSede) {
+            const resFolio = await gestionarFolioAutomatico(idPacienteActual);
+            folioSede = resFolio?.folio;
+
+            if (resFolio?.nuevo) {
+                await fisioNet.from('expedientes_clinicos').insert([{
+                    id_paciente: idPacienteActual,
+                    id_clinica: idClinicaActiva,
+                    folio_personalizado: folioSede,
+                    numero_consecutivo: resFolio.numero_consecutivo,
+                    estado_expediente: 'ACTIVO'
+                }]);
+            }
         }
 
         // 3. Subida de archivos (PDFs/Fotos)
@@ -762,7 +795,7 @@ async function guardarEstudioLaboratorio(event) {
             console.error("❌ Error en subida de archivos:", uploadErr);
         }
 
-        // 4. Preparación de etiquetas de estudio
+        // 4. Preparacion de etiquetas de estudio
         const etiquetas = [];
         document.querySelectorAll('.check-estudio:checked').forEach(ch => {
             const label = document.querySelector(`label[for="${ch.id}"]`);
@@ -771,20 +804,21 @@ async function guardarEstudioLaboratorio(event) {
         const otro = document.getElementById('otro-estudio')?.value?.trim();
         if (otro) etiquetas.push(otro.toUpperCase());
 
-        // 5. Construcción de CURP completa y Folio
+        // 5. Construccion de CURP completa
         const p1 = document.getElementById('curp-parte1')?.value || '';
         const p2 = document.getElementById('curp-estado')?.value || '';
         const p3 = document.getElementById('curp-consonantes')?.value || '';
         const p4 = document.getElementById('curp-homo')?.value || '';
         const curpCompleta = `${p1}${p2}${p3}${p4}`.toUpperCase();
-        const folioSede = document.getElementById('inputFolioExpediente')?.value || null;
+
+        const doctorReferenteId = elDoctorHidden?.value || null;
 
         // 6. Payload Final para la tabla estudios_laboratorio
-        const payload = {
+        const payloadLaboratorio = {
             paciente_id: idPacienteActual,
             id_socio_emisor: idClinicaActiva,
             creado_por: user.id,
-            doctor_emisor_id: elDoctorHidden?.value || null,
+            doctor_emisor_id: doctorReferenteId,
             id_radiologo_firmante: elQuimicoHidden?.value || null,
             medico_referente_nombre: inputDoctorTexto.toUpperCase(),
             quimico_asignado_nombre: inputQuimicoTexto.toUpperCase(),
@@ -801,14 +835,45 @@ async function guardarEstudioLaboratorio(event) {
             folio_expediente: folioSede
         };
 
-        const { error: errInsert } = await fisioNet.from('estudios_laboratorio').insert([payload]);
+        const { data: resEstudio, error: errInsert } = await fisioNet
+            .from('estudios_laboratorio')
+            .insert([payloadLaboratorio])
+            .select('id')
+            .single();
+
         if (errInsert) throw errInsert;
+
+        // 🛡️ 7. VINCULACION AUTOMATICA A GALERIA MULTIMEDIA (SOLO SI VIENE DE UN DOCTOR DE LA RED)
+        if (doctorReferenteId && doctorReferenteId !== "" && rutasSubidas.length > 0) {
+            const descEstudios = etiquetas.length > 0 ? etiquetas.join(', ') : 'ANALISIS CLINICOS';
+            
+            const registrosEvidencia = rutasSubidas.map(rutaStorage => ({
+                id_paciente: idPacienteActual,
+                id_profesional: doctorReferenteId,
+                id_clinica: idClinicaActiva,
+                categoria_especial: 'LABORATORIO',
+                url_imagen: rutaStorage,
+                ruta_storage: rutaStorage,
+                descripcion: `ESTUDIO DE LABORATORIO: ${descEstudios}`,
+                fecha_registro: new Date().toISOString(),
+                es_privado_clinica: false,
+                id_estudio_laboratorio: resEstudio?.id || null
+            }));
+
+            const { error: errEvidencia } = await fisioNet
+                .from('paciente_evidencia_multimedia')
+                .insert(registrosEvidencia);
+
+            if (errEvidencia) {
+                console.warn("⚠️ Advertencia al registrar evidencia multimedia para el doctor:", errEvidencia.message);
+            }
+        }
 
         alert("✅ ESTUDIO DE LABORATORIO ASIGNADO Y EXPEDIENTE REGISTRADO EN RED.");
         window.location.reload();
 
     } catch (err) {
-        console.error("❌ ERROR CRÍTICO AL GUARDAR:", err);
+        console.error("❌ ERROR CRITICO AL GUARDAR:", err);
         alert("Error al guardar el estudio: " + err.message);
     } finally {
         if (btn) {
@@ -1805,8 +1870,6 @@ function hacerParpadearCamposBase(ids) {
     });
 }
 
-
-
 // =====================================================================
 // 🔍 1. FUNCIÓN CENTRAL: BÚSQUEDA EN BASE DE DATOS POR CURP COMPLETA
 // =====================================================================
@@ -1815,6 +1878,7 @@ async function verificarPacienteExistentePorCurp(curpCompleta) {
 
     const statusFolio = document.getElementById('statusFolio');
     const msjAuto = document.getElementById('msjHomoclaveAuto');
+    const idClinica = localStorage.getItem('id_clinica_activa');
 
     if (statusFolio) {
         statusFolio.innerHTML = '<i class="fas fa-spinner fa-spin text-primary"></i> Consultando base de datos...';
@@ -1832,9 +1896,27 @@ async function verificarPacienteExistentePorCurp(curpCompleta) {
         if (paciente) {
             autorrellenarCamposLaboratorio(paciente);
             
-            if (statusFolio) {
-                statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> PACIENTE REGISTRADO EN RED - EXPEDIENTE RECURSADO';
+            // Verificar si el paciente ya tiene expediente en esta sede
+            const { data: exp } = await fisioNet
+                .from('expedientes_clinicos')
+                .select('folio_personalizado')
+                .eq('id_paciente', paciente.id)
+                .eq('id_clinica', idClinica)
+                .maybeSingle();
+
+            if (exp) {
+                if (statusFolio) {
+                    statusFolio.innerHTML = '<i class="fas fa-check-circle text-success"></i> PACIENTE REGISTRADO EN RED - EXPEDIENTE LOCALIZADO';
+                }
+            } else {
+                if (typeof gestionarFolioAutomatico === 'function') {
+                    gestionarFolioAutomatico(paciente.id);
+                }
+                if (statusFolio) {
+                    statusFolio.innerHTML = '<i class="fas fa-info-circle text-primary"></i> PACIENTE DE RED REGISTRADO - NUEVO EXPEDIENTE LOCAL';
+                }
             }
+
             if (msjAuto) {
                 msjAuto.innerHTML = "<span class='text-success'>✅ ¡Paciente localizado y expediente cargado!</span>";
             }

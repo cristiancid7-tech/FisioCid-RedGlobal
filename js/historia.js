@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
     if (idPacienteLimpio) {
         sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+        sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
     }
     
     // Ejecución inicial limpia
@@ -19,6 +20,7 @@ window.addEventListener('beforeunload', () => {
     const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
     if (idPacienteLimpio) {
         sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+        sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
     }
 });
 
@@ -227,6 +229,7 @@ const cargarExpedienteFijo = async () => {
     }
     detectarEstudiosPendientesEnNota(idLimpio);
     adaptarInterfazPorEspecialidad();
+    verificarNotificacionesEstudios(idLimpio);
 
 };
     // ============================================================================
@@ -407,11 +410,12 @@ if (formHistoria) {
                 }
             }
 
-            // 5. 🔒 LIMPIAR PERMISO OTP DE SESIÓN
-            const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
-            if (idPacienteLimpio) {
-                sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
-            }
+         // 5. 🔒 LIMPIAR PERMISO OTP DE SESIÓN
+const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+if (idPacienteLimpio) {
+    sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+    sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
+}
 
             // 6. IMPRESIÓN Y GENERACIÓN DE PDF MEDIANTE MOTOR JSPDF
             const deseaImprimir = confirm("✅ ¡Consulta guardada con éxito!\n\n¿Deseas generar la receta/reporte en PDF?");
@@ -897,7 +901,7 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
 
                         return `
                             <div class="col-md-6">
-                                <div class="card h-100 border-0 shadow-sm p-3 style="border-top: 4px solid #3b82f6 !important; border-radius: 12px; background: white;">
+                              <div class="card h-100 border-0 shadow-sm p-3" style="border-top: 4px solid #3b82f6 !important; border-radius: 12px; background: white;">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <h6 class="fw-bold text-primary mb-0" style="font-size: 0.9rem;">🩻 ${img.tipo_estudio || 'ESTUDIO DE IMAGEN'}</h6>
                                         <span class="badge bg-light text-dark border small">${fechaFmt}</span>
@@ -1137,32 +1141,50 @@ async function verificarEstudiosVinculadosEnCarga(pacienteId) {
     }
 }
 
-// ============================================================================
-// 🔍 DETECTOR DE ESTUDIOS PENDIENTES AL ABRIR LA CONSULTA
-// ============================================================================
 async function detectarEstudiosPendientesEnNota(pacienteId) {
     if (!pacienteId) return;
 
     try {
-        // Consultamos estudios de gabinete y laboratorio cargados recientemente
-        const { data: estudios, error } = await fisioNet
+        const contenedorBanners = document.getElementById('contenedor-apoyo-fisiocid');
+        if (!contenedorBanners) return;
+        contenedorBanners.innerHTML = '';
+
+        // 1. Consultar estudios de gabinete
+        const { data: estudios } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
             .eq('paciente_id', pacienteId)
             .order('fecha_registro', { ascending: false })
             .limit(3);
 
-        if (error) throw error;
+        // 2. Consultar evidencias subidas
+        const { data: evidencias } = await fisioNet
+            .from('paciente_evidencia_multimedia')
+            .select('*')
+            .eq('id_paciente', pacienteId)
+            .in('categoria_especialidad', ['GABINETE', 'LABORATORIO', 'EVIDENCIA'])
+            .order('fecha_registro', { ascending: false })
+            .limit(3);
 
-        const contenedorBanners = document.getElementById('contenedor-apoyo-fisiocid');
-        if (!contenedorBanners) return;
+        // Combinar y ordenar por fecha más reciente
+        const listaCombinada = [
+            ...(estudios || []).map(e => ({
+                tipo: e.tipo_estudio || 'Estudio de Gabinete',
+                hallazgos: e.hallazgos_resumen || 'Sin interpretación previa.',
+                fecha: e.fecha_registro,
+                url: e.archivo_url
+            })),
+            ...(evidencias || []).map(ev => ({
+                tipo: ev.categoria_especialidad || 'Evidencia Multimedia',
+                hallazgos: ev.descripcion || 'Archivo adjunto disponible.',
+                fecha: ev.fecha_registro,
+                url: ev.url_imagen
+            }))
+        ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 3);
 
-        // Limpiamos avisos previos
-        contenedorBanners.innerHTML = '';
-
-        if (estudios && estudios.length > 0) {
-            estudios.forEach(est => {
-                const fechaEstudio = new Date(est.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+        if (listaCombinada.length > 0) {
+            listaCombinada.forEach(est => {
+                const fechaEstudio = new Date(est.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
                 
                 const cardAviso = document.createElement('div');
                 cardAviso.className = 'card border-0 shadow-sm mb-3';
@@ -1177,22 +1199,22 @@ async function detectarEstudiosPendientesEnNota(pacienteId) {
                                 📂 ESTUDIO PENDIENTE POR REVISAR (${fechaEstudio})
                             </span>
                             <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">
-                                🩻 ${est.tipo_estudio || 'Estudio de Gabinete'}
+                                🩻 ${est.tipo}
                             </h6>
                             <p class="text-secondary small mb-0" style="font-size: 0.8rem;">
-                                <strong>Hallazgos:</strong> ${est.hallazgos_resumen || 'Sin interpretación previa.'}
+                                <strong>Hallazgos:</strong> ${est.hallazgos}
                             </p>
                         </div>
                         
                         <div class="d-flex gap-2 align-items-center ms-auto">
-                            ${est.archivo_url ? `
-                                <a href="${est.archivo_url}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" style="font-size: 0.75rem;">
+                            ${est.url ? `
+                                <a href="${est.url}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" style="font-size: 0.75rem;">
                                     👁️ Ver Placa / PDF
                                 </a>
                             ` : ''}
                             
                             <button type="button" class="btn btn-sm btn-primary fw-bold text-white shadow-sm" style="font-size: 0.75rem; border-radius: 8px;"
-                                    onclick="inyectarEstudioAExploracion('${est.tipo_estudio}', '${est.hallazgos_resumen || ''}', '${fechaEstudio}')">
+                                    onclick="inyectarEstudioAExploracion('${est.tipo}', '${est.hallazgos}', '${fechaEstudio}')">
                                 ➕ Cargar a esta Consulta
                             </button>
                         </div>
@@ -1619,8 +1641,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 🛡️ Búsqueda/Definición de la fecha de autorización del OTP
             let fechaOtpStr = new Date().toISOString();
-            const otpActivoId = (typeof solicitudOTPActivaId !== 'undefined') ? solicitudOTPActivaId : null;
-
+const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_paciente_${pacienteActualId}`);
             if (otpActivoId) {
                 const { data: datosOtp } = await fisioNet
                     .from('solicitudes_acceso_otp')
@@ -1748,7 +1769,7 @@ function renderizarListaEvidencias(lista) {
         const esPDF = item.url_imagen?.toLowerCase().endsWith('.pdf');
         
         // 🎯 Mapeo adaptado para categoria_especial
-        const catNombre = item.categoria_especial || item.categoria_especialidad || 'EVIDENCIA';
+const catNombre = item.categoria_especialidad || item.categoria_especial || 'EVIDENCIA';
         
         html += `
             <div class="tarjeta-evidencia-item" onclick="verEvidenciaPantallaCompleta('${item.url_imagen}', ${esPDF}, '${catNombre}', '${fechaFormateada}', '${(item.descripcion || '').replace(/'/g, "\\'")}')">
@@ -1858,7 +1879,7 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
 
         // 1. Consultar los datos de la solicitud OTP que aprobó el acceso
         let fechaOtpStr = new Date().toISOString();
-        let idOtpActivo = solicitudOTPActivaId || null;
+       let idOtpActivo = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_paciente_${idPacienteLimpio}`);
 
         if (idOtpActivo) {
             const { data: datosOtp } = await fisioNet
@@ -1922,4 +1943,55 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
         console.error("💥 Error al anexar estudio:", err);
         alert("Error al anexar estudio: " + (err.message || "Error de conexión"));
     }
+}
+
+
+// ============================================================================
+// 🔔 VERIFICADOR DE NUEVA EVIDENCIA / ESTUDIOS NO VISTOS (EXCLUSIVO DEL DOCTOR)
+// ============================================================================
+async function verificarNotificacionesEstudios(idPacienteActual) {
+    if (!idPacienteActual) return;
+
+    try {
+        // 1. Obtener la sesión del usuario activo
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+
+        // 🎯 FILTRO ESTRUCTURAL ESTRICTO:
+        // Solo cuenta registros donde id_paciente coincida Y id_profesional sea EXCLUSIVAMENTE el doctor en sesión
+       const { count, error } = await fisioNet
+    .from('paciente_evidencia_multimedia')
+    .select('id', { count: 'exact', head: true })
+    .eq('id_paciente', idPacienteActual)
+    .eq('id_profesional', user.id)
+    .in('categoria_especialidad', ['GABINETE', 'LABORATORIO']);
+
+
+        if (error) throw error;
+
+        // Si hay estudios dirigidos a este doctor, inyectamos la alerta visual únicamente para él
+        if (count && count > 0) {
+            inyectarBadgeBoton('btn-historial-galeria', count);
+            inyectarBadgeBoton('btn-acciones-clinicas', count);
+        }
+    } catch (err) {
+        console.error("❌ Error consultando notificaciones exclusivas de estudios:", err.message);
+    }
+}
+
+function inyectarBadgeBoton(idBoton, cantidad) {
+    const btn = document.getElementById(idBoton);
+    if (!btn) return;
+
+    // Evitamos duplicar badges si ya existe
+    let badge = btn.querySelector('.badge-notificacion-estudio');
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'badge-notificacion-estudio badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle shadow-sm';
+        badge.style.fontSize = '0.70rem';
+        badge.style.zIndex = '10';
+        btn.style.position = 'relative';
+        btn.appendChild(badge);
+    }
+    badge.innerText = cantidad;
 }
