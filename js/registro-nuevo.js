@@ -61,7 +61,7 @@ document.getElementById('formRegistroNuevo').addEventListener('submit', async (e
     
     // Captura estricta del tipo de perfil desde el input oculto
     const rawTipoPerfil = document.getElementById('tipoPerfil')?.value || 'INDEPENDIENTE';
-   const tipoPerfilFinal = (rawTipoPerfil === 'DUEÑO' || rawTipoPerfil === 'DUENO' || rawTipoPerfil === 'DUENO_CLINICA') 
+   const tipoPerfilFinal = (rawTipoPerfil === 'DUENO' || rawTipoPerfil === 'DUENO' || rawTipoPerfil === 'DUENO_CLINICA') 
         ? 'DUENO' 
         : 'INDEPENDIENTE';
     const especialidadCapturada = document.getElementById('regEspecialidad')?.value || 'FISIOTERAPEUTA';
