@@ -3851,3 +3851,6 @@ document.getElementById('formNuevaSede')?.addEventListener('submit', async (e) =
         btnSubmit.textContent = '✅ Registrar Sede';
     }
 });
+
+window.buscarColegasFisioCid = buscarColegasFisioCid;
+window.verDetalleColega = verDetalleColega;
