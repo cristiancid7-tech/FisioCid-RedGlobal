@@ -1695,6 +1695,9 @@ const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_pacie
 // =========================================================
 // 📂 CARGAR HISTORIAL CON GENERACIÓN DE URLS FIRMADAS DÍNAMICAS
 // =========================================================
+// =========================================================
+// 📂 CARGAR HISTORIAL CON GENERACIÓN DE URLS FIRMADAS DINÁMICAS
+// =========================================================
 async function cargarHistorialEvidencias() {
     const contenedor = document.getElementById('contenedor_lista_evidencias');
     if (!contenedor) return;
@@ -1715,12 +1718,23 @@ async function cargarHistorialEvidencias() {
     try {
         contenedor.innerHTML = `<p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando expediente multimedia privado...</p>`;
 
-        const { data, error } = await fisioNet
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        // 🛡️ BÚSQUEDA FLEXIBLE NOM-004: Trae si pertenece a la clínica activa O si fue asignado/creado por el profesional en sesión
+        let query = fisioNet
             .from('paciente_evidencia_multimedia')
             .select('*')
-            .eq('id_paciente', pacienteActualId)
-            .eq('id_clinica', idClinicaActiva)
-            .order('fecha_registro', { ascending: false });
+            .eq('id_paciente', pacienteActualId);
+
+        if (idClinicaActiva && user) {
+            query = query.or(`id_clinica.eq.${idClinicaActiva},id_profesional.eq.${user.id}`);
+        } else if (idClinicaActiva) {
+            query = query.eq('id_clinica', idClinicaActiva);
+        } else if (user) {
+            query = query.eq('id_profesional', user.id);
+        }
+
+        const { data, error } = await query.order('fecha_registro', { ascending: false });
 
         if (error) throw error;
 
@@ -1855,6 +1869,7 @@ function cerrarVisorFullscreen() {
     }
 }
 
+
 // ============================================================================
 // 📥 IMPORTAR ESTUDIO / EVIDENCIA GLOBAL AL EXPEDIENTE LOCAL DE LA CLÍNICA
 // ============================================================================
@@ -1879,7 +1894,7 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
 
         // 1. Consultar los datos de la solicitud OTP que aprobó el acceso
         let fechaOtpStr = new Date().toISOString();
-       let idOtpActivo = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_paciente_${idPacienteLimpio}`);
+        let idOtpActivo = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_paciente_${idPacienteLimpio}`);
 
         if (idOtpActivo) {
             const { data: datosOtp } = await fisioNet
@@ -1915,6 +1930,11 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
             if (signedData?.signedUrl) urlFirmada = signedData.signedUrl;
         }
 
+        // 🎯 Identificación del origen para FKs exactas
+        const esLaboratorio = itemOrigen.tipo_estudio === 'LABORATORIO CLÍNICO' || itemOrigen.estudios_etiquetas;
+        const idOrigenGab = !esLaboratorio ? itemOrigen.id : null;
+        const idOrigenLab = esLaboratorio ? itemOrigen.id : null;
+
         // 4. Insertar el nuevo registro de evidencia local sin duplicar archivo en Storage
         const { error } = await fisioNet
             .from('paciente_evidencia_multimedia')
@@ -1927,7 +1947,9 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
                 ruta_storage: rutaStorage,
                 descripcion: descripcionAuditada,
                 es_privado_clinica: true,
-                fecha_registro: new Date().toISOString()
+                fecha_registro: new Date().toISOString(),
+                id_origen_gabinete: idOrigenGab,
+                id_origen_laboratorio: idOrigenLab
             });
 
         if (error) throw error;
