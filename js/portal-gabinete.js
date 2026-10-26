@@ -2469,19 +2469,20 @@ async function ejecutarAnexoEstudioDesdeModal(idEstudioGabinete, categoria) {
 }
 
 
-// ============================================================================
-// 📩 RECEPTOR DE SOLICITUDES ENVIADAS POR MÉDICOS DE LA RED
-// ============================================================================
 async function verificarSolicitudesPendientesGabinete(pacienteId) {
     if (!pacienteId) return;
 
     try {
-        // Consultar si el médico mandó una orden de gabinete pendiente
+        // 1. Calculamos la fecha límite de hace exactamente 7 días
+        const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        // 2. Consultamos solo solicitudes de los últimos 7 días
         const { data: solicitudes, error } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
             .eq('paciente_id', pacienteId)
             .or('estado_estudio.eq.SOLICITADO,estado_estudio.eq.PENDIENTE')
+            .gte('fecha_registro', hace7Dias) // 👈 AQUÍ ESTÁ EL TRUCO: Descarta todo lo mayor a 7 días
             .order('fecha_registro', { ascending: false })
             .limit(1);
 
@@ -2490,7 +2491,9 @@ async function verificarSolicitudesPendientesGabinete(pacienteId) {
         if (solicitudes && solicitudes.length > 0) {
             const sol = solicitudes[0];
             const medicoNombre = sol.medico_solicitante_manual || "UN MÉDICO DE LA RED";
-            const peticion = `${sol.tipo_estudio || 'ESTUDIO'} - ${sol.zona_anatomica || 'GENERAL'}`;
+            
+            const peticion = sol.indicaciones_medicas || 
+                             `${sol.tipo_estudio || 'ESTUDIO'} - ${sol.zona_anatomica || 'GENERAL'}`;
 
             const aceptar = confirm(
                 `📩 ¡SOLICITUD ENTRANTE DETECTADA!\n\n` +
@@ -2515,15 +2518,17 @@ function autovincularEstudioParaSubida(solicitud) {
     window.estudioGabineteActivoId = solicitud.id;
     window.categoriaEstudioActiva = solicitud.tipo_estudio || 'GABINETE';
 
-    // Precargar tipo y zona anatómica
+    // Precargar tipo de estudio (si fue seleccionado)
     const selectTipo = document.getElementById('tipo-estudio');
     if (selectTipo && solicitud.tipo_estudio) {
         selectTipo.value = solicitud.tipo_estudio;
     }
 
+    // Precargar zona anatómica o las indicaciones médicas en el campo correspondiente
     const inputZona = document.getElementById('zona-estudio');
-    if (inputZona && solicitud.zona_anatomica) {
-        inputZona.value = solicitud.zona_anatomica.toUpperCase();
+    if (inputZona) {
+        const textoInyectar = solicitud.indicaciones_medicas || solicitud.zona_anatomica || '';
+        inputZona.value = textoInyectar.toUpperCase();
     }
 
     // Precargar Médico Solicitante
@@ -2532,7 +2537,7 @@ function autovincularEstudioParaSubida(solicitud) {
         inputDoc.value = solicitud.medico_solicitante_manual.toUpperCase();
     }
 
-    // Notificación visual de confirmación de vinculo
+    // Notificación visual de confirmación de vínculo
     const statusFolio = document.getElementById('statusFolio');
     if (statusFolio) {
         statusFolio.innerHTML = `<i class="fas fa-link text-success"></i> VINCULADO A ORDEN EN RED (#${solicitud.id.substring(0,6)})`;
