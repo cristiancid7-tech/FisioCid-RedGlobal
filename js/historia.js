@@ -1252,25 +1252,29 @@ window.abrirModalEstudioExpress = async () => {
     const datalist = document.getElementById('listaLabs');
     
     document.getElementById('txtQueEstudio').value = ""; 
-    inputLab.value = ""; // Limpiamos el buscador
-    datalist.innerHTML = ""; // Limpiamos opciones anteriores
+    inputLab.value = ""; 
+    datalist.innerHTML = ""; 
     inputLab.disabled = false;
     inputLab.placeholder = "Selecciona o busca un laboratorio...";
     
-    modal.style.display = 'flex';
+    if (modal) modal.style.display = 'flex';
 
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
-        if (!user) return;
+        if (!user) {
+            alert("⚠️ No se detectó una sesión activa.");
+            return;
+        }
 
         let opcionesHTML = "";
 
         // =========================================================================
-        // 1. OBTENER LABORATORIO / CLÍNICA INTERNA (PROPIA)
+        // 1. OBTENER MI PROPIA CLÍNICA / SEDE INTERNA (Soporte Multi-dispositivo)
         // =========================================================================
-        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+        // Intentar obtener ID local
+        let idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
-        // A) Intentar buscar la clínica activa de la sesión
+        // A) Si existe ID local, buscar la clínica
         if (idClinicaActiva) {
             const { data: clinicaPropia } = await fisioNet
                 .from('clinicas')
@@ -1284,7 +1288,7 @@ window.abrirModalEstudioExpress = async () => {
             }
         }
 
-        // B) Si no hay clínica activa en localStorage, buscar si el usuario es dueño de alguna
+        // B) Si no hay ID local en la laptop, buscar las clínicas de las que eres dueño
         if (!opcionesHTML) {
             const { data: misClinicas } = await fisioNet
                 .from('clinicas')
@@ -1292,6 +1296,10 @@ window.abrirModalEstudioExpress = async () => {
                 .eq('id_dueno', user.id);
 
             if (misClinicas && misClinicas.length > 0) {
+                // Guardamos en localStorage para reparar la lap automáticamente
+                localStorage.setItem('id_clinica_activa', misClinicas[0].id);
+                localStorage.setItem('clinica_activa_id', misClinicas[0].id);
+
                 misClinicas.forEach(c => {
                     const nombreInterno = `🏠 [INTERNO] ${c.nombre_clinica.toUpperCase()} - MI SEDE`;
                     opcionesHTML += `<option data-id="${user.id}" value="${nombreInterno}"></option>`;
@@ -1299,8 +1307,25 @@ window.abrirModalEstudioExpress = async () => {
             }
         }
 
+        // C) Si eres colaborador activo en una clínica
+        if (!opcionesHTML) {
+            const { data: colab } = await fisioNet
+                .from('colaboradores_clinica')
+                .select('id_clinica, clinicas(nombre_clinica)')
+                .eq('id_profesional', user.id)
+                .eq('estado', 'ACTIVO')
+                .maybeSingle();
+
+            if (colab && colab.clinicas) {
+                localStorage.setItem('id_clinica_activa', colab.id_clinica);
+                localStorage.setItem('clinica_activa_id', colab.id_clinica);
+                const nombreInterno = `🏠 [INTERNO] ${colab.clinicas.nombre_clinica.toUpperCase()} - SEDE COLABORADOR`;
+                opcionesHTML += `<option data-id="${user.id}" value="${nombreInterno}"></option>`;
+            }
+        }
+
         // =========================================================================
-        // 2. OBTENER SOCIOS / LABORATORIOS EXTERNOS (RED DE COLABORACIÓN)
+        // 2. OBTENER SOCIOS DE LA RED DE COLABORACIÓN (EXTERNOS)
         // =========================================================================
         const { data: alianzas } = await fisioNet
             .from('red_colaboracion')
@@ -1312,14 +1337,12 @@ window.abrirModalEstudioExpress = async () => {
             for (const a of alianzas) {
                 const idSocio = (a.id_doctor_emisor === user.id) ? a.id_doctor_receptor : a.id_doctor_emisor;
                 
-                // 1. Obtenemos el nombre del responsable
                 const { data: perfilSocio } = await fisioNet
                     .from('perfiles_profesionales')
                     .select('nombre_completo')
                     .eq('id', idSocio)
                     .maybeSingle();
 
-                // 2. Obtenemos el nombre de su clínica/laboratorio
                 const { data: clinicaSocio } = await fisioNet
                     .from('clinicas')
                     .select('nombre_clinica')
@@ -1330,18 +1353,17 @@ window.abrirModalEstudioExpress = async () => {
                 const nombreLaboratorio = clinicaSocio?.nombre_clinica || a.nombre_entidad || "LABORATORIO ALIADO";
 
                 const textoMostrado = `🏥 ${nombreLaboratorio.toUpperCase()} - 👤 ${nombreResponsable.toUpperCase()}`;
-                
                 opcionesHTML += `<option data-id="${idSocio}" value="${textoMostrado}"></option>`;
             }
         }
 
         // =========================================================================
-        // 3. INYECTAR OPCIONES EN EL DATALIST
+        // 3. INYECTAR OPCIONES Y HABILITAR/DESHABILITAR
         // =========================================================================
         if (opcionesHTML !== "") {
             datalist.innerHTML = opcionesHTML;
         } else {
-            inputLab.placeholder = "No hay laboratorios ni sedes disponibles";
+            inputLab.placeholder = "No tienes laboratorios vinculados en tu red";
             inputLab.disabled = true;
         }
 
