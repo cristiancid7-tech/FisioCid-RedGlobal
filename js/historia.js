@@ -1246,11 +1246,6 @@ window.inyectarEstudioAExploracion = (tipo, hallazgos, fecha) => {
     }
 };
 
-// =================================================================
-// 🧪 MÓDULO: LABORATORIO INTELIGENTE (CERO REGISTROS)
-// =================================================================
-
-
 window.abrirModalEstudioExpress = async () => {
     const modal = document.getElementById('modalEstudioExpress');
     const inputLab = document.getElementById('inputLabDestino');
@@ -1259,50 +1254,99 @@ window.abrirModalEstudioExpress = async () => {
     document.getElementById('txtQueEstudio').value = ""; 
     inputLab.value = ""; // Limpiamos el buscador
     datalist.innerHTML = ""; // Limpiamos opciones anteriores
+    inputLab.disabled = false;
+    inputLab.placeholder = "Selecciona o busca un laboratorio...";
     
     modal.style.display = 'flex';
 
-    const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) return;
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
 
-    // Buscamos aliados activos
-    const { data: alianzas, error } = await fisioNet
-        .from('red_colaboracion')
-        .select('*')
-        .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id}`)
-        .eq('estado_conexion', 'ACTIVO');
+        let opcionesHTML = "";
 
-    if (alianzas && alianzas.length > 0) {
-        for (const a of alianzas) {
-            const idSocio = (a.id_doctor_emisor === user.id) ? a.id_doctor_receptor : a.id_doctor_emisor;
-            
-            // 1. Obtenemos el nombre del responsable
-            const { data: perfilSocio } = await fisioNet
-                .from('perfiles_profesionales')
-                .select('nombre_completo')
-                .eq('id', idSocio)
-                .maybeSingle();
+        // =========================================================================
+        // 1. OBTENER LABORATORIO / CLÍNICA INTERNA (PROPIA)
+        // =========================================================================
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
-            // 2. Obtenemos el nombre de su clínica/laboratorio
-            const { data: clinicaSocio } = await fisioNet
+        // A) Intentar buscar la clínica activa de la sesión
+        if (idClinicaActiva) {
+            const { data: clinicaPropia } = await fisioNet
                 .from('clinicas')
-                .select('nombre_clinica')
-                .eq('id_dueno', idSocio)
+                .select('id, nombre_clinica')
+                .eq('id', idClinicaActiva)
                 .maybeSingle();
 
-            const nombreResponsable = perfilSocio?.nombre_completo || "SIN NOMBRE";
-            // Si tiene registrada una clínica usamos ese nombre, si no, usamos el nombre de la entidad de la invitación
-            const nombreLaboratorio = clinicaSocio?.nombre_clinica || a.nombre_entidad || "LABORATORIO ALIADO";
-
-            // Creamos la etiqueta fusionada: "CLÍNICA XYZ - DR. JUAN PÉREZ"
-            const textoMostrado = `🏥 ${nombreLaboratorio.toUpperCase()} - 👤 ${nombreResponsable.toUpperCase()}`;
-            
-            // Lo agregamos al datalist (guardando el ID oculto para enviarlo a la base de datos)
-            datalist.innerHTML += `<option data-id="${idSocio}" value="${textoMostrado}"></option>`;
+            if (clinicaPropia) {
+                const nombreInterno = `🏠 [INTERNO] ${clinicaPropia.nombre_clinica.toUpperCase()} - MI SEDE`;
+                opcionesHTML += `<option data-id="${user.id}" value="${nombreInterno}"></option>`;
+            }
         }
-    } else {
-        inputLab.placeholder = "No tienes laboratorios vinculados en tu red";
-        inputLab.disabled = true;
+
+        // B) Si no hay clínica activa en localStorage, buscar si el usuario es dueño de alguna
+        if (!opcionesHTML) {
+            const { data: misClinicas } = await fisioNet
+                .from('clinicas')
+                .select('id, nombre_clinica')
+                .eq('id_dueno', user.id);
+
+            if (misClinicas && misClinicas.length > 0) {
+                misClinicas.forEach(c => {
+                    const nombreInterno = `🏠 [INTERNO] ${c.nombre_clinica.toUpperCase()} - MI SEDE`;
+                    opcionesHTML += `<option data-id="${user.id}" value="${nombreInterno}"></option>`;
+                });
+            }
+        }
+
+        // =========================================================================
+        // 2. OBTENER SOCIOS / LABORATORIOS EXTERNOS (RED DE COLABORACIÓN)
+        // =========================================================================
+        const { data: alianzas } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id}`)
+            .eq('estado_conexion', 'ACTIVO');
+
+        if (alianzas && alianzas.length > 0) {
+            for (const a of alianzas) {
+                const idSocio = (a.id_doctor_emisor === user.id) ? a.id_doctor_receptor : a.id_doctor_emisor;
+                
+                // 1. Obtenemos el nombre del responsable
+                const { data: perfilSocio } = await fisioNet
+                    .from('perfiles_profesionales')
+                    .select('nombre_completo')
+                    .eq('id', idSocio)
+                    .maybeSingle();
+
+                // 2. Obtenemos el nombre de su clínica/laboratorio
+                const { data: clinicaSocio } = await fisioNet
+                    .from('clinicas')
+                    .select('nombre_clinica')
+                    .eq('id_dueno', idSocio)
+                    .maybeSingle();
+
+                const nombreResponsable = perfilSocio?.nombre_completo || "RESPONSABLE TÉCNICO";
+                const nombreLaboratorio = clinicaSocio?.nombre_clinica || a.nombre_entidad || "LABORATORIO ALIADO";
+
+                const textoMostrado = `🏥 ${nombreLaboratorio.toUpperCase()} - 👤 ${nombreResponsable.toUpperCase()}`;
+                
+                opcionesHTML += `<option data-id="${idSocio}" value="${textoMostrado}"></option>`;
+            }
+        }
+
+        // =========================================================================
+        // 3. INYECTAR OPCIONES EN EL DATALIST
+        // =========================================================================
+        if (opcionesHTML !== "") {
+            datalist.innerHTML = opcionesHTML;
+        } else {
+            inputLab.placeholder = "No hay laboratorios ni sedes disponibles";
+            inputLab.disabled = true;
+        }
+
+    } catch (err) {
+        console.error("💥 Error al cargar la lista de laboratorios:", err);
     }
 };
 
