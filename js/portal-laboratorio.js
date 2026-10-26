@@ -1,16 +1,28 @@
-let debounceTimer; 
+// ============================================================================
+// 🧪 PORTAL DE ANÁLISIS CLÍNICOS Y LABORATORIO FISIOCID (PRODUCCIÓN 2026)
+// Archivo: portal-laboratorio.js
+// ============================================================================
+
+let debounceTimer = null; 
+let timeoutBusqueda = null;
 let perfilEspecialistaCache = { especialidad: 'GENERAL' };
-let archivosLaboratorio = []; // Acumulador de PDFs
-let historialLab = [];       // Caché del historial local
+let archivosLaboratorio = [];     // Acumulador global de archivos
+let historialLabCache = [];        // Caché local para filtrado
 let pacienteExistenteId = null;
 let edicionFichaAutorizada = false;
 let especialidadUsuario = localStorage.getItem('especialidad_usuario') || 'GENERAL'; 
-let archivosParaSubir = []; 
-const especialidadActiva = localStorage.getItem('especialidad_usuario') || 'Laboratorio';
+let estudioActivoGlobal = null;
 
+// Visor y Zoom
+let panzoomLab = null;
+let tomasLabActuales = []; 
+let indiceTomaLab = 0;     
+
+const ESPECIALIDADES_DICTAMINADORAS = ['QUIMICO', 'QUÍMICO', 'BIOQUIMICO', 'BIOQUÍMICO', 'PATOLOGO', 'PATÓLOGO', 'GENETISTA', 'MICROBIOLOGO'];
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Identidad y configuración visual
+    const especialidadActiva = localStorage.getItem('especialidad_usuario') || 'Laboratorio';
     const elSpanEspecialidad = document.getElementById('especialidad_usuario');
     if (elSpanEspecialidad) {
         elSpanEspecialidad.innerText = especialidadActiva.charAt(0).toUpperCase() + especialidadActiva.slice(1).toLowerCase();
@@ -20,11 +32,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await aplicarIdentidadGabinete();
     await inicializarRolUsuario();
 
-    // 2. ACTIVAR LOS BUSCADORES INTELIGENTES
+    // 2. Buscadores Inteligentes
     configurarBuscadorDoctor();
     configurarBuscadorQuimico();
 
-    // 3. MAYÚSCULAS AUTOMÁTICAS GLOBALES (Menos en correos)
+    // 3. Mayúsculas automáticas globales
     document.addEventListener('input', (e) => {
         const el = e.target;
         if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && 
@@ -33,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 4. GESTIÓN MULTI-ARCHIVO (Acumulador de PDFs)
+    // 4. Gestión Multi-archivo
     const inputArchivos = document.getElementById('file-pdf');
     const inputArchivosModal = document.getElementById('file-pdf-modal');
 
@@ -46,13 +58,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         inputArchivosModal.addEventListener('change', manejarSeleccionArchivos);
     }
 
-    // 5. CONFIGURACIÓN DE ESCUCHAS PARA CURP Y FOLIOS
+    // 5. Escuchas para CURP y Folios
     const inputsCurp = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'genero-manual', 'valEstado'];
     inputsCurp.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             const tipoEvento = (el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
-            
             el.addEventListener(tipoEvento, () => {
                 if (id === 'valFecha') actualizarInterfazEdad();
                 procesarCurp(); 
@@ -60,21 +71,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 6. INTERCEPTOR DE DASHBOARD (Auto-relleno de Paciente)
+    // 6. Carga de historial
+    await cargarHistorialLaboratorio();
+
+    // 7. Auto-relleno desde Dashboard
     const pacientePrecargado = localStorage.getItem('paciente_precargado');
     if (pacientePrecargado) {
         try {
             const pacienteObj = JSON.parse(pacientePrecargado);
             autorrellenarCamposLaboratorio(pacienteObj);
             localStorage.removeItem('paciente_precargado');
-            console.log("✅ Paciente importado exitosamente desde el Dashboard");
         } catch(err) {
             console.error("❌ Error leyendo datos del paciente precargado:", err);
             localStorage.removeItem('paciente_precargado'); 
         }
     }
 
-    // 🧹 7. ESCUDO UNIFICADO ANTI-CAJITAS PASMADAS (Clic afuera, Escape, TAB y focusout)
+    // 8. Cierre de listas flotantes (Clic afuera, TAB, ESC)
     document.addEventListener('click', (e) => {
         const listasFlotantes = document.querySelectorAll('.list-group.position-absolute');
         listasFlotantes.forEach(lista => {
@@ -87,21 +100,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' || e.key === 'Tab') {
-            document.querySelectorAll('.list-group.position-absolute').forEach(el => {
-                el.classList.add('d-none');
-            });
+            document.querySelectorAll('.list-group.position-absolute').forEach(el => el.classList.add('d-none'));
         }
-    });
-
-    document.addEventListener('focusout', (e) => {
-        setTimeout(() => {
-            const elementoActivo = document.activeElement;
-            document.querySelectorAll('.list-group.position-absolute').forEach(lista => {
-                if (!lista.contains(elementoActivo)) {
-                    lista.classList.add('d-none');
-                }
-            });
-        }, 150);
     });
 });
 
@@ -113,11 +113,12 @@ function esDictaminadorAutorizado() {
     return especialidadesDictaminadoras.includes(especialidadUsuario.toUpperCase());
 }
 
+// ============================================================================
+// 📑 MANEJO Y SUBIDA DE ARCHIVOS (STORAGE)
+// ============================================================================
 function manejarSeleccionArchivos(e) {
     const input = e.target;
     const nuevosArchivos = Array.from(input.files);
-    
-    // 🛡️ Ahora aceptamos PDFs y Fotos
     const permitidos = ['application/pdf', 'image/jpeg', 'image/png'];
 
     nuevosArchivos.forEach(archivo => {
@@ -135,7 +136,7 @@ function manejarSeleccionArchivos(e) {
     nuevoInput.type = 'file';
     nuevoInput.id = input.id;
     nuevoInput.className = input.className;
-    nuevoInput.accept = 'application/pdf, image/jpeg, image/png'; // Actualizado aquí
+    nuevoInput.accept = 'application/pdf, image/jpeg, image/png';
     nuevoInput.style.display = 'none';
     nuevoInput.multiple = true;
     nuevoInput.addEventListener('change', manejarSeleccionArchivos);
@@ -144,9 +145,8 @@ function manejarSeleccionArchivos(e) {
 }
 
 function renderizarListaPDFs() {
-    // Buscamos ambos contenedores (el de la pantalla principal y el del modal)
-    let contenedorPrincipal = document.getElementById('lista-pdfs-cargados'); 
-    let contenedorModal = document.getElementById('lista-pdfs-modal'); 
+    const contenedorPrincipal = document.getElementById('lista-pdfs-cargados'); 
+    const contenedorModal = document.getElementById('lista-pdfs-modal'); 
 
     const htmlArchivos = archivosLaboratorio.map((archivo, index) => {
         const esPDF = archivo.type === 'application/pdf';
@@ -162,12 +162,14 @@ function renderizarListaPDFs() {
         </div>`;
     }).join('');
 
-    // Pintamos los archivos donde sea que el usuario esté trabajando
     if (contenedorPrincipal) contenedorPrincipal.innerHTML = htmlArchivos;
     if (contenedorModal) contenedorModal.innerHTML = htmlArchivos;
 }
 
-
+function eliminarPDFLaboratorio(index) {
+    archivosLaboratorio.splice(index, 1);
+    renderizarListaPDFs();
+}
 
 async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
     if (!pacienteId || !clinicaId || !estudioId) {
@@ -176,8 +178,6 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
     }
 
     const nombresArchivos = [];
-    
-    // 🛡️ LISTA BLANCA DE TIPOS PERMITIDOS
     const tiposPermitidos = {
         'application/pdf': 'pdf',
         'image/jpeg': 'jpg',
@@ -185,29 +185,21 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
     };
 
     for (const archivo of archivosLaboratorio) {
-        // 1. Validar el MIME type real del archivo
         const tipoReal = archivo.type;
-        if (!tiposPermitidos[tipoReal]) {
-            console.warn(`⚠️ Archivo bloqueado por seguridad (Tipo no permitido): ${archivo.name} (${tipoReal})`);
-            continue; 
-        }
+        if (!tiposPermitidos[tipoReal]) continue; 
 
-        // 2. Limpieza extrema del nombre y FORZAR la extensión correcta
         const nombreLimpio = archivo.name
-            .replace(/\.[^/.]+$/, "") // Quita la extensión original
-            .replace(/[^a-z0-9]/gi, '_') // Quita caracteres raros
+            .replace(/\.[^/.]+$/, "")
+            .replace(/[^a-z0-9]/gi, '_')
             .toLowerCase();
 
         const extensionForzada = tiposPermitidos[tipoReal];
         const rutaSegura = `${clinicaId}/${pacienteId}/${estudioId}/${Date.now()}_${nombreLimpio}.${extensionForzada}`;
-        
-        //console.log("📤 Subiendo archivo blindado:", rutaSegura);
 
-        // 3. Subida con tipo de contenido forzado
         const { error } = await fisioNet.storage
             .from('expedientes-clinicos')
             .upload(rutaSegura, archivo, {
-                contentType: tipoReal, // Supabase detecta el tipo real
+                contentType: tipoReal,
                 upsert: false
             });
 
@@ -219,6 +211,7 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
     }
     return nombresArchivos;
 }
+
 
 // --- MOTOR DE IDENTIDAD VISUAL CAMALEÓN ---
 async function aplicarIdentidadGabinete() {
@@ -883,25 +876,7 @@ async function guardarEstudioLaboratorio(event) {
     }
 }
 
-function renderizarListaPDFs() {
-    // Asegúrate de que apunte al nuevo contenedor que pusimos en el modal
-    let contenedor = document.getElementById('lista-pdfs-cargados'); 
-    
-    if (!contenedor) {
-        console.error("❌ No encuentro el contenedor lista-pdfs-cargados");
-        return;
-    }
 
-    contenedor.innerHTML = archivosLaboratorio.map((archivo, index) => `
-        <div class="d-flex align-items-center p-2 border rounded bg-white mb-1 shadow-sm">
-            <i class="fas fa-file-pdf text-danger me-2"></i>
-            <span class="small text-truncate flex-grow-1" style="font-size: 0.70rem;">${archivo.name}</span>
-            <button type="button" class="btn btn-sm text-danger p-0" onclick="eliminarPDFLaboratorio(${index})">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `).join('');
-}
 
 function eliminarPDFLaboratorio(index) {
     archivosLaboratorio.splice(index, 1);
@@ -1156,6 +1131,9 @@ async function renderizarCamposDinamicos(idsArray) {
 
 
 
+// ============================================================================
+// 🔍 AUTOCOMPLETADOS DE DOCTOR REFERENTE Y QUÍMICO
+// ============================================================================
 async function configurarBuscadorDoctor() {
     const input = document.getElementById('buscador-doctor');
     const lista = document.getElementById('sugerencias-doctores');
@@ -1165,21 +1143,19 @@ async function configurarBuscadorDoctor() {
 
     input.addEventListener('input', async (e) => {
         const query = e.target.value.trim().toUpperCase();
-        if (inputHidden) inputHidden.value = ""; // Si edita texto libre, reseteamos el UUID
+        if (inputHidden) inputHidden.value = ""; 
 
         if (query.length < 3) { lista.classList.add('d-none'); return; }
 
         try {
             const idClinica = localStorage.getItem('id_clinica_activa');
 
-            // 1. Consulta limpia a colaboradores internos
             const { data: internos } = await fisioNet
                 .from('colaboradores_clinica')
                 .select('id_profesional, perfiles_profesionales(nombre_completo, especialidad)')
                 .eq('id_clinica', idClinica)
                 .eq('estado', 'ACTIVO');
 
-            // 2. Consulta a convenios externos
             const { data: externos } = await fisioNet
                 .from('red_colaboracion')
                 .select('id_doctor_receptor, nombre_entidad, tipo_entidad')
@@ -1188,7 +1164,6 @@ async function configurarBuscadorDoctor() {
 
             lista.innerHTML = '';
 
-            // Filtrado manual flexible en memoria (evita fallos de SQL sintáctico)
             const listaInternos = (internos || [])
                 .filter(i => i.perfiles_profesionales?.nombre_completo?.toUpperCase().includes(query))
                 .map(i => ({
@@ -1232,19 +1207,10 @@ async function configurarBuscadorDoctor() {
                 });
             } else {
                 lista.classList.remove('d-none');
-                lista.innerHTML = `
-                    <div class="list-group-item bg-light text-muted small py-2">
-                        ✍️ <strong>Médico Externo:</strong> Se registrará como texto libre.
-                    </div>`;
+                lista.innerHTML = `<div class="list-group-item bg-light text-muted small py-2">✍️ <strong>Médico Externo:</strong> Texto libre.</div>`;
             }
         } catch (err) {
             console.error("❌ Error en buscador de doctores:", err);
-        }
-    });
-
-    document.addEventListener('click', (evt) => {
-        if (!input.contains(evt.target) && !lista.contains(evt.target)) {
-            lista.classList.add('d-none');
         }
     });
 }
@@ -1265,7 +1231,6 @@ async function configurarBuscadorQuimico() {
         try {
             const idClinica = localStorage.getItem('id_clinica_activa');
 
-            // Consultamos los colaboradores de la sede
             const { data: resultados, error } = await fisioNet
                 .from('colaboradores_clinica')
                 .select('id_profesional, perfiles_profesionales(nombre_completo, especialidad)')
@@ -1276,15 +1241,10 @@ async function configurarBuscadorQuimico() {
 
             lista.innerHTML = '';
 
-            // Filtrado flexible por nombre o por cualquier especialidad de laboratorio
             const filtrados = (resultados || []).filter(r => {
                 const nom = (r.perfiles_profesionales?.nombre_completo || '').toUpperCase();
                 const esp = (r.perfiles_profesionales?.especialidad || '').toUpperCase();
-                
-                const coincideNombre = nom.includes(query);
-                const esDeLaboratorio = ['QUIMICO', 'QUÍMICO', 'BIOQUIMICO', 'BIOQUÍMICO', 'PATOLOGO', 'PATÓLOGO', 'MICROBIOLOGO', 'LABORATORIO', 'LABORATORISTA'].some(e => esp.includes(e));
-                
-                return coincideNombre || (esDeLaboratorio && query.length >= 3);
+                return nom.includes(query) || ESPECIALIDADES_DICTAMINADORAS.some(e => esp.includes(e));
             });
 
             if (filtrados.length > 0) {
@@ -1306,18 +1266,9 @@ async function configurarBuscadorQuimico() {
                     };
                     lista.appendChild(btn);
                 });
-            } else {
-                lista.classList.remove('d-none');
-                lista.innerHTML = '<div class="p-2 text-muted small">No se encontraron especialistas de laboratorio registrados.</div>';
             }
         } catch (err) {
             console.error("❌ Error en buscador de químicos:", err);
-        }
-    });
-
-    document.addEventListener('click', (evt) => {
-        if (!input.contains(evt.target) && !lista.contains(evt.target)) {
-            lista.classList.add('d-none');
         }
     });
 }
@@ -1713,13 +1664,9 @@ async function renderizarModoConsulta(estudio) {
 
 
 
-// ==========================================
-// 🩻 MOTOR UNIVERSAL DE VISOR (LABORATORIO)
-// ==========================================
-let panzoomLab = null;
-let tomasLabActuales = []; 
-let indiceTomaLab = 0;     
-
+// ============================================================================
+// 🩻 VISOR INTERACTIVO OVERLAY (PANZOOM LABORATORIO)
+// ============================================================================
 async function abrirVisorLaboratorio(rutasComa) {
     if (!rutasComa) return;
     
@@ -1729,7 +1676,7 @@ async function abrirVisorLaboratorio(rutasComa) {
     if (!document.getElementById('visor-lab-overlay')) {
         document.body.insertAdjacentHTML('beforeend', `
             <div id="visor-lab-overlay" class="d-none animate__animated animate__fadeIn" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(5px); z-index: 9999; display: flex; flex-direction: column;">
-                <div style="padding: 15px 20px; background: #0f172a; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);">
+                <div style="padding: 15px 20px; background: #0f172a; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b;">
                     <div class="d-flex align-items-center">
                         <h5 class="text-white mb-0 fw-bold me-3"><i class="fas fa-microscope text-info me-2"></i> Visor Laboratorio</h5>
                         <span id="visor-lab-contador" class="badge bg-dark border border-secondary" style="font-size: 0.8rem;"></span>
@@ -1740,11 +1687,11 @@ async function abrirVisorLaboratorio(rutasComa) {
                     </div>
                 </div>
                 <div style="flex: 1; position: relative; display: flex;">
-                    <button id="btn-visor-lab-prev" class="btn btn-dark shadow" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px; opacity: 0.8;" onclick="cambiarTomaLaboratorio(-1)">
+                    <button id="btn-visor-lab-prev" class="btn btn-dark shadow" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px;" onclick="cambiarTomaLaboratorio(-1)">
                         <i class="fas fa-chevron-left fa-lg"></i>
                     </button>
                     <div id="visor-lab-lienzo" style="flex: 1; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;"></div>
-                    <button id="btn-visor-lab-next" class="btn btn-dark shadow" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px; opacity: 0.8;" onclick="cambiarTomaLaboratorio(1)">
+                    <button id="btn-visor-lab-next" class="btn btn-dark shadow" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 10000; border-radius: 50%; width: 50px; height: 50px;" onclick="cambiarTomaLaboratorio(1)">
                         <i class="fas fa-chevron-right fa-lg"></i>
                     </button>
                 </div>
@@ -1763,13 +1710,14 @@ async function renderizarTomaLaboratorio() {
     const lienzo = document.getElementById('visor-lab-lienzo');
     const archivoRuta = tomasLabActuales[indiceTomaLab];
 
-    document.getElementById('visor-lab-contador').innerText = `Archivo ${indiceTomaLab + 1} de ${tomasLabActuales.length}`;
+    const contador = document.getElementById('visor-lab-contador');
+    if (contador) contador.innerText = `Archivo ${indiceTomaLab + 1} de ${tomasLabActuales.length}`;
     
     const mostrarFlechas = tomasLabActuales.length > 1 ? 'block' : 'none';
     document.getElementById('btn-visor-lab-prev').style.display = mostrarFlechas;
     document.getElementById('btn-visor-lab-next').style.display = mostrarFlechas;
 
-    lienzo.innerHTML = '<div class="spinner-border text-info" role="status" style="width: 3rem; height: 3rem;"></div>';
+    if (lienzo) lienzo.innerHTML = '<div class="spinner-border text-info" role="status" style="width: 3rem; height: 3rem;"></div>';
 
     if (panzoomLab) {
         panzoomLab.destroy();
@@ -1789,24 +1737,28 @@ async function renderizarTomaLaboratorio() {
             });
         }
 
-        lienzo.innerHTML = ''; 
-        if (archivoRuta.toLowerCase().endsWith('.pdf')) {
-            lienzo.innerHTML = `<embed src="${data.signedUrl}" type="application/pdf" width="100%" height="100%" style="border: none;">`;
-        } else {
-            lienzo.innerHTML = `<img id="img-visor-lab" src="${data.signedUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">`;
-            const img = document.getElementById('img-visor-lab');
-            
-            setTimeout(() => {
-                panzoomLab = Panzoom(img, { maxScale: 6, minScale: 1, contain: 'outside' });
-                lienzo.addEventListener('wheel', (e) => { 
-                    e.preventDefault(); 
-                    panzoomLab.zoomWithWheel(e); 
-                }, { passive: false });
-            }, 150);
+        if (lienzo) {
+            lienzo.innerHTML = ''; 
+            if (archivoRuta.toLowerCase().endsWith('.pdf')) {
+                lienzo.innerHTML = `<embed src="${data.signedUrl}" type="application/pdf" width="100%" height="100%" style="border: none;">`;
+            } else {
+                lienzo.innerHTML = `<img id="img-visor-lab" src="${data.signedUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;">`;
+                const img = document.getElementById('img-visor-lab');
+                
+                setTimeout(() => {
+                    if (img && typeof Panzoom !== 'undefined') {
+                        panzoomLab = Panzoom(img, { maxScale: 6, minScale: 1, contain: 'outside' });
+                        lienzo.addEventListener('wheel', (e) => { 
+                            e.preventDefault(); 
+                            if (panzoomLab) panzoomLab.zoomWithWheel(e); 
+                        }, { passive: false });
+                    }
+                }, 150);
+            }
         }
     } catch (err) {
         console.error("Error en renderizado:", err);
-        lienzo.innerHTML = `<div class="text-center text-white"><i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i><h5>Archivo no disponible.</h5></div>`;
+        if (lienzo) lienzo.innerHTML = `<div class="text-center text-white"><h5>Archivo no disponible.</h5></div>`;
     }
 }
 
@@ -1823,7 +1775,8 @@ function cerrarVisorLaboratorio() {
     if (visor) {
         visor.classList.add('d-none');
         setTimeout(() => visor.style.display = 'none', 300);
-        document.getElementById('visor-lab-lienzo').innerHTML = ''; 
+        const lienzo = document.getElementById('visor-lab-lienzo');
+        if (lienzo) lienzo.innerHTML = ''; 
     }
     if (panzoomLab) {
         panzoomLab.destroy();
@@ -2077,3 +2030,11 @@ document.getElementById('curp-homo')?.addEventListener('input', async (e) => {
         }
     }
 });
+
+window.autocompletarHomoclaveRenapo = autocompletarHomoclaveRenapo;
+window.guardarEstudioLaboratorio = guardarEstudioLaboratorio;
+window.abrirDictaminacion = abrirDictaminacion;
+window.abrirVisorLaboratorio = abrirVisorLaboratorio;
+window.cerrarVisorLaboratorio = cerrarVisorLaboratorio;
+window.cambiarTomaLaboratorio = cambiarTomaLaboratorio;
+window.eliminarPDFLaboratorio = eliminarPDFLaboratorio;

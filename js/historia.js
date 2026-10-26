@@ -1396,40 +1396,53 @@ window.enviarSolicitudLab = async () => {
         const idPacienteActual = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
         const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
         const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
+        const idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
         if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
 
         if (tipoServicio === 'LAB') {
-            const { error: errLab } = await fisioNet.from('estudios_laboratorio').insert([{
+            // 🧪 ENVÍO ESTÁNDAR A LABORATORIO CLÍNICO UNIFICADO
+            const payloadLaboratorio = {
                 paciente_id: idPacienteActual,
-                id_doctor_referente: user.id,
-                doctor_referente_nombre: nombreDocStr,
-                id_socio_receptor: idSocioDestino,
-                estudios_etiquetas: estudioTexto, 
-                paciente_nombre: nombrePacienteStr,
+                id_socio_emisor: idClinicaEmisora,          // Clínica que envía la orden
+                creado_por: user.id,
+                doctor_emisor_id: user.id,                  // Doctor emisor de la receta/orden
+                id_socio_receptor: idSocioDestino,          // Laboratorio o Químico destino
+                medico_referente_nombre: nombreDocStr.toUpperCase(),
+                quimico_asignado_nombre: inputLabVal.toUpperCase(),
+                paciente_nombre: nombrePacienteStr.toUpperCase(),
+                estudios_etiquetas: [estudioTexto],         // 👈 Convertido a Array para empatar con la estructura de portal-laboratorio.js
                 estado: 'PENDIENTE', 
+                metodo_carga: 'CAPTURA',
                 fecha_captura: new Date().toISOString()
-            }]);
+            };
+
+            const { error: errLab } = await fisioNet
+                .from('estudios_laboratorio')
+                .insert([payloadLaboratorio]);
+
             if (errLab) throw errLab;
+
         } else {
-            // 🩻 ENVÍO A GABINETE
+            // 🩻 ENVÍO A GABINETE / IMAGENOLOGÍA (Se mantiene tu lógica que ya funciona)
             const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
                 paciente_id: idPacienteActual,
                 doctor_emisor_id: user.id,
                 medico_solicitante_manual: nombreDocStr,
                 id_socio_receptor: idSocioDestino, 
-                id_socio_emisor: user.id,          
-                indicaciones_medicas: estudioTexto, // 👈 Se guarda todo el mensaje libre del doctor aquí
+                id_socio_emisor: idClinicaEmisora || user.id,          
+                indicaciones_medicas: estudioTexto,
                 paciente_nombre_manual: nombrePacienteStr,
                 estado_estudio: 'SOLICITADO', 
                 estado_dictamen: 'PENDIENTE', 
                 archivo_url: 'EMPTY',
                 fecha_registro: new Date().toISOString()
             }]);
+
             if (errGab) throw errGab;
         }
 
-        alert("✅ ¡Solicitud enviada a la sala de espera del Gabinete!");
+        alert("✅ ¡Solicitud enviada exitosamente a la sala de espera!");
         document.getElementById('modalEstudioExpress').style.display = 'none';
 
     } catch (err) {
@@ -2039,38 +2052,46 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
 
 
 // ============================================================================
-// 🔔 VERIFICADOR DE NUEVA EVIDENCIA / ESTUDIOS NO VISTOS (EXCLUSIVO DEL DOCTOR)
+// 🔔 VERIFICADOR DE NUEVA EVIDENCIA Y LABORATORIOS COMPLETADOS (EXCLUSIVO DEL DOCTOR)
 // ============================================================================
 async function verificarNotificacionesEstudios(idPacienteActual) {
     if (!idPacienteActual) return;
 
     try {
-        // 1. Obtener la sesión del usuario activo
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
 
-        // 🎯 FILTRO ESTRUCTURAL ESTRICTO:
-        // Solo cuenta registros donde id_paciente coincida Y id_profesional sea EXCLUSIVAMENTE el doctor en sesión
-       const { count, error } = await fisioNet
-    .from('paciente_evidencia_multimedia')
-    .select('id', { count: 'exact', head: true })
-    .eq('id_paciente', idPacienteActual)
-    .eq('id_profesional', user.id)
-    .in('categoria_especialidad', ['GABINETE', 'LABORATORIO']);
+        // 1. Consultar Evidencias Multimedia / Gabinete dirigidas a ti
+        const { count: countEvidencias, error: errEv } = await fisioNet
+            .from('paciente_evidencia_multimedia')
+            .select('id', { count: 'exact', head: true })
+            .eq('id_paciente', idPacienteActual)
+            .eq('id_profesional', user.id)
+            .in('categoria_especialidad', ['GABINETE', 'LABORATORIO']);
 
+        if (errEv) throw errEv;
 
-        if (error) throw error;
+        // 2. Consultar Estudios de Laboratorio Dictaminados/Listos para este paciente
+        const { count: countLabs, error: errLab } = await fisioNet
+            .from('estudios_laboratorio')
+            .select('id', { count: 'exact', head: true })
+            .eq('paciente_id', idPacienteActual)
+            .eq('doctor_emisor_id', user.id)
+            .eq('estado', 'DICTAMINADO');
 
-        // Si hay estudios dirigidos a este doctor, inyectamos la alerta visual únicamente para él
-        if (count && count > 0) {
-            inyectarBadgeBoton('btn-historial-galeria', count);
-            inyectarBadgeBoton('btn-acciones-clinicas', count);
+        if (errLab) console.warn("Aviso en consulta de laboratorios:", errLab.message);
+
+        const totalPendientesRevision = (countEvidencias || 0) + (countLabs || 0);
+
+        // 3. Inyectar insignias rojas de notificación si hay estudios listos
+        if (totalPendientesRevision > 0) {
+            inyectarBadgeBoton('btn-historial-galeria', totalPendientesRevision);
+            inyectarBadgeBoton('btn-acciones-clinicas', totalPendientesRevision);
         }
     } catch (err) {
-        console.error("❌ Error consultando notificaciones exclusivas de estudios:", err.message);
+        console.error("❌ Error consultando notificaciones de estudios:", err.message);
     }
 }
-
 function inyectarBadgeBoton(idBoton, cantidad) {
     const btn = document.getElementById(idBoton);
     if (!btn) return;

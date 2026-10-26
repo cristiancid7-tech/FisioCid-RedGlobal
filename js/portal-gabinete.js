@@ -2525,11 +2525,11 @@ function autovincularEstudioParaSubida(solicitud) {
     }
 
     // Precargar zona anatómica o las indicaciones médicas en el campo correspondiente
-    const inputZona = document.getElementById('zona-estudio');
-    if (inputZona) {
-        const textoInyectar = solicitud.indicaciones_medicas || solicitud.zona_anatomica || '';
-        inputZona.value = textoInyectar.toUpperCase();
-    }
+   // const inputZona = document.getElementById('zona-estudio');
+   // if (inputZona) {
+   //     const textoInyectar = solicitud.indicaciones_medicas || solicitud.zona_anatomica || '';
+    //    inputZona.value = textoInyectar.toUpperCase();
+    //}
 
     // Precargar Médico Solicitante
     const inputDoc = document.getElementById('input-doctor-solicitante');
