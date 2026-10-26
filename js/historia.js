@@ -1420,6 +1420,7 @@ window.enviarSolicitudLab = async () => {
                 tipo_estudio: estudioTexto,
                 paciente_nombre_manual: nombrePacienteStr,
                 estado_dictamen: 'PENDIENTE', 
+                archivo_url: '',
                 fecha_registro: new Date().toISOString()
             }]);
             if (errGab) throw errGab;
