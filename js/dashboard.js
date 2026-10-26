@@ -1,7 +1,10 @@
-let sedesDisponibles = [];
-
 
 import './agenda.js';
+// dashboard.js - Inicio del archivo
+if (typeof window.sedesDisponibles === 'undefined') {
+    window.sedesDisponibles = [];
+}
+
 // Verificar estado de sesión al cargar la página
 async function verificarSesionSegura() {
     // 1. Verificar sesión activa con Supabase
@@ -2597,24 +2600,30 @@ async function buscarColegasFisioCid() {
         grid.innerHTML = ''; 
 
         colegas.forEach(c => {
-            const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo)}&background=random&color=fff`;
-
-            grid.innerHTML += `
-                <div style="background:white; padding:20px; border-radius:15px; border:1px solid #e2e8f0; text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <img src="${fotoUrl}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; margin-bottom:10px;">
-                    <h4 style="margin:0; font-size:0.9rem; color: #1e293b;">${c.nombre_completo}</h4>
-                    <p style="margin:5px 0; font-size:0.75rem; color:#059669; font-weight:800; background: #ecfdf5; padding: 2px 6px; border-radius: 4px; display: inline-block;">
-                        ${c.especialidad}
-                    </p>
-                    <button onclick="verDetalleColega('${c.id}')" style="margin-top:12px; background:var(--primary); color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-size:0.8rem; width:100%; font-weight:bold; transition: 0.2s;">
-                        Ver Perfil
+            const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo)}&background=random`;
+            
+            const card = document.createElement('div');
+            card.className = 'card-colega p-3 bg-white border rounded-3 shadow-sm mb-2';
+            card.innerHTML = `
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <img src="${fotoUrl}" class="rounded-circle" width="45" height="45" alt="Avatar">
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark">${c.nombre_completo.toUpperCase()}</h6>
+                            <small class="text-muted"><i class="fas fa-user-md me-1"></i>${c.especialidad || 'ESPECIALISTA'}</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="enviarSolicitudColaboracion('${c.id}')">
+                        <i class="fas fa-user-plus me-1"></i> Invitar
                     </button>
                 </div>
             `;
+            grid.appendChild(card);
         });
+
     } catch (err) {
-        console.error("Error en el buscador:", err);
-        grid.innerHTML = '<p style="color:red; text-align:center; grid-column:1/-1;">Error al conectar con el servidor.</p>';
+        console.error("❌ Error al buscar colegas:", err);
+        grid.innerHTML = `<div class="text-danger text-center p-3">Error en la búsqueda: ${err.message}</div>`;
     }
 }
 

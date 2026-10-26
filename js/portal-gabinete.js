@@ -516,6 +516,7 @@ let debounceTimer; // Asegúrate de tener esta variable declarada fuera del even
 const inputNombre = document.getElementById('valNombre');
 const listaSugerencias = document.getElementById('sugerencias-gabinete');
 
+// --- BUSCADOR INTELIGENTE CON INDICADOR DE SOLICITUDES PENDIENTES ---
 inputNombre?.addEventListener('input', async (e) => {
     const texto = e.target.value.trim().toUpperCase();
     
@@ -528,7 +529,7 @@ inputNombre?.addEventListener('input', async (e) => {
 
     debounceTimer = setTimeout(async () => {
         try {
-            // Buscamos en todas las columnas posibles
+            // Buscamos pacientes coincidentes
             const { data: pacientes, error } = await fisioNet
                 .from('pacientes_maestros')
                 .select('*')
@@ -538,6 +539,22 @@ inputNombre?.addEventListener('input', async (e) => {
             if (error) throw error;
 
             if (pacientes && pacientes.length > 0) {
+                // Extraemos los IDs de los pacientes encontrados
+                const idsPacientes = pacientes.map(p => p.id);
+
+                // Consultamos si alguno tiene órdenes de gabinete pendientes
+                const { data: ordenesPendientes } = await fisioNet
+                    .from('estudios_gabinete')
+                    .select('paciente_id, id')
+                    .in('paciente_id', idsPacientes)
+                    .or('estado_estudio.eq.SOLICITADO,estado_estudio.eq.PENDIENTE,estado_dictamen.eq.PENDIENTE');
+
+                // Mapeamos cuántas órdenes pendientes tiene cada paciente
+                const conteoOrdenes = {};
+                (ordenesPendientes || []).forEach(o => {
+                    conteoOrdenes[o.paciente_id] = (conteoOrdenes[o.paciente_id] || 0) + 1;
+                });
+
                 listaSugerencias.innerHTML = '';
                 listaSugerencias.classList.remove('d-none');
 
@@ -545,14 +562,20 @@ inputNombre?.addEventListener('input', async (e) => {
                     const btn = document.createElement('button');
                     btn.className = 'list-group-item list-group-item-action p-2.5 text-start';
                     
-                    // Aseguramos que los apellidos se lean bien
-                    const apPat = p.apellido_paterno || '';
-                    const apMat = p.apellido_materno || '';
-                    const nombreCompleto = `${p.nombre} ${apPat} ${apMat}`.trim();
+                    const nombreCompleto = `${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+                    const tieneOrdenes = conteoOrdenes[p.id] || 0;
+
+                    // Insignia destacada si tiene orden pendiente de un médico
+                    const badgeSolicitud = tieneOrdenes > 0 
+                        ? `<span class="badge bg-danger animate__animated animate__pulse animate__infinite ms-2"><i class="fas fa-bell me-1"></i>${tieneOrdenes} SOLICITUD PENDIENTE</span>`
+                        : '';
 
                     btn.innerHTML = `
                         <div class="d-flex justify-content-between align-items-center">
-                            <strong class="text-dark fs-7">${nombreCompleto.toUpperCase()}</strong>
+                            <div>
+                                <strong class="text-dark fs-7">${nombreCompleto.toUpperCase()}</strong>
+                                ${badgeSolicitud}
+                            </div>
                             <span class="badge bg-light text-secondary border">🎂 ${p.fecha_nacimiento || 'S/F'}</span>
                         </div>
                         <div class="text-muted mt-1" style="font-size: 0.65rem;">
@@ -2430,99 +2453,147 @@ async function ejecutarAnexoEstudioDesdeModal(idEstudioGabinete, categoria) {
     );
 }
 
+
 // ============================================================================
-// 🔔 DETECTOR AUTOMÁTICO DE SOLICITUDES PENDIENTES DE GABINETE / LABORATORIO
+// 🔔 DETECTOR INTELIGENTE DE ÓRDENES ENVIADAS POR MÉDICOS (NOTIFICACIÓN PUSH/TOAST)
 // ============================================================================
 async function verificarSolicitudesPendientesGabinete(idPaciente) {
     if (!idPaciente) return;
 
     try {
-        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-
-        // Buscar estudios en estado SOLICITADO para este paciente
+        // 1. Consulta limpia por ID de paciente
         const { data: solicitudes, error } = await fisioNet
             .from('estudios_gabinete')
-            .select(`
-                *,
-                medico:creado_por ( id, raw_user_meta_data ),
-                clinica_emisora:id_socio_emisor ( nombre_clinica )
-            `)
+            .select('*')
             .eq('paciente_id', idPaciente)
-            .eq('estado_estudio', 'SOLICITADO')
+            .or('estado_estudio.eq.SOLICITADO,estado_estudio.eq.PENDIENTE,estado_dictamen.eq.PENDIENTE')
             .order('fecha_registro', { ascending: false });
 
         if (error) throw error;
+        if (!solicitudes || solicitudes.length === 0) return;
 
-        // Si existen solicitudes pendientes, disparar la Alerta Visual
-        if (solicitudes && solicitudes.length > 0) {
-            const sol = solicitudes[0]; // Tomamos la más reciente
-            
-            // Extraer nombre del médico solicitante
-            const nombreMedico = sol.medico?.raw_user_meta_data?.full_name || 
-                                 sol.medico?.raw_user_meta_data?.nombre || 
-                                 'DR(A). SOLICITANTE';
+        // 2. Notificación flotante superior tipo PUSH/TOAST
+        const solReciente = solicitudes[0];
+        const nombreDoctor = solReciente.medico_solicitante_manual || 'UN MÉDICO DE LA RED';
 
-            const fechaSolicitud = new Date(sol.fecha_registro).toLocaleDateString('es-MX', {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 4500,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+
+        Toast.fire({
+            icon: 'warning',
+            title: `📩 ¡SOLICITUD ENVIADA!`,
+            text: `El Dr(a). ${nombreDoctor.toUpperCase()} te envió una orden para este paciente.`
+        });
+
+        // 3. CASO A: UNA SOLA SOLICITUD PENDIENTE
+        if (solicitudes.length === 1) {
+            const fechaSolicitud = new Date(solReciente.fecha_registro).toLocaleDateString('es-MX', {
                 day: '2-digit', month: 'short', year: 'numeric'
             });
 
-            // Swal / Alerta Visual deslumbrante para el Radiólogo
             Swal.fire({
-                title: '🚨 ¡SOLICITUD DE ESTUDIO DETECTADA!',
+                title: '🚨 ¡SOLICITUD DE ESTUDIO RECIBIDA!',
                 html: `
                     <div class="text-start p-2">
                         <div class="alert alert-primary mb-3" role="alert">
-                            <i class="fas fa-user-md me-2 fs-5"></i><strong>Solicitado por:</strong> ${nombreMedico.toUpperCase()}
+                            <i class="fas fa-user-md me-2 fs-5"></i><strong>Doctor Emisor:</strong> ${nombreDoctor.toUpperCase()}
                         </div>
-                        <p class="mb-1"><strong>📋 Estudio Requerido:</strong></p>
-                        <h5 class="text-danger fw-bold mb-3">${sol.estudio_solicitado.toUpperCase()}</h5>
-                        <p class="mb-1 text-muted small"><i class="fas fa-microscope me-1"></i><strong>Tipo:</strong> ${sol.tipo_estudio}</p>
-                        <p class="mb-0 text-muted small"><i class="far fa-calendar-alt me-1"></i><strong>Fecha de orden:</strong> ${fechaSolicitud}</p>
+                        <p class="mb-1"><strong>📋 Estudio Solicitado:</strong></p>
+                        <h5 class="text-danger fw-bold mb-3">${(solReciente.tipo_estudio || 'ESTUDIO GABINETE').toUpperCase()} - ${(solReciente.zona_anatomica || 'REGIONAL').toUpperCase()}</h5>
+                        <p class="mb-0 text-muted small"><i class="far fa-calendar-alt me-1"></i><strong>Fecha de solicitud:</strong> ${fechaSolicitud}</p>
                     </div>
                 `,
                 icon: 'info',
                 showCancelButton: true,
-                confirmButtonText: '⚡ VINCULAR Y SUBIR RESULTADO',
+                confirmButtonText: '⚡ VINCULAR Y CARGAR DATOS',
                 cancelButtonText: 'OMITIR DE MOMENTO',
                 confirmButtonColor: '#2563eb',
                 cancelButtonColor: '#64748b',
                 allowOutsideClick: false
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Autovinculación de datos en el modal de subida de imágenes
-                    autovincularEstudioParaSubida(sol);
+                    autovincularEstudioParaSubida(solReciente);
+                }
+            });
+        } 
+        
+        // 4. CASO B: MULTI-SOLICITUDES PENDIENTES
+        else {
+            let opcionesSelect = solicitudes.map((s, index) => {
+                const fecha = new Date(s.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+                const doc = s.medico_solicitante_manual || 'Médico Red';
+                return `<option value="${index}">📌 ${s.tipo_estudio} (${s.zona_anatomica || 'Sin zona'}) - ${fecha} - Solicitó: Dr(a). ${doc}</option>`;
+            }).join('');
+
+            Swal.fire({
+                title: `🚨 ¡${solicitudes.length} SOLICITUDES PENDIENTES!`,
+                html: `
+                    <div class="text-start p-2">
+                        <p class="text-muted small mb-2">Este paciente cuenta con múltiples órdenes emitidas en la red. Elige la que vas a procesar:</p>
+                        <select id="select-orden-gabinete-swal" class="form-select border-primary fw-bold text-dark mb-3">
+                            ${opcionesSelect}
+                        </select>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '⚡ PROCESAR ESTA ORDEN',
+                cancelButtonText: 'OMITIR DE MOMENTO',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#64748b',
+                allowOutsideClick: false,
+                preConfirm: () => {
+                    const idx = document.getElementById('select-orden-gabinete-swal').value;
+                    return solicitudes[idx];
+                }
+            }).then((result) => {
+                if (result.isConfirmed && result.value) {
+                    autovincularEstudioParaSubida(result.value);
                 }
             });
         }
+
     } catch (err) {
-        console.error("❌ Error al verificar solicitudes de gabinete:", err.message || err);
+        console.error("❌ Error verificando solicitudes pendientes:", err.message || err);
     }
 }
 
 // ============================================================================
-// 🔗 AUTOVINCULACIÓN DE DATOS Y APERTURA DE MODAL DE SUBIDA
+// 🔗 AUTOVINCULACIÓN INTELIGENTE DE CAMPOS EN EL FORMULARIO
 // ============================================================================
 function autovincularEstudioParaSubida(solicitud) {
     window.estudioGabineteActivoId = solicitud.id;
     window.categoriaEstudioActiva = solicitud.tipo_estudio || 'GABINETE';
 
-    // Precargar tipo y zona anatomica en el formulario principal
+    // Precargar tipo y zona anatómica
     const selectTipo = document.getElementById('tipo-estudio');
     if (selectTipo && solicitud.tipo_estudio) {
         selectTipo.value = solicitud.tipo_estudio;
     }
 
     const inputZona = document.getElementById('zona-estudio');
-    if (inputZona && solicitud.estudio_solicitado) {
-        inputZona.value = solicitud.estudio_solicitado.toUpperCase();
+    if (inputZona && solicitud.zona_anatomica) {
+        inputZona.value = solicitud.zona_anatomica.toUpperCase();
     }
 
-    // Si utilizas un modal Bootstrap de evidencia:
-    const modalEvidencia = document.getElementById('modalSubirEvidenciaGabinete');
-    if (modalEvidencia && typeof bootstrap !== 'undefined') {
-        const bsModal = bootstrap.Modal.getInstance(modalEvidencia) || new bootstrap.Modal(modalEvidencia);
-        bsModal.show();
-    } else if (typeof abrirModalEvidenciaMultimedia === 'function') {
-        abrirModalEvidenciaMultimedia();
+    // Precargar Médico Solicitante
+    const inputDoc = document.getElementById('input-doctor-solicitante');
+    if (inputDoc && solicitud.medico_solicitante_manual) {
+        inputDoc.value = solicitud.medico_solicitante_manual.toUpperCase();
+    }
+
+    // Notificación visual de confirmación de vinculo
+    const statusFolio = document.getElementById('statusFolio');
+    if (statusFolio) {
+        statusFolio.innerHTML = `<i class="fas fa-link text-success"></i> VINCULADO A ORDEN EN RED (#${solicitud.id.substring(0,6)})`;
     }
 }

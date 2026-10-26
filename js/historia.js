@@ -1419,7 +1419,8 @@ window.enviarSolicitudLab = async () => {
                 id_socio_emisor: idSocioDestino, 
                 tipo_estudio: estudioTexto,
                 paciente_nombre_manual: nombrePacienteStr,
-                estado_dictamen: 'PENDIENTE', 
+               estado_estudio: 'SOLICITADO',    // 👈 Clave para el conector
+                estado_dictamen: 'PENDIENTE',   // 👈 Compatibilidad
                 archivo_url: '',
                 fecha_registro: new Date().toISOString()
             }]);
