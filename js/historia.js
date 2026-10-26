@@ -1378,14 +1378,14 @@ window.enviarSolicitudLab = async () => {
     const inputLabVal = document.getElementById('inputLabDestino')?.value;
     const btn = document.getElementById('btnEnviarLab');
 
-    if (!estudioTexto) { alert("⚠️ Especifica qué estudio necesitas."); return; }
+    if (!estudioTexto) { alert("⚠️ Especifica qué estudio o indicación necesitas."); return; }
     if (!inputLabVal) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
 
     const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${inputLabVal}"]`);
     const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
 
     if (!idSocioDestino) { 
-        alert("⚠️ Por favor, selecciona un laboratorio de la lista desplegable."); 
+        alert("⚠️ Por favor, selecciona un laboratorio de la lista."); 
         return; 
     }
 
@@ -1404,7 +1404,7 @@ window.enviarSolicitudLab = async () => {
                 paciente_id: idPacienteActual,
                 id_doctor_referente: user.id,
                 doctor_referente_nombre: nombreDocStr,
-                id_socio_emisor: idSocioDestino, 
+                id_socio_receptor: idSocioDestino,
                 estudios_etiquetas: estudioTexto, 
                 paciente_nombre: nombrePacienteStr,
                 estado: 'PENDIENTE', 
@@ -1412,22 +1412,24 @@ window.enviarSolicitudLab = async () => {
             }]);
             if (errLab) throw errLab;
         } else {
+            // 🩻 ENVÍO A GABINETE
             const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
                 paciente_id: idPacienteActual,
                 doctor_emisor_id: user.id,
                 medico_solicitante_manual: nombreDocStr,
-                id_socio_emisor: idSocioDestino, 
-                tipo_estudio: estudioTexto,
+                id_socio_receptor: idSocioDestino, 
+                id_socio_emisor: user.id,          
+                indicaciones_medicas: estudioTexto, // 👈 Se guarda todo el mensaje libre del doctor aquí
                 paciente_nombre_manual: nombrePacienteStr,
-               estado_estudio: 'SOLICITADO',    // 👈 Clave para el conector
-                estado_dictamen: 'PENDIENTE',   // 👈 Compatibilidad
-                archivo_url: '',
+                estado_estudio: 'SOLICITADO', 
+                estado_dictamen: 'PENDIENTE', 
+                archivo_url: 'EMPTY',
                 fecha_registro: new Date().toISOString()
             }]);
             if (errGab) throw errGab;
         }
 
-        alert("✅ ¡Estudio enviado directo a la sala de espera del socio comercial!");
+        alert("✅ ¡Solicitud enviada a la sala de espera del Gabinete!");
         document.getElementById('modalEstudioExpress').style.display = 'none';
 
     } catch (err) {

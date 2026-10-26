@@ -1079,26 +1079,68 @@ async function guardarEstudioGabinete(event) {
         const tipoEstudioCapturado = (document.getElementById('tipo-estudio')?.value || 'N/A').toUpperCase();
         const zonaAnatomicaCapturada = (document.getElementById('zona-estudio')?.value || 'N/A').toUpperCase();
 
-        // 7. PAYLOAD COMPLETO A ESTUDIOS_GABINETE
-        const payloadGabinete = {
-            paciente_id: pacienteExistenteId,
-            id_socio_emisor: idClinicaActiva,
-            doctor_emisor_id: doctorEmisorVinculado || null,
-            medico_solicitante_manual: medicoSolicitanteTexto,
-            id_radiologo_firmante: radiologoFinal,
-            creado_por: user.id,
-            tecnico_captura: user.email, 
-            paciente_nombre_manual: nombrePacManual,
-            curp: curpFinal.length === 18 ? curpFinal : null,
-            tipo_estudio: tipoEstudioCapturado,
-            zona_anatomica: zonaAnatomicaCapturada,
-            estado_dictamen: 'PENDIENTE',
-            archivo_url: listaNombresArchivos.join(','),
-            fecha_registro: new Date().toISOString(),
-            paciente_edad_momento: edadFinal, 
-            paciente_genero_momento: generoFinal,
-            folio_expediente: folioSede
-        };
+     // 7. PAYLOAD COMPLETO Y ACTUALIZACIÓN/INSERCIÓN EN ESTUDIOS_GABINETE
+        const idSolicitudActiva = window.solicitudGabineteActivaId || window.estudioGabineteActivoId;
+        const archivoUrlFinal = listaNombresArchivos.join(',');
+
+        let resEstudioId = idSolicitudActiva;
+
+        if (idSolicitudActiva) {
+            // 🔄 CASO A: EL ESTUDIO VENÍA DE UNA SOLICITUD PENDIENTE -> ACTUALIZAMOS A COMPLETADO
+            const { error: errUpdate } = await fisioNet
+                .from('estudios_gabinete')
+                .update({
+                    tipo_estudio: tipoEstudioCapturado,
+                    zona_anatomica: zonaAnatomicaCapturada,
+                    estado_estudio: 'COMPLETADO', // 👈 Marca la solicitud como procesada
+                    estado_dictamen: 'PENDIENTE',
+                    archivo_url: archivoUrlFinal,
+                    tecnico_captura: user.email,
+                    id_radiologo_firmante: radiologoFinal,
+                    folio_expediente: folioSede,
+                    paciente_edad_momento: edadFinal,
+                    paciente_genero_momento: generoFinal
+                })
+                .eq('id', idSolicitudActiva);
+
+            if (errUpdate) throw errUpdate;
+
+            // Limpiamos la variable global
+            window.solicitudGabineteActivaId = null;
+            window.estudioGabineteActivoId = null;
+
+        } else {
+            // 🆕 CASO B: ESTUDIO DIRECTO CREADO EN GABINETE (SIN SOLICITUD PREVIA) -> INSERCIÓN NUEVA
+            const payloadGabinete = {
+                paciente_id: pacienteExistenteId,
+                id_socio_emisor: idClinicaActiva,
+                doctor_emisor_id: doctorEmisorVinculado || null,
+                medico_solicitante_manual: medicoSolicitanteTexto,
+                id_radiologo_firmante: radiologoFinal,
+                creado_por: user.id,
+                tecnico_captura: user.email, 
+                paciente_nombre_manual: nombrePacManual,
+                curp: curpFinal.length === 18 ? curpFinal : null,
+                tipo_estudio: tipoEstudioCapturado,
+                zona_anatomica: zonaAnatomicaCapturada,
+                estado_estudio: 'COMPLETADO', // 👈 Nace como completado
+                estado_dictamen: 'PENDIENTE',
+                archivo_url: archivoUrlFinal,
+                fecha_registro: new Date().toISOString(),
+                paciente_edad_momento: edadFinal, 
+                paciente_genero_momento: generoFinal,
+                folio_expediente: folioSede
+            };
+
+            const { data: resEstudio, error: errEst } = await fisioNet
+                .from('estudios_gabinete')
+                .insert([payloadGabinete])
+                .select('id')
+                .single();
+
+            if (errEst) throw errEst;
+            resEstudioId = resEstudio?.id;
+        }
 
         const { data: resEstudio, error: errEst } = await fisioNet
             .from('estudios_gabinete')
@@ -1259,9 +1301,6 @@ function quitarArchivo(index) {
 
 
 
-// ============================================================================
-// 📜 CARGA DE HISTORIAL GABINETE (BANDEJA UNIVERSAL DE RADIOLOGÍA)
-// ============================================================================
 async function cargarHistorialPersonal() {
     const contenedor = document.getElementById('lista-historial-gabinete');
     if (!contenedor) return;
@@ -1273,7 +1312,6 @@ async function cargarHistorialPersonal() {
                 Cargando bandeja de estudios radiológicos...
             </div>`;
 
-        // 1. Obtener la sesión activa de Supabase Auth
         const { data: { user }, error: authErr } = await fisioNet.auth.getUser();
         if (authErr || !user) {
             console.error("❌ Usuario no autenticado.");
@@ -1283,7 +1321,6 @@ async function cargarHistorialPersonal() {
 
         const idClinicaActiva = localStorage.getItem('id_clinica_activa');
 
-        // 2. Consultar perfil profesional para conocer la especialidad del usuario
         const { data: perfil } = await fisioNet
             .from('perfiles_profesionales')
             .select('especialidad')
@@ -1294,9 +1331,6 @@ async function cargarHistorialPersonal() {
         const esRadiologo = especialidad.includes('RADIOLOG');
 
         console.group("📡 CONSULTA DE HISTORIAL GABINETE");
-        //console.log("👤 Usuario ID:", user.id);
-        //console.log("🎓 Especialidad:", especialidad || 'STAFF');
-        //console.log("🏥 Clínica Activa:", idClinicaActiva);
 
         let query = fisioNet.from('estudios_gabinete').select(`
             *,
@@ -1308,15 +1342,17 @@ async function cargarHistorialPersonal() {
             )
         `);
 
-        // 🎯 LÓGICA DE FILTRADO SEPARADA:
+        // 🎯 LÓGICA DE FILTRADO SEPARADA POR SEDE:
         if (esRadiologo) {
-            // BANDEJA GLOBAL DEL RADIÓLOGO: Trae TODO estudio donde esté asignada como firmante,
-            // emisor o creador, independientemente de qué sede o clínica externa lo haya subido.
-            //console.log("🟢 Modo: Bandeja de Dictamen Radiológico Activa (Universal)");
-            query = query.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+            if (idClinicaActiva && idClinicaActiva !== "null") {
+                // Filtra los estudios pertenecientes a la clínica activa O asignados al radiólogo
+                query = query.eq('id_socio_emisor', idClinicaActiva)
+                             .or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+            } else {
+                query = query.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+            }
         } else {
-            // BANDEJA DE STAFF CLINICO: Trae los estudios de la sede activa
-            //console.log("🔵 Modo: Staff de Clínica Local");
+            // BANDEJA DE STAFF CLÍNICO LOCAL
             if (idClinicaActiva && idClinicaActiva !== "null") {
                 query = query.or(`id_socio_emisor.eq.${idClinicaActiva},creado_por.eq.${user.id}`);
             } else {
@@ -1324,14 +1360,12 @@ async function cargarHistorialPersonal() {
             }
         }
 
-        // 3. Ejecutar ordenado por fecha descendente (Los más recientes primero)
         const { data: estudios, error } = await query
             .order('fecha_registro', { ascending: false })
             .limit(50);
 
         if (error) throw error;
 
-        //console.log(`✅ Estudios recuperados (${estudios?.length || 0}):`, estudios);
         console.groupEnd();
 
         historialGabineteCache = estudios ? estudios.map(est => ({
@@ -1358,6 +1392,7 @@ function filtrarHistorialGabineteRealTime() {
     if (!input) return;
     const texto = input.value.trim().toUpperCase();
     
+    // Filtrado local inmediato sobre la caché cargada
     const resultados = historialGabineteCache.filter(estudio => 
         (estudio.paciente_nombre_manual && estudio.paciente_nombre_manual.toUpperCase().includes(texto)) || 
         (estudio.curp && estudio.curp.toUpperCase().includes(texto))
@@ -1368,6 +1403,7 @@ function filtrarHistorialGabineteRealTime() {
     clearTimeout(timeoutBusqueda);
     if (texto.length < 3) return; 
 
+    // Búsqueda remota profunda con debounce
     timeoutBusqueda = setTimeout(async () => {
         try {
             const { data: { user } } = await fisioNet.auth.getUser();
@@ -1384,9 +1420,15 @@ function filtrarHistorialGabineteRealTime() {
 
             let queryDeep = fisioNet.from('estudios_gabinete').select('*');
 
+            // 🎯 LÓGICA DE FILTRADO CORREGIDA PARA BÚSQUEDA PROFUNDA:
             if (esRadiologo) {
-                queryDeep = queryDeep.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
-            } else if (idClinicaActiva) {
+                if (idClinicaActiva && idClinicaActiva !== "null") {
+                    queryDeep = queryDeep.eq('id_socio_emisor', idClinicaActiva)
+                                         .or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+                } else {
+                    queryDeep = queryDeep.or(`id_radiologo_firmante.eq.${user.id},doctor_emisor_id.eq.${user.id},creado_por.eq.${user.id}`);
+                }
+            } else if (idClinicaActiva && idClinicaActiva !== "null") {
                 queryDeep = queryDeep.or(`id_socio_emisor.eq.${idClinicaActiva},creado_por.eq.${user.id}`);
             } else {
                 queryDeep = queryDeep.eq('creado_por', user.id);
@@ -2453,117 +2495,52 @@ async function ejecutarAnexoEstudioDesdeModal(idEstudioGabinete, categoria) {
     );
 }
 
-
-// ============================================================================
-// 🔔 DETECTOR INTELIGENTE DE ÓRDENES ENVIADAS POR MÉDICOS (NOTIFICACIÓN PUSH/TOAST)
-// ============================================================================
-async function verificarSolicitudesPendientesGabinete(idPaciente) {
-    if (!idPaciente) return;
+// Listener que se dispara cuando detectas al paciente en el Portal Gabinete
+async function verificarSolicitudesPendientesPaciente(pacienteId) {
+    if (!pacienteId) return;
 
     try {
-        // 1. Consulta limpia por ID de paciente
+        // Consultar si hay una solicitud activa no procesada
         const { data: solicitudes, error } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
-            .eq('paciente_id', idPaciente)
-            .or('estado_estudio.eq.SOLICITADO,estado_estudio.eq.PENDIENTE,estado_dictamen.eq.PENDIENTE')
-            .order('fecha_registro', { ascending: false });
+            .eq('paciente_id', pacienteId)
+            .eq('estado_estudio', 'SOLICITADO')
+            .order('fecha_registro', { ascending: false })
+            .limit(1);
 
         if (error) throw error;
-        if (!solicitudes || solicitudes.length === 0) return;
 
-        // 2. Notificación flotante superior tipo PUSH/TOAST
-        const solReciente = solicitudes[0];
-        const nombreDoctor = solReciente.medico_solicitante_manual || 'UN MÉDICO DE LA RED';
+        if (solicitudes && solicitudes.length > 0) {
+            const sol = solicitudes[0];
+            const medicoNombre = sol.medico_solicitante_manual || "UN MÉDICO DE LA RED";
+            const peticion = sol.indicaciones_medicas || sol.tipo_estudio;
 
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 4500,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            // Confirmación automática para autorrellenar la interfaz de gabinete
+            const aceptar = confirm(
+                `📩 ¡SOLICITUD PENDIENTE DETECTADA!\n\n` +
+                `El ${medicoNombre} solicita lo siguiente:\n` +
+                `"${peticion}"\n\n` +
+                `¿Deseas autorrellenar los datos de la orden para este estudio?`
+            );
+
+            if (aceptar) {
+                // 1. Rellenar Médico Solicitante
+                const inputMedico = document.getElementById('input-medico-remitente') || document.getElementById('medico_solicitante');
+                if (inputMedico) inputMedico.value = medicoNombre;
+
+                // 2. Rellenar Indicaciones / Zona / Tipo
+                const inputZona = document.getElementById('input-zona-anatomica') || document.getElementById('zona_anatomica');
+                if (inputZona) inputZona.value = peticion;
+
+                // 3. Guardar el ID de la solicitud activa para actualizar su estatus al terminar
+                window.solicitudGabineteActivaId = sol.id;
+                
+                alert("✅ Orden vinculada con éxito. Procede a cargar las imágenes/reporte.");
             }
-        });
-
-        Toast.fire({
-            icon: 'warning',
-            title: `📩 ¡SOLICITUD ENVIADA!`,
-            text: `El Dr(a). ${nombreDoctor.toUpperCase()} te envió una orden para este paciente.`
-        });
-
-        // 3. CASO A: UNA SOLA SOLICITUD PENDIENTE
-        if (solicitudes.length === 1) {
-            const fechaSolicitud = new Date(solReciente.fecha_registro).toLocaleDateString('es-MX', {
-                day: '2-digit', month: 'short', year: 'numeric'
-            });
-
-            Swal.fire({
-                title: '🚨 ¡SOLICITUD DE ESTUDIO RECIBIDA!',
-                html: `
-                    <div class="text-start p-2">
-                        <div class="alert alert-primary mb-3" role="alert">
-                            <i class="fas fa-user-md me-2 fs-5"></i><strong>Doctor Emisor:</strong> ${nombreDoctor.toUpperCase()}
-                        </div>
-                        <p class="mb-1"><strong>📋 Estudio Solicitado:</strong></p>
-                        <h5 class="text-danger fw-bold mb-3">${(solReciente.tipo_estudio || 'ESTUDIO GABINETE').toUpperCase()} - ${(solReciente.zona_anatomica || 'REGIONAL').toUpperCase()}</h5>
-                        <p class="mb-0 text-muted small"><i class="far fa-calendar-alt me-1"></i><strong>Fecha de solicitud:</strong> ${fechaSolicitud}</p>
-                    </div>
-                `,
-                icon: 'info',
-                showCancelButton: true,
-                confirmButtonText: '⚡ VINCULAR Y CARGAR DATOS',
-                cancelButtonText: 'OMITIR DE MOMENTO',
-                confirmButtonColor: '#2563eb',
-                cancelButtonColor: '#64748b',
-                allowOutsideClick: false
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    autovincularEstudioParaSubida(solReciente);
-                }
-            });
-        } 
-        
-        // 4. CASO B: MULTI-SOLICITUDES PENDIENTES
-        else {
-            let opcionesSelect = solicitudes.map((s, index) => {
-                const fecha = new Date(s.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
-                const doc = s.medico_solicitante_manual || 'Médico Red';
-                return `<option value="${index}">📌 ${s.tipo_estudio} (${s.zona_anatomica || 'Sin zona'}) - ${fecha} - Solicitó: Dr(a). ${doc}</option>`;
-            }).join('');
-
-            Swal.fire({
-                title: `🚨 ¡${solicitudes.length} SOLICITUDES PENDIENTES!`,
-                html: `
-                    <div class="text-start p-2">
-                        <p class="text-muted small mb-2">Este paciente cuenta con múltiples órdenes emitidas en la red. Elige la que vas a procesar:</p>
-                        <select id="select-orden-gabinete-swal" class="form-select border-primary fw-bold text-dark mb-3">
-                            ${opcionesSelect}
-                        </select>
-                    </div>
-                `,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: '⚡ PROCESAR ESTA ORDEN',
-                cancelButtonText: 'OMITIR DE MOMENTO',
-                confirmButtonColor: '#2563eb',
-                cancelButtonColor: '#64748b',
-                allowOutsideClick: false,
-                preConfirm: () => {
-                    const idx = document.getElementById('select-orden-gabinete-swal').value;
-                    return solicitudes[idx];
-                }
-            }).then((result) => {
-                if (result.isConfirmed && result.value) {
-                    autovincularEstudioParaSubida(result.value);
-                }
-            });
         }
-
-    } catch (err) {
-        console.error("❌ Error verificando solicitudes pendientes:", err.message || err);
+    } catch (e) {
+        console.warn("No se pudieron verificar solicitudes pendientes:", e);
     }
 }
 
