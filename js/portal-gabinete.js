@@ -641,7 +641,7 @@ function autorrellenarPaciente(p) {
     congelarCamposIdentidad(true);
 
     // 🔑 2. Desplegamos el botón inteligente de control de firmas OTP
-    crearBotonDesbloqueoDinamico();
+   // crearBotonDesbloqueoDinamico();
 
     actualizarInterfazEdad();
     verificarSolicitudesPendientesGabinete(p.id);

@@ -214,14 +214,15 @@ async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
 }
 
 
-// --- MOTOR DE IDENTIDAD VISUAL CAMALEÓN ---
+//// --- MOTOR DE IDENTIDAD VISUAL CAMALEÓN ---
 async function aplicarIdentidadGabinete() {
     try {
         const colorSede = localStorage.getItem('clinica_color') || '#00cfd5';
         document.documentElement.style.setProperty('--color-camaleon', colorSede);
 
         const infoEmisor = document.getElementById('info-emisor');
-        const nombreDoc = localStorage.getItem('full_name');
+        const nombreDoc = localStorage.getItem('full_name') || 'ESPECIALISTA';
+        const especialidadActiva = localStorage.getItem('especialidad_usuario') || 'Laboratorio'; // 👈 Definida para solucionar ReferenceError
 
         if (infoEmisor) {
             infoEmisor.innerHTML = `
@@ -555,9 +556,9 @@ function autorrellenarCamposLaboratorio(p) {
     congelarCamposIdentidad(true);
 
     // Protegemos llamadas si la función dinámicas no existe aún
-    if (typeof crearBotonDesbloqueoDinamico === 'function') {
-        try { crearBotonDesbloqueoDinamico(); } catch(e) { console.warn(e); }
-    }
+  //  if (typeof crearBotonDesbloqueoDinamico === 'function') {
+   //     try { crearBotonDesbloqueoDinamico(); } catch(e) { console.warn(e); }
+    //}
 
     actualizarInterfazEdad();
     
@@ -575,7 +576,7 @@ function autorrellenarCamposLaboratorio(p) {
 async function verificarSolicitudesPendientesLaboratorio(pacienteId) {
     if (!pacienteId) return;
     try {
-        console.log("🔍 Buscando solicitudes pendientes para el paciente:", pacienteId);
+       // console.log("🔍 Buscando solicitudes pendientes para el paciente:", pacienteId);
         
         // Consultamos sin restricción de días para asegurar detectar cualquier orden abierta
         const { data: solicitudes, error } = await fisioNet
@@ -593,9 +594,9 @@ async function verificarSolicitudesPendientesLaboratorio(pacienteId) {
             
             const medicoNombre = sol.medico_referente_nombre || sol.doctor_referente_nombre || sol.medico_solicitante_manual || "UN MÉDICO DE LA RED";
             
-            const peticion = Array.isArray(sol.estudios_etiquetas) 
-                ? sol.estudios_etiquetas.join(', ') 
-                : (sol.estudios_etiquetas || 'ANÁLISIS CLÍNICOS');
+            const peticion = Array.isArray(sol.indicaciones_medicas) 
+                ? sol.indicaciones_medicas.join(', ') 
+                : (sol.indicaciones_medicas || 'ANÁLISIS CLÍNICOS');
 
             // Timeout de 100ms para asegurar que el DOM responda antes de pausar con el confirm()
             setTimeout(() => {
