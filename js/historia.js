@@ -1149,15 +1149,17 @@ async function detectarEstudiosPendientesEnNota(pacienteId) {
         if (!contenedorBanners) return;
         contenedorBanners.innerHTML = '';
 
-        // 1. Consultar estudios de gabinete
+        // 1. Consultar únicamente estudios de gabinete que ya tengan resultado subido o dictaminado
         const { data: estudios } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
             .eq('paciente_id', pacienteId)
+            .or('estado_dictamen.eq.DICTAMINADO,estado_estudio.eq.COMPLETADO')
+            .not('archivo_url', 'eq', 'EMPTY')
             .order('fecha_registro', { ascending: false })
             .limit(3);
 
-        // 2. Consultar evidencias subidas
+        // 2. Consultar evidencias multimedia subidas
         const { data: evidencias } = await fisioNet
             .from('paciente_evidencia_multimedia')
             .select('*')
@@ -1170,7 +1172,7 @@ async function detectarEstudiosPendientesEnNota(pacienteId) {
         const listaCombinada = [
             ...(estudios || []).map(e => ({
                 tipo: e.tipo_estudio || 'Estudio de Gabinete',
-                hallazgos: e.hallazgos_resumen || 'Sin interpretación previa.',
+                hallazgos: e.hallazgos_resumen || 'Resultado/Dictamen disponible.',
                 fecha: e.fecha_registro,
                 url: e.archivo_url
             })),
@@ -1196,7 +1198,7 @@ async function detectarEstudiosPendientesEnNota(pacienteId) {
                     <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
                             <span class="badge bg-primary text-uppercase mb-1" style="font-size: 0.65rem;">
-                                📂 ESTUDIO PENDIENTE POR REVISAR (${fechaEstudio})
+                                📂 RESULTADO DISPONIBLE (${fechaEstudio})
                             </span>
                             <h6 class="fw-bold text-dark mb-1" style="font-size: 0.9rem;">
                                 🩻 ${est.tipo}
@@ -1801,19 +1803,11 @@ const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_pacie
         }
     });
 });
-// =========================================================
-// 📂 CARGAR HISTORIAL CON GENERACIÓN DE URLS FIRMADAS DÍNAMICAS
-// =========================================================
-// =========================================================
-// 📂 CARGAR HISTORIAL CON GENERACIÓN DE URLS FIRMADAS DINÁMICAS
-// =========================================================
+
+
 async function cargarHistorialEvidencias() {
     const contenedor = document.getElementById('contenedor_lista_evidencias');
     if (!contenedor) return;
-
-    const idClinicaActiva = (typeof idClinica !== 'undefined' && idClinica) 
-        ? idClinica 
-        : (localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id'));
 
     const pacienteActualId = (typeof idPaciente !== 'undefined' && idPaciente) 
         ? idPaciente 
@@ -1825,42 +1819,71 @@ async function cargarHistorialEvidencias() {
     }
 
     try {
-        contenedor.innerHTML = `<p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando expediente multimedia privado...</p>`;
+        contenedor.innerHTML = `<p class="text-center text-muted my-5"><i class="fas fa-spinner fa-spin me-2"></i>Cargando expediente multimedia y estudios...</p>`;
 
-        const { data: { user } } = await fisioNet.auth.getUser();
-
-        // 🛡️ BÚSQUEDA FLEXIBLE NOM-004: Trae si pertenece a la clínica activa O si fue asignado/creado por el profesional en sesión
-        let query = fisioNet
+        // A) Consultar Evidencias Multimedia
+        const { data: evidencias } = await fisioNet
             .from('paciente_evidencia_multimedia')
             .select('*')
             .eq('id_paciente', pacienteActualId);
 
-        if (idClinicaActiva && user) {
-            query = query.or(`id_clinica.eq.${idClinicaActiva},id_profesional.eq.${user.id}`);
-        } else if (idClinicaActiva) {
-            query = query.eq('id_clinica', idClinicaActiva);
-        } else if (user) {
-            query = query.eq('id_profesional', user.id);
-        }
+        // B) Consultar Estudios de Gabinete con Resultados
+        const { data: gabinetes } = await fisioNet
+            .from('estudios_gabinete')
+            .select('*')
+            .eq('paciente_id', pacienteActualId)
+            .not('archivo_url', 'eq', 'EMPTY');
 
-        const { data, error } = await query.order('fecha_registro', { ascending: false });
+        // C) Consultar Estudios de Laboratorio Dictaminados
+        const { data: laboratorios } = await fisioNet
+            .from('estudios_laboratorio')
+            .select('*')
+            .eq('paciente_id', pacienteActualId)
+            .eq('estado', 'DICTAMINADO');
 
-        if (error) throw error;
+        // Normalizar en una sola estructura uniforme
+        const listaUnificada = [
+            ...(evidencias || []).map(e => ({
+                id: e.id,
+                categoria: e.categoria_especialidad || 'EVIDENCIA',
+                descripcion: e.descripcion || 'Sin descripción',
+                fecha: e.fecha_registro,
+                url: e.url_imagen,
+                ruta_storage: e.ruta_storage,
+                tipo_origen: 'MULTIMEDIA'
+            })),
+            ...(gabinetes || []).map(g => ({
+                id: g.id,
+                categoria: `GABINETE: ${g.tipo_estudio || 'IMAGEN'}`,
+                descripcion: g.hallazgos_resumen || g.indicaciones_medicas || 'Estudio de Gabinete',
+                fecha: g.fecha_registro,
+                url: g.archivo_url,
+                ruta_storage: g.ruta_storage,
+                tipo_origen: 'GABINETE'
+            })),
+            ...(laboratorios || []).map(l => ({
+                id: l.id,
+                categoria: 'LABORATORIO CLÍNICO',
+                descripcion: l.indicaciones_medicas || 'Resultados de laboratorio',
+                fecha: l.fecha_captura || l.created_at,
+                url: l.archivo_resultado_url || l.archivo_url,
+                ruta_storage: null,
+                tipo_origen: 'LABORATORIO'
+            }))
+        ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
-        // 🔒 Generar URLs firmadas dinámicas y frescas para cada evidencia
-        const evidenciasConFirmas = await Promise.all((data || []).map(async (item) => {
-            if (item.ruta_storage) {
+        // Firmar URLs que provengan de Storage privado
+        const listaConFirmas = await Promise.all(listaUnificada.map(async (item) => {
+            if (item.ruta_storage && !item.ruta_storage.startsWith('http')) {
                 const { data: signedData } = await fisioNet.storage
                     .from('expedientes-multimedia')
                     .createSignedUrl(item.ruta_storage, 3600);
-                if (signedData?.signedUrl) {
-                    item.url_imagen = signedData.signedUrl;
-                }
+                if (signedData?.signedUrl) item.url = signedData.signedUrl;
             }
             return item;
         }));
 
-        coleccionEvidenciasPaciente = evidenciasConFirmas;
+        coleccionEvidenciasPaciente = listaConFirmas;
         renderizarListaEvidencias(coleccionEvidenciasPaciente);
 
     } catch (err) {
@@ -2078,7 +2101,7 @@ async function anexarEstudioAExpedienteClinica(itemOrigen) {
 
 
 // ============================================================================
-// 🔔 VERIFICADOR DE NUEVA EVIDENCIA Y LABORATORIOS COMPLETADOS (EXCLUSIVO DEL DOCTOR)
+// 🔔 VERIFICADOR DE ESTUDIOS LISTOS / COMPLETED (NOTIFICACIONES EN BOTONES)
 // ============================================================================
 async function verificarNotificacionesEstudios(idPacienteActual) {
     if (!idPacienteActual) return;
@@ -2087,50 +2110,58 @@ async function verificarNotificacionesEstudios(idPacienteActual) {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
 
-        // 1. Consultar Evidencias Multimedia / Gabinete dirigidas a ti
+        // 1. Evidencias subidas por el paciente o aliadas
         const { count: countEvidencias, error: errEv } = await fisioNet
             .from('paciente_evidencia_multimedia')
             .select('id', { count: 'exact', head: true })
             .eq('id_paciente', idPacienteActual)
-            .eq('id_profesional', user.id)
             .in('categoria_especialidad', ['GABINETE', 'LABORATORIO']);
 
         if (errEv) throw errEv;
 
-        // 2. Consultar Estudios de Laboratorio Dictaminados/Listos para este paciente
+        // 2. Estudios de gabinete completados o dictaminados por el gabinete
+        const { count: countGabinetes, error: errGab } = await fisioNet
+            .from('estudios_gabinete')
+            .select('id', { count: 'exact', head: true })
+            .eq('paciente_id', idPacienteActual)
+            .or('estado_dictamen.eq.DICTAMINADO,estado_estudio.eq.COMPLETADO')
+            .not('archivo_url', 'eq', 'EMPTY');
+
+        // 3. Estudios de laboratorio dictaminados/listos
         const { count: countLabs, error: errLab } = await fisioNet
             .from('estudios_laboratorio')
             .select('id', { count: 'exact', head: true })
             .eq('paciente_id', idPacienteActual)
-            .eq('id_doctor_referente', user.id)               // 👈 Nombre correcto de la columna en BD
             .eq('estado', 'DICTAMINADO');
 
-        if (errLab) console.warn("Aviso en consulta de laboratorios:", errLab.message);
+        const totalNuevosResultados = (countEvidencias || 0) + (countGabinetes || 0) + (countLabs || 0);
 
-        const totalPendientesRevision = (countEvidencias || 0) + (countLabs || 0);
-
-        // 3. Inyectar insignias rojas de notificación si hay estudios listos
-        if (totalPendientesRevision > 0) {
-            inyectarBadgeBoton('btn-historial-galeria', totalPendientesRevision);
-            inyectarBadgeBoton('btn-acciones-clinicas', totalPendientesRevision);
+        // Inyectar badges si existen resultados nuevos
+        if (totalNuevosResultados > 0) {
+            // Badge en el botón principal flotante "Acciones Clínicas"
+            inyectarBadgeBoton('btnAccionesClinicasMain', totalNuevosResultados);
+            
+            // Badge en la opción del menú "Historial y Galería Clínica"
+            inyectarBadgeBoton('btnHistorialGaleriaMenu', totalNuevosResultados);
         }
     } catch (err) {
         console.error("❌ Error consultando notificaciones de estudios:", err.message);
     }
 }
 
-
 function inyectarBadgeBoton(idBoton, cantidad) {
     const btn = document.getElementById(idBoton);
     if (!btn) return;
 
-    // Evitamos duplicar badges si ya existe
     let badge = btn.querySelector('.badge-notificacion-estudio');
     if (!badge) {
         badge = document.createElement('span');
-        badge.className = 'badge-notificacion-estudio badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle shadow-sm';
-        badge.style.fontSize = '0.70rem';
-        badge.style.zIndex = '10';
+        badge.className = 'badge-notificacion-estudio badge rounded-pill bg-danger position-absolute shadow-sm';
+        badge.style.top = '-5px';
+        badge.style.right = '-5px';
+        badge.style.fontSize = '0.72rem';
+        badge.style.padding = '0.3em 0.55em';
+        badge.style.zIndex = '15';
         btn.style.position = 'relative';
         btn.appendChild(badge);
     }

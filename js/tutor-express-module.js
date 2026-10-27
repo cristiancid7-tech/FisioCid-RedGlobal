@@ -404,3 +404,9 @@ document.addEventListener('input', (e) => {
         evaluarCurpHomoclaveTutorExpress();
     }
 });
+
+window.abrirModalTutorExpress = abrirModalTutorExpress;
+window.generarCurpExpressTutor = generarCurpExpressTutor;
+window.evaluarCurpHomoclaveTutorExpress = evaluarCurpHomoclaveTutorExpress;
+window.autocompletarHomoclaveRenapoTutor = autocompletarHomoclaveRenapoTutor;
+window.guardarTutorExpress = guardarTutorExpress;
