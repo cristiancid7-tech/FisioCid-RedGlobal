@@ -1403,13 +1403,16 @@ window.enviarSolicitudLab = async () => {
         if (tipoServicio === 'LAB') {
             // 🧪 ENVÍO ESTÁNDAR A LABORATORIO CLÍNICO UNIFICADO
             const payloadLaboratorio = {
-                paciente_id: idPacienteActual,
-                id_socio_emisor: idClinicaEmisora,          
-                id_doctor_referente: user.id,               
+              paciente_id: idPacienteActual,
+                id_socio_emisor: idClinicaEmisora || user.id, // UUID de tu clínica
+                id_clinica: idClinicaEmisora || user.id,      // UUID de tu clínica
+                id_socio_receptor: idSocioDestino,            // 🎯 UUID DEL LABORATORIO DESTINATARIO
+                creado_por: user.id,                          // UUID de tu usuario
+                id_doctor_referente: user.id,                 // UUID de tu usuario
                 doctor_referente_nombre: nombreDocStr.toUpperCase(),
-                especialista_quimico: inputLabVal.toUpperCase(),
+                especialista_quimico: inputLabVal.toUpperCase(), // Nombre del laboratorio/químico en texto
                 paciente_nombre: nombrePacienteStr.toUpperCase(),
-                     indicaciones_medicas: estudioTexto,         
+                indicaciones_medicas: estudioTexto,          // Texto libre de la orden
                 estado: 'PENDIENTE', 
                 metodo_carga: 'CAPTURA',
                 fecha_captura: new Date().toISOString()
