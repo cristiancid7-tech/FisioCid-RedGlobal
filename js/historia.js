@@ -1375,17 +1375,18 @@ window.abrirModalEstudioExpress = async () => {
 window.enviarSolicitudLab = async () => {
     const tipoServicio = document.getElementById('tipoServicioExterno')?.value;
     const estudioTexto = document.getElementById('txtQueEstudio')?.value.trim().toUpperCase();
-    const inputLabVal = document.getElementById('inputLabDestino')?.value;
+    const inputLabVal = document.getElementById('inputLabDestino')?.value.trim();
     const btn = document.getElementById('btnEnviarLab');
 
-    if (!estudioTexto) { alert("⚠️ Especifica qué estudio o indicación necesitas."); return; }
-    if (!inputLabVal) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
+    if (!estudioTexto) { alert("⚠️ Especifica que estudio o indicacion necesitas."); return; }
+    if (!inputLabVal) { alert("⚠️ Selecciona a que socio lo vas a enviar."); return; }
 
-    const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${inputLabVal}"]`);
+    // 🔍 Extraer el ID único (UUID) del laboratorio destinatario
+    const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${CSS.escape(inputLabVal)}"]`);
     const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
 
     if (!idSocioDestino) { 
-        alert("⚠️ Por favor, selecciona un laboratorio de la lista."); 
+        alert("⚠️ Por favor, selecciona un laboratorio valido de la lista sugerida."); 
         return; 
     }
 
@@ -1399,7 +1400,7 @@ window.enviarSolicitudLab = async () => {
         const idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
         if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
-
+        
         if (tipoServicio === 'LAB') {
             // 🧪 ENVÍO ESTÁNDAR A LABORATORIO CLÍNICO UNIFICADO
             const payloadLaboratorio = {
