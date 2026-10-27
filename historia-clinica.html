@@ -1017,25 +1017,40 @@ function siguienteTabSOAP(idTab) {
 </style>
 
 
+
 <!-- ========================================================= -->
-<!-- ⚡ SPEED DIAL PRO: BOTÓN FLOTANTE DISCRETO (3 OPCIONES) -->
+<!-- ⚡ SPEED DIAL PRO: BOTÓN FLOTANTE DISCRETO CON NOTIFICACIÓN -->
 <!-- ========================================================= -->
 <div id="contenedor-speed-dial" style="position: fixed; bottom: 20px; left: 20px; z-index: 10000; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px;">
     
-    <!-- Botón Principal Disparador -->
+    <!-- Botón Principal Disparador (Con Badge Global) -->
     <button type="button" id="btnMainSpeedDial" onclick="toggleSpeedDial()" 
-            style="background: #0f172a; color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 30px; padding: 8px 16px; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3); backdrop-filter: blur(8px); transition: all 0.25s ease;">
+            style="position: relative; background: #0f172a; color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 30px; padding: 8px 16px; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3); backdrop-filter: blur(8px); transition: all 0.25s ease;">
         <i class="fas fa-bolt text-warning" id="iconoSpeedDial" style="font-size: 0.85rem; transition: transform 0.3s ease;"></i>
         <span style="letter-spacing: 0.3px;">Acciones Clínicas</span>
+
+        <!-- 🔴 GLOBO ROJO FACEBOOK EN EL BOTÓN PRINCIPAL -->
+        <span id="badge_main_speed_dial" 
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" 
+              style="font-size: 0.65rem; border: 2px solid #0f172a; box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);">
+            0
+        </span>
     </button>
 
     <!-- Menú Desplegable con 3 Opciones -->
     <div id="opcionesSpeedDial" style="display: none; flex-direction: column; gap: 6px; margin-left: 2px;">
         
-        <!-- Opción 1: Ver Historial y Galería del Paciente -->
-        <button type="button" onclick="abrirModalHistorialEvidencias()" class="btn-speed-option">
+        <!-- Opción 1: Ver Historial y Galería del Paciente (Con Badge Específico) -->
+        <button type="button" onclick="alAbrirGaleriaEvidencias()" class="btn-speed-option" style="position: relative;">
             <i class="fas fa-photo-video text-success"></i>
             <span>📂 Historial y Galería Clínica</span>
+
+            <!-- 🔴 GLOBO ROJO FACEBOOK DENTRO DE LA OPCIÓN -->
+            <span id="badge_opcion_galeria" 
+                  class="badge rounded-pill bg-danger ms-auto d-none" 
+                  style="font-size: 0.65rem; padding: 3px 6px;">
+                0
+            </span>
         </button>
 
         <!-- Opción 2: Subir Nueva Foto / Evidencia -->

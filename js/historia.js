@@ -11,8 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ejecución inicial limpia
     cargarExpedienteFijo();
     inicializarEscuchaMotivo();
-     adaptarInterfazPorEspecialidad();
+    adaptarInterfazPorEspecialidad();
     cargarDatosDesdeRecetaPendiente();
+    
+    // 🔔 Verificación inicial de notificaciones
+    actualizarBadgeNotificaciones();
 });
 
 // B) LIMPIAR PERMISOS AL CERRAR O SALIR DE LA PÁGINA
@@ -224,13 +227,13 @@ const cargarExpedienteFijo = async () => {
 
     // 6. GALERÍA DE GABINETE
     if (idLimpio && typeof modalEngine !== 'undefined' && modalEngine.cargarEstudiosAnteriores) {
-        //console.log("📸 Sincronizando galería de gabinete para:", idLimpio);
         modalEngine.cargarEstudiosAnteriores(idLimpio);
     }
     detectarEstudiosPendientesEnNota(idLimpio);
     adaptarInterfazPorEspecialidad();
-    verificarNotificacionesEstudios(idLimpio);
-
+    
+    // 🔔 Llama al nuevo sistema de notificaciones en cuanto se cargue el paciente
+    actualizarBadgeNotificaciones();
 };
     // ============================================================================
 // 🎨 ADAPTADOR CAMALEÓNICO POR ESPECIALIDAD
@@ -2269,4 +2272,91 @@ function inyectarBadgeBoton(idBoton, cantidad) {
         btn.appendChild(badge);
     }
     badge.innerText = cantidad;
+}
+
+
+
+// ============================================================================
+// 🔔 GESTOR DE NOTIFICACIONES TIPO FACEBOOK ROBUSTO (SISTEMA FISIOCID)
+// ============================================================================
+
+/**
+ * Consulta en Supabase cuántos estudios/evidencias están sin leer (leido == false)
+ */
+async function actualizarBadgeNotificaciones() {
+    const badgeMain = document.getElementById('badge_main_speed_dial');
+    const badgeOp = document.getElementById('badge_opcion_galeria');
+
+    const pacienteActualId = (typeof idPaciente !== 'undefined' && idPaciente) 
+        ? idPaciente 
+        : (localStorage.getItem('paciente_seleccionado_id') || new URLSearchParams(window.location.search).get('id'));
+
+    if (!pacienteActualId) return;
+
+    try {
+        // Consultas seguras aisladas con Promise.allSettled
+        const [resEvidencias, resGabinete, resLab] = await Promise.allSettled([
+            fisioNet.from('paciente_evidencia_multimedia').select('*', { count: 'exact', head: true }).eq('id_paciente', pacienteActualId).eq('leido', false),
+            fisioNet.from('estudios_gabinete').select('*', { count: 'exact', head: true }).eq('paciente_id', pacienteActualId).eq('leido', false),
+            fisioNet.from('estudios_laboratorio').select('*', { count: 'exact', head: true }).eq('paciente_id', pacienteActualId).eq('leido', false)
+        ]);
+
+        const countEvidencias = resEvidencias.status === 'fulfilled' && !resEvidencias.value.error ? (resEvidencias.value.count || 0) : 0;
+        const countGabinete = resGabinete.status === 'fulfilled' && !resGabinete.value.error ? (resGabinete.value.count || 0) : 0;
+        const countLab = resLab.status === 'fulfilled' && !resLab.value.error ? (resLab.value.count || 0) : 0;
+
+        const totalPendientes = countEvidencias + countGabinete + countLab;
+
+        if (totalPendientes > 0) {
+            const textoBadge = totalPendientes > 99 ? '99+' : totalPendientes;
+            
+            if (badgeMain) {
+                badgeMain.textContent = textoBadge;
+                badgeMain.classList.remove('d-none');
+            }
+            if (badgeOp) {
+                badgeOp.textContent = textoBadge;
+                badgeOp.classList.remove('d-none');
+            }
+        } else {
+            if (badgeMain) badgeMain.classList.add('d-none');
+            if (badgeOp) badgeOp.classList.add('d-none');
+        }
+
+    } catch (err) {
+        console.warn("⚠️ No se pudo verificar notificaciones de evidencias:", err);
+    }
+}
+
+/**
+ * Función que se dispara cuando el usuario HACE CLIC en "📂 Historial y Galería Clínica"
+ */
+async function alAbrirGaleriaEvidencias() {
+    // 1. Abrir el modal de la galería
+    abrirModalHistorialEvidencias();
+
+    const pacienteActualId = (typeof idPaciente !== 'undefined' && idPaciente) 
+        ? idPaciente 
+        : (localStorage.getItem('paciente_seleccionado_id') || new URLSearchParams(window.location.search).get('id'));
+
+    if (!pacienteActualId) return;
+
+    try {
+        // 2. Marcar en la BD como leídos
+        await Promise.allSettled([
+            fisioNet.from('paciente_evidencia_multimedia').update({ leido: true }).eq('id_paciente', pacienteActualId).eq('leido', false),
+            fisioNet.from('estudios_gabinete').update({ leido: true }).eq('paciente_id', pacienteActualId).eq('leido', false),
+            fisioNet.from('estudios_laboratorio').update({ leido: true }).eq('paciente_id', pacienteActualId).eq('leido', false)
+        ]);
+
+        // 3. Ocultar globos de la interfaz
+        const badgeMain = document.getElementById('badge_main_speed_dial');
+        const badgeOp = document.getElementById('badge_opcion_galeria');
+
+        if (badgeMain) badgeMain.classList.add('d-none');
+        if (badgeOp) badgeOp.classList.add('d-none');
+
+    } catch (err) {
+        console.error("Error al marcar notificaciones como leídas:", err);
+    }
 }
