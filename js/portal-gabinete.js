@@ -3,6 +3,7 @@
 // Archivo: portal-gabinete.js
 // Gestión de Identidad, Buscador Multi-Palabra, Candados de Seguridad y OTP
 // ============================================================================
+let debounceTimerDoctor = null;
 let tomasVisorActualesA = []; 
 let tomasVisorActualesB = []; 
 let indiceTomaActivaA = 0;
@@ -690,54 +691,7 @@ function congelarCamposIdentidad(bloquear) {
     }
 }
 
-// ============================================================================
-// 🔑 MOTOR OTP DINÁMICO DE DESBLOQUEO DE SEGURIDAD MAESTRA
-// ============================================================================
-function crearBotonDesbloqueoDinamico() {
-    document.getElementById('btnDesbloquearFichaLab')?.remove();
 
-    const contenedorCurp = document.getElementById('curp-parte1').closest('.col-12');
-    const wrapper = document.createElement('div');
-    wrapper.id = 'btnDesbloquearFichaLab';
-    wrapper.className = 'mt-2 text-end';
-    
-    wrapper.innerHTML = `
-        <button type="button" class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" style="border-radius: 8px; background-color: #ecc94b; color: #000; border: none; font-size:0.75rem;">
-            <i class="fas fa-lock"></i> ✏️ Corregir Datos de Identidad
-        </button>
-    `;
-
-    contenedorCurp.appendChild(wrapper);
-
-    wrapper.querySelector('button').addEventListener('click', async () => {
-        const p = window.pacienteCargado;
-        const esMenor = !document.getElementById('seccion-tutor').classList.contains('d-none');
-        const telefonoDestino = esMenor ? p?.telefono_tutor : (p?.telefono || document.getElementById('tel-manual').value);
-        
-        if (!telefonoDestino || telefonoDestino.trim() === "") {
-            alert("⚠️ Error: El paciente no cuenta con un teléfono registrado en la Ficha Maestro para el envío del código OTP.");
-            return;
-        }
-
-        const tokenSeguridad = Math.floor(100000 + Math.random() * 900000);
-        alert(`🛡️ PROTOCOLO DE EDICIÓN FISIOCID:\nCódigo enviado de forma segura al celular: ${telefonoDestino}\n👉 (Código de Autorización: ${tokenSeguridad})`);
-
-        const codigoIngresado = prompt("🔒 Ingrese el código OTP de 6 dígitos enviado para liberar la escritura:");
-        
-        if (String(codigoIngresado) === String(tokenSeguridad)) {
-            edicionFichaAutorizada = true; 
-            congelarCamposIdentidad(false); 
-            
-            const btn = wrapper.querySelector('button');
-            btn.className = "btn btn-success btn-sm fw-bold px-3 disabled";
-            btn.innerHTML = '<i class="fas fa-lock-open"></i> Modo Edición Activo';
-            btn.style.backgroundColor = "#48bb78";
-            btn.style.color = "#ffffff";
-        } else {
-            alert("❌ Código incorrecto. Los datos maestros de identidad siguen blindados.");
-        }
-    });
-}
 
 async function subirArchivosASupabase(pacienteId, clinicaId, estudioId) {
     if (!pacienteId || !clinicaId || !estudioId) {
@@ -933,10 +887,11 @@ async function registrarPacienteNuevo() {
         nombre_clinica: localStorage.getItem('nombre_clinica') || 'FisioCid',
         fecha_registro: new Date().toISOString(),
         es_menor_edad: esMenor,
-        nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
-        parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
-        telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
-        acceso_red_activo: true,
+      // 🎯 ID DEL TUTOR VINCULADO
+    id_tutor: esMenor ? (document.getElementById('idTutorSeleccionado')?.value || null) : null,
+    nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
+    parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
+    telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,acceso_red_activo: true,
         consentimiento_firmado: true,
         fecha_firma_consentimiento: new Date().toISOString()
     };
@@ -1848,15 +1803,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (inputDoc) {
         inputDoc.addEventListener('input', (e) => {
-            const texto = e.target.value;
-            // Si el usuario edita el texto manualmente, borramos el ID vinculado para dejarlo como "Doctor Externo"
-            document.getElementById('idDoctorSolicitanteVinculado').value = "";
+            const texto = e.target.value.trim().toUpperCase();
 
-            if (texto.trim().length >= 3) {
-                buscarMedicoSolicitanteEnRed(texto);
-            } else if (listaDoc) {
-                listaDoc.classList.add('d-none');
+            // Si el usuario edita el texto manualmente, borramos el ID vinculado
+            const inputHidden = document.getElementById('idDoctorSolicitanteVinculado');
+            if (inputHidden) inputHidden.value = "";
+
+            if (texto.length < 3) {
+                if (listaDoc) listaDoc.classList.add('d-none');
+                return;
             }
+
+            // ⏱️ Debounce de 300ms para no saturar Supabase mientras se teclea
+            clearTimeout(debounceTimerDoctor);
+            debounceTimerDoctor = setTimeout(() => {
+                buscarMedicoSolicitanteEnRed(texto);
+            }, 300);
         });
 
         // Ocultar la lista flotante si se da clic afuera
@@ -1867,66 +1829,108 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
+// ============================================================================
+// 🔍 BUSCADOR HIBRIDO DE MEDICOS SOLICITANTES (RED FISIOCID PERSONAL / EXTERNOS)
+// ============================================================================
 async function buscarMedicoSolicitanteEnRed(texto) {
     const lista = document.getElementById('listaMedicosConvenio');
-    if (!texto || texto.trim().length < 3) return;
+    if (!lista || !texto || texto.trim().length < 3) return;
 
     const entrada = texto.trim().toUpperCase();
+
     try {
-        const palabras = entrada.split(/\s+/).filter(p => p.length > 0);
-        let query = fisioNet.from('perfiles_profesionales').select('id, nombre_completo, especialidad, cedula_profesional');
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
-        // Búsqueda rápida aprovechando índices
-        if (palabras.length >= 1) query = query.ilike('nombre_completo', `%${palabras[0]}%`);
+        const identificadoresPropios = [user?.id, idClinica].filter(Boolean);
 
-        const { data: medicos, error } = await query.limit(5);
+        // 🚀 EJECUCIÓN EN PARALELO CON PROMISE.ALL (Consultas simultáneas)
+        const [resColabs, resEmisor, resReceptor] = await Promise.all([
+            idClinica 
+                ? fisioNet.from('colaboradores_clinica').select('id_profesional').eq('id_clinica', idClinica).neq('estado', 'INACTIVO') 
+                : Promise.resolve({ data: [] }),
+            fisioNet.from('red_colaboracion').select('id_doctor_receptor').in('id_doctor_emisor', identificadoresPropios).in('estado_conexion', ['ACEPTADO', 'ACTIVO']),
+            fisioNet.from('red_colaboracion').select('id_doctor_emisor').in('id_doctor_receptor', identificadoresPropios).in('estado_conexion', ['ACEPTADO', 'ACTIVO'])
+        ]);
+
+        // Consolidador de IDs únicos
+        const idsPermitidos = new Set();
+        if (user?.id) idsPermitidos.add(user.id); // Incluir siempre al propio usuario
+
+        (resColabs.data || []).forEach(c => { if (c.id_profesional) idsPermitidos.add(c.id_profesional); });
+        (resEmisor.data || []).forEach(r => { if (r.id_doctor_receptor) idsPermitidos.add(r.id_doctor_receptor); });
+        (resReceptor.data || []).forEach(r => { if (r.id_doctor_emisor) idsPermitidos.add(r.id_doctor_emisor); });
+
+        lista.innerHTML = '';
+
+        // Si no hay médicos asociados en la red
+        if (idsPermitidos.size === 0) {
+            lista.innerHTML = `
+                <div class="list-group-item bg-light text-muted small py-2">
+                    ✍️ <strong>Doctor Externo:</strong> Presiona TAB para registrar como texto libre.
+                </div>`;
+            lista.classList.remove('d-none');
+            return;
+        }
+
+        // 3. Consultar la tabla perfiles_profesionales filtrando solo por la red autorizada
+        const { data: medicos, error } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('id, nombre_completo, especialidad, cedula_profesional')
+            .in('id', Array.from(idsPermitidos))
+            .ilike('nombre_completo', `%${entrada}%`)
+            .limit(5);
+
         if (error) throw error;
 
-        if (lista) {
-            lista.innerHTML = '';
-            
-            if (!medicos || medicos.length === 0) {
-                lista.innerHTML = `
-                    <div class="list-group-item bg-light text-muted small py-2">
-                        ✍️ <strong>Doctor Externo:</strong> Presiona TAB para registrar como texto libre.
-                    </div>`;
-                lista.classList.remove('d-none');
-                return;
-            }
-
+        if (!medicos || medicos.length === 0) {
+            lista.innerHTML = `
+                <div class="list-group-item bg-light text-muted small py-2">
+                    ✍️ <strong>Doctor Externo:</strong> Presiona TAB para registrar como texto libre.
+                </div>`;
             lista.classList.remove('d-none');
-
-            medicos.forEach(m => {
-                const item = document.createElement('a');
-                item.href = "#";
-                item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2";
-                
-                const esp = m.especialidad ? `<span class="badge bg-info-subtle text-info border">${m.especialidad}</span>` : '';
-                item.innerHTML = `
-                    <div>
-                        <div class="fw-bold text-dark small">👨‍⚕️ ${m.nombre_completo.toUpperCase()}</div>
-                        <div class="text-muted" style="font-size: 0.65rem;">Cédula: ${m.cedula_profesional || 'N/A'}</div>
-                    </div>
-                    ${esp}
-                `;
-
-                // 🎯 Al dar clic, amarramos el UUID y el nombre
-                item.onclick = (e) => {
-                    e.preventDefault();
-                    document.getElementById('input-doctor-solicitante').value = m.nombre_completo.toUpperCase();
-                    document.getElementById('idDoctorSolicitanteVinculado').value = m.id; // 👈 UUID guardado
-                    lista.classList.add('d-none');
-                    //console.log("🔗 Doctor en red FisioCid vinculado. ID:", m.id);
-                };
-
-                lista.appendChild(item);
-            });
+            return;
         }
+
+        lista.classList.remove('d-none');
+
+        medicos.forEach(m => {
+            const item = document.createElement('a');
+            item.href = "#";
+            item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2";
+
+            const esp = m.especialidad ? `<span class="badge bg-info-subtle text-info border">${m.especialidad}</span>` : '';
+            item.innerHTML = `
+                <div>
+                    <div class="fw-bold text-dark small">👨‍⚕️ ${m.nombre_completo.toUpperCase()}</div>
+                    <div class="text-muted" style="font-size: 0.65rem;">Cédula: ${m.cedula_profesional || 'N/A'}</div>
+                </div>
+                ${esp}
+            `;
+
+            item.onclick = (e) => {
+                e.preventDefault();
+                const inputDoc = document.getElementById('input-doctor-solicitante');
+                const inputHidden = document.getElementById('idDoctorSolicitanteVinculado');
+
+                if (inputDoc) inputDoc.value = m.nombre_completo.toUpperCase();
+                if (inputHidden) inputHidden.value = m.id;
+                lista.classList.add('d-none');
+            };
+
+            lista.appendChild(item);
+        });
+
     } catch (err) {
         console.error("💥 Error en búsqueda de médicos:", err.message);
+        lista.innerHTML = `
+            <div class="list-group-item bg-light text-muted small py-2">
+                ✍️ <strong>Doctor Externo:</strong> Presiona TAB para registrar como texto libre.
+            </div>`;
+        lista.classList.remove('d-none');
     }
 }
+
 // Lo exponemos globalmente para que el HTML lo encuentre
 window.cambiarTomaPACS = cambiarTomaPACS;
 
@@ -2469,20 +2473,25 @@ async function ejecutarAnexoEstudioDesdeModal(idEstudioGabinete, categoria) {
 }
 
 
+// ============================================================================
+// 📩 DETECTOR Y PRECARGADOR DE SOLICITUDES PENDIENTES (LÍMITE 7 DÍAS)
+// ============================================================================
 async function verificarSolicitudesPendientesGabinete(pacienteId) {
     if (!pacienteId) return;
 
     try {
+        console.log("🔍 Buscando solicitudes pendientes (últimos 7 días) para paciente:", pacienteId);
+
         // 1. Calculamos la fecha límite de hace exactamente 7 días
         const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-        // 2. Consultamos solo solicitudes de los últimos 7 días
+        // 2. Consultamos solicitudes pendientes dentro del rango de 7 días
         const { data: solicitudes, error } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
             .eq('paciente_id', pacienteId)
-            .or('estado_estudio.eq.SOLICITADO,estado_estudio.eq.PENDIENTE')
-            .gte('fecha_registro', hace7Dias) // 👈 AQUÍ ESTÁ EL TRUCO: Descarta todo lo mayor a 7 días
+            .in('estado_estudio', ['SOLICITADO', 'PENDIENTE'])
+            .gte('fecha_registro', hace7Dias) // 👈 Tu regla de negocio de 7 días conservada
             .order('fecha_registro', { ascending: false })
             .limit(1);
 
@@ -2495,20 +2504,25 @@ async function verificarSolicitudesPendientesGabinete(pacienteId) {
             const peticion = sol.indicaciones_medicas || 
                              `${sol.tipo_estudio || 'ESTUDIO'} - ${sol.zona_anatomica || 'GENERAL'}`;
 
-            const aceptar = confirm(
-                `📩 ¡SOLICITUD ENTRANTE DETECTADA!\n\n` +
-                `El Dr. ${medicoNombre} ha remitido a este paciente para:\n` +
-                `"${peticion}"\n\n` +
-                `¿Deseas precargar los datos de esta solicitud para subir sus resultados?`
-            );
+            // Pequeña pausa de 100ms para asegurar que el navegador despliegue la alerta
+            setTimeout(() => {
+                const aceptar = confirm(
+                    `📩 ¡SOLICITUD ENTRANTE DETECTADA!\n\n` +
+                    `El Dr. ${medicoNombre} ha remitido a este paciente para:\n` +
+                    `"${peticion}"\n\n` +
+                    `¿Deseas precargar los datos de esta solicitud para subir sus resultados?`
+                );
 
-            if (aceptar) {
-                autovincularEstudioParaSubida(sol);
-                alert("✅ Solicitud vinculada. Adjunta las imágenes/PDF y presiona 'INTEGRAR A EXPEDIENTE FISIOCID'.");
-            }
+                if (aceptar) {
+                    autovincularEstudioParaSubida(sol);
+                    alert("✅ Solicitud vinculada. Adjunta las imágenes/PDF y presiona 'INTEGRAR A EXPEDIENTE FISIOCID'.");
+                }
+            }, 100);
+        } else {
+            console.log("ℹ️ No hay solicitudes recientes (menos de 7 días) para este paciente.");
         }
     } catch (e) {
-        console.warn("⚠️ No se pudieron verificar solicitudes pendientes:", e);
+        console.warn("⚠️ No se pudieron verificar solicitudes pendientes:", e.message);
     }
 }
 // ============================================================================
@@ -2543,3 +2557,5 @@ function autovincularEstudioParaSubida(solicitud) {
         statusFolio.innerHTML = `<i class="fas fa-link text-success"></i> VINCULADO A ORDEN EN RED (#${solicitud.id.substring(0,6)})`;
     }
 }
+
+window.abrirModalTutorExpress = abrirModalTutorExpress; 

@@ -4,6 +4,7 @@
 // ============================================================================
 
 let debounceTimer = null; 
+let debounceTimerDoctor = null;
 let timeoutBusqueda = null;
 let perfilEspecialistaCache = { especialidad: 'GENERAL' };
 let archivosLaboratorio = [];     // Acumulador global de archivos
@@ -422,55 +423,7 @@ function congelarCamposIdentidad(bloquear) {
     }
 }
 
-// ============================================================================
-// 🔑 MOTOR OTP DINÁMICO DE DESBLOQUEO DE SEGURIDAD MAESTRA
-// ============================================================================
-function crearBotonDesbloqueoDinamico() {
-    // Evitamos duplicaciones
-    document.getElementById('btnDesbloquearFichaLab')?.remove();
 
-    const contenedorCurp = document.getElementById('curp-parte1').closest('.col-12');
-    const wrapper = document.createElement('div');
-    wrapper.id = 'btnDesbloquearFichaLab';
-    wrapper.className = 'mt-2 text-end';
-    
-    wrapper.innerHTML = `
-        <button type="button" class="btn btn-warning btn-sm fw-bold px-3 shadow-sm" style="border-radius: 8px; background-color: #ecc94b; color: #000; border: none; font-size:0.75rem;">
-            <i class="fas fa-lock"></i> ✏️ Corregir Datos de Identidad
-        </button>
-    `;
-
-    contenedorCurp.appendChild(wrapper);
-
-    wrapper.querySelector('button').addEventListener('click', async () => {
-        const p = window.pacienteCargado;
-        const esMenor = !document.getElementById('seccion-tutor').classList.contains('d-none');
-        const telefonoDestino = esMenor ? p?.telefono_tutor : (p?.telefono || document.getElementById('tel-manual').value);
-        
-        if (!telefonoDestino || telefonoDestino.trim() === "") {
-            alert("⚠️ Error: El paciente no cuenta con un teléfono registrado en la Ficha Maestro para el envío del código OTP.");
-            return;
-        }
-
-        const tokenSeguridad = Math.floor(100000 + Math.random() * 900000);
-        alert(`🛡️ PROTOCOLO DE EDICIÓN FISIOCID:\nCódigo enviado de forma segura al celular: ${telefonoDestino}\n👉 (Código de Autorización: ${tokenSeguridad})`);
-
-        const codigoIngresado = prompt("🔒 Ingrese el código OTP de 6 dígitos enviado para liberar la escritura:");
-        
-        if (String(codigoIngresado) === String(tokenSeguridad)) {
-            edicionFichaAutorizada = true; 
-            congelarCamposIdentidad(false); // 🔓 Abre las compuertas
-            
-            const btn = wrapper.querySelector('button');
-            btn.className = "btn btn-success btn-sm fw-bold px-3 disabled";
-            btn.innerHTML = '<i class="fas fa-lock-open"></i> Modo Edición Activo';
-            btn.style.backgroundColor = "#48bb78";
-            btn.style.color = "#ffffff";
-        } else {
-            alert("❌ Código incorrecto. Los datos maestros de identidad siguen blindados.");
-        }
-    });
-}
 
 // --- MOTOR DE BÚSQUEDA MULTI-PALABRA ---
 const inputNombre = document.getElementById('valNombre');
@@ -557,10 +510,15 @@ document.addEventListener('click', (e) => {
     }
 });
 
+
+
+// ============================================================================
+// 1. AUTORRELLENO SEGURO (CON PROTECCIÓN CONTRA FUNCIONES FALTANTES)
+// ============================================================================
 function autorrellenarCamposLaboratorio(p) {
     if (listaSugerencias) listaSugerencias.classList.add('d-none');
     pacienteExistenteId = p.id;
-    window.pacienteCargado = p; // Inyectamos en el objeto global de sesión
+    window.pacienteCargado = p;
 
     const mapear = (id, valor) => {
         const el = document.getElementById(id);
@@ -579,11 +537,9 @@ function autorrellenarCamposLaboratorio(p) {
     mapear('tutor-parentesco', p.parentesco_tutor);
     mapear('tutor-tel', p.telefono_tutor);
 
-    // 🎯 AUTO-RELLENO DEL SELECT DE ESTADO DE NACIMIENTO
     if (p.estado_nacimiento) {
         mapear('valEstado', p.estado_nacimiento);
     } else if (p.curp && p.curp.length >= 18) {
-        // Respaldo clínico: Si la columna está vacía, extraemos el estado directo de su CURP
         mapear('valEstado', p.curp.substring(11, 13).toUpperCase());
     }
 
@@ -595,24 +551,73 @@ function autorrellenarCamposLaboratorio(p) {
         mapear('curp-homo', c.substring(16, 18));
     }
 
-    // 🛡️ 1. Congelamos inmediatamente la vista en gris operativo
+    // 🛡️ Congelar campos de identidad
     congelarCamposIdentidad(true);
 
-    // 🔑 2. Desplegamos el botón inteligente de control de firmas OTP
-    crearBotonDesbloqueoDinamico();
+    // Protegemos llamadas si la función dinámicas no existe aún
+    if (typeof crearBotonDesbloqueoDinamico === 'function') {
+        try { crearBotonDesbloqueoDinamico(); } catch(e) { console.warn(e); }
+    }
 
     actualizarInterfazEdad();
+    
+    // 📩 Disparar la verificación de solicitudes pendientes
     verificarSolicitudesPendientesLaboratorio(p.id);
-   
-    // Ejecutamos la búsqueda o cálculo del folio de la sede para el nuevo expediente local
+
     if (typeof gestionarFolioAutomatico === 'function') {
         gestionarFolioAutomatico(p.id);
     }
 }
 
 // ============================================================================
-// 🆕 REGISTRO DE PACIENTE NUEVO + VÍNCULO + EXPEDIENTE (PORTAL LABORATORIO)
+// 2. DETECTOR Y PRECARGADOR DE SOLICITUDES PENDIENTES
 // ============================================================================
+async function verificarSolicitudesPendientesLaboratorio(pacienteId) {
+    if (!pacienteId) return;
+    try {
+        console.log("🔍 Buscando solicitudes pendientes para el paciente:", pacienteId);
+        
+        // Consultamos sin restricción de días para asegurar detectar cualquier orden abierta
+        const { data: solicitudes, error } = await fisioNet
+            .from('estudios_laboratorio')
+            .select('*')
+            .eq('paciente_id', pacienteId)
+            .in('estado', ['SOLICITADO', 'PENDIENTE', 'PENDIENTE_ANALISIS'])
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (error) throw error;
+
+        if (solicitudes && solicitudes.length > 0) {
+            const sol = solicitudes[0];
+            
+            const medicoNombre = sol.medico_referente_nombre || sol.doctor_referente_nombre || sol.medico_solicitante_manual || "UN MÉDICO DE LA RED";
+            
+            const peticion = Array.isArray(sol.estudios_etiquetas) 
+                ? sol.estudios_etiquetas.join(', ') 
+                : (sol.estudios_etiquetas || 'ANÁLISIS CLÍNICOS');
+
+            // Timeout de 100ms para asegurar que el DOM responda antes de pausar con el confirm()
+            setTimeout(() => {
+                const aceptar = confirm(
+                    `📩 ¡SOLICITUD ENTRANTE DETECTADA!\n\n` +
+                    `El Dr. ${medicoNombre} ha remitido a este paciente para:\n` +
+                    `"${peticion}"\n\n` +
+                    `¿Deseas precargar los datos de esta solicitud para registrar/subir sus resultados?`
+                );
+
+                if (aceptar) {
+                    autovincularLaboratorioParaSubida(sol);
+                    alert("✅ Solicitud vinculada. Adjunta los resultados o documenta y presiona 'REGISTRAR Y ENVIAR'.");
+                }
+            }, 100);
+        } else {
+            console.log("ℹ️ No hay solicitudes pendientes encontradas para este paciente.");
+        }
+    } catch (e) {
+        console.warn("⚠️ Error al verificar solicitudes pendientes:", e.message);
+    }
+}
 // ============================================================================
 // 🆕 REGISTRO DE PACIENTE NUEVO + VÍNCULO + EXPEDIENTE (PORTAL LABORATORIO)
 // ============================================================================
@@ -670,9 +675,11 @@ async function registrarPacienteNuevo() {
         nombre_clinica: localStorage.getItem('nombre_clinica') || 'FisioCid',
         fecha_registro: new Date().toISOString(),
         es_menor_edad: esMenor,
-        nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
-        parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
-        telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
+        // 🎯 ID DEL TUTOR VINCULADO
+    id_tutor: esMenor ? (document.getElementById('idTutorSeleccionado')?.value || null) : null,
+    nombre_tutor: esMenor ? document.getElementById('tutor-nombre')?.value.toUpperCase() : null,
+    parentesco_tutor: esMenor ? document.getElementById('tutor-parentesco')?.value.toUpperCase() : null,
+    telefono_tutor: esMenor ? document.getElementById('tutor-tel')?.value : null,
         acceso_red_activo: true,
         consentimiento_firmado: true,
         fecha_firma_consentimiento: new Date().toISOString()
@@ -1178,85 +1185,110 @@ async function renderizarCamposDinamicos(idsArray) {
 
 
 // ============================================================================
-// 🔍 AUTOCOMPLETADOS DE DOCTOR REFERENTE Y QUÍMICO
+// 🔍 BUSCADOR DE MEDICOS (RED PERSONAL + CLINICA + PROPIO PERFIL)
 // ============================================================================
+
+
 async function configurarBuscadorDoctor() {
-    const input = document.getElementById('buscador-doctor');
-    const lista = document.getElementById('sugerencias-doctores');
-    const inputHidden = document.getElementById('id-doctor-referente-final');
+    const input = document.getElementById('buscador-doctor') || document.getElementById('input-doctor-solicitante');
+    const lista = document.getElementById('sugerencias-doctores') || document.getElementById('listaMedicosConvenio');
+    const inputHidden = document.getElementById('id-doctor-referente-final') || document.getElementById('idDoctorSolicitanteVinculado');
 
     if (!input || !lista) return;
 
-    input.addEventListener('input', async (e) => {
-        const query = e.target.value.trim().toUpperCase();
+    input.addEventListener('input', (e) => {
+        const texto = e.target.value.trim().toUpperCase();
+        
         if (inputHidden) inputHidden.value = ""; 
 
-        if (query.length < 3) { lista.classList.add('d-none'); return; }
+        if (texto.length < 3) { 
+            lista.classList.add('d-none'); 
+            return; 
+        }
 
-        try {
-            const idClinica = localStorage.getItem('id_clinica_activa');
+        // ⏱️ Cancelamos el temporizador previo para no saturar con consultas por cada letra
+        clearTimeout(debounceTimerDoctor);
 
-            const { data: internos } = await fisioNet
-                .from('colaboradores_clinica')
-                .select('id_profesional, perfiles_profesionales(nombre_completo, especialidad)')
-                .eq('id_clinica', idClinica)
-                .eq('estado', 'ACTIVO');
+        debounceTimerDoctor = setTimeout(async () => {
+            try {
+                const { data: { user } } = await fisioNet.auth.getUser();
+                const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
-            const { data: externos } = await fisioNet
-                .from('red_colaboracion')
-                .select('id_doctor_receptor, nombre_entidad, tipo_entidad')
-                .eq('id_doctor_emisor', idClinica)
-                .eq('estado_conexion', 'ACTIVO');
+                const identificadoresPropios = [user?.id, idClinica].filter(Boolean);
 
-            lista.innerHTML = '';
+                // 🚀 EJECUCIÓN EN PARALELO CON PROMISE.ALL (Reduce el tiempo de espera a la mitad)
+                const [resColabs, resEmisor, resReceptor] = await Promise.all([
+                    idClinica ? fisioNet.from('colaboradores_clinica').select('id_profesional').eq('id_clinica', idClinica).neq('estado', 'INACTIVO') : Promise.resolve({ data: [] }),
+                    fisioNet.from('red_colaboracion').select('id_doctor_receptor').in('id_doctor_emisor', identificadoresPropios).in('estado_conexion', ['ACEPTADO', 'ACTIVO']),
+                    fisioNet.from('red_colaboracion').select('id_doctor_emisor').in('id_doctor_receptor', identificadoresPropios).in('estado_conexion', ['ACEPTADO', 'ACTIVO'])
+                ]);
 
-            const listaInternos = (internos || [])
-                .filter(i => i.perfiles_profesionales?.nombre_completo?.toUpperCase().includes(query))
-                .map(i => ({
-                    id: i.id_profesional,
-                    nombre: i.perfiles_profesionales.nombre_completo,
-                    especialidad: i.perfiles_profesionales.especialidad || 'MÉDICO GENERAL',
-                    tipo: 'STAFF INTERNO'
-                }));
+                // Consolidador de IDs únicos
+                const idsPermitidos = new Set();
+                if (user?.id) idsPermitidos.add(user.id);
 
-            const listaExternos = (externos || [])
-                .filter(e => e.nombre_entidad?.toUpperCase().includes(query))
-                .map(e => ({
-                    id: e.id_doctor_receptor,
-                    nombre: e.nombre_entidad,
-                    especialidad: e.tipo_entidad || 'CONVENIO EXTERNO',
-                    tipo: 'CONVENIO EXTERNO'
-                }));
+                (resColabs.data || []).forEach(c => { if (c.id_profesional) idsPermitidos.add(c.id_profesional); });
+                (resEmisor.data || []).forEach(r => { if (r.id_doctor_receptor) idsPermitidos.add(r.id_doctor_receptor); });
+                (resReceptor.data || []).forEach(r => { if (r.id_doctor_emisor) idsPermitidos.add(r.id_doctor_emisor); });
 
-            const todos = [...listaInternos, ...listaExternos];
+                // Consultar perfiles filtrados
+                const { data: medicos, error } = await fisioNet
+                    .from('perfiles_profesionales')
+                    .select('id, nombre_completo, especialidad, cedula_profesional')
+                    .in('id', Array.from(idsPermitidos))
+                    .ilike('nombre_completo', `%${texto}%`)
+                    .limit(5);
 
-            if (todos.length > 0) {
+                if (error) throw error;
+
+                lista.innerHTML = '';
+
+                if (!medicos || medicos.length === 0) {
+                    lista.innerHTML = `
+                        <div class="list-group-item bg-light text-muted small py-2">
+                            ✍️ <strong>Doctor Externo:</strong> ${texto} (Presiona TAB para dejar como texto libre)
+                        </div>`;
+                    lista.classList.remove('d-none');
+                    return;
+                }
+
                 lista.classList.remove('d-none');
-                todos.forEach(item => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'list-group-item list-group-item-action p-2 text-start';
-                    btn.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong class="text-dark fs-7">${item.nombre.toUpperCase()}</strong>
-                            <span class="badge ${item.tipo === 'STAFF INTERNO' ? 'bg-primary' : 'bg-success'}" style="font-size: 0.6rem;">${item.tipo}</span>
+                
+                medicos.forEach(m => {
+                    const item = document.createElement('a');
+                    item.href = "#";
+                    item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2";
+                    
+                    const esp = m.especialidad ? `<span class="badge bg-info-subtle text-info border">${m.especialidad}</span>` : '';
+                    
+                    item.innerHTML = `
+                        <div>
+                            <div class="fw-bold text-dark small">👨‍⚕️ ${m.nombre_completo.toUpperCase()}</div>
+                            <div class="text-muted" style="font-size: 0.65rem;">Cédula: ${m.cedula_profesional || 'N/A'}</div>
                         </div>
-                        <small class="text-muted" style="font-size: 0.65rem;"><i class="fas fa-stethoscope me-1"></i>${item.especialidad}</small>
+                        ${esp}
                     `;
-                    btn.onclick = (evt) => {
+                    
+                    item.onclick = (evt) => {
                         evt.preventDefault();
-                        input.value = item.nombre.toUpperCase();
-                        if (inputHidden) inputHidden.value = item.id;
+                        input.value = m.nombre_completo.toUpperCase();
+                        if (inputHidden) inputHidden.value = m.id;
                         lista.classList.add('d-none');
                     };
-                    lista.appendChild(btn);
+                    
+                    lista.appendChild(item);
                 });
-            } else {
+            } catch (err) {
+                console.error("❌ Error en buscador de doctores:", err);
+                lista.innerHTML = `<div class="list-group-item bg-light text-muted small py-2">✍️ <strong>Doctor Externo:</strong> ${texto}</div>`;
                 lista.classList.remove('d-none');
-                lista.innerHTML = `<div class="list-group-item bg-light text-muted small py-2">✍️ <strong>Médico Externo:</strong> Texto libre.</div>`;
             }
-        } catch (err) {
-            console.error("❌ Error en buscador de doctores:", err);
+        }, 300); // Espera 300ms a que el usuario deje de teclear
+    });
+
+    document.addEventListener('click', (evt) => {
+        if (lista && !input.contains(evt.target) && !lista.contains(evt.target)) {
+            lista.classList.add('d-none');
         }
     });
 }
@@ -2077,57 +2109,28 @@ document.getElementById('curp-homo')?.addEventListener('input', async (e) => {
     }
 });
 
-async function verificarSolicitudesPendientesLaboratorio(pacienteId) {
-    if (!pacienteId) return;
-    try {
-        const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: solicitudes, error } = await fisioNet
-            .from('estudios_laboratorio')
-            .select('*')
-            .eq('paciente_id', pacienteId)
-            .or('estado.eq.SOLICITADO,estado.eq.PENDIENTE')
-            .gte('created_at', hace7Dias)
-            .order('created_at', { ascending: false })
-            .limit(1);
 
-        if (error) throw error;
 
-        if (solicitudes && solicitudes.length > 0) {
-            const sol = solicitudes[0];
-            const medicoNombre = sol.medico_referente_nombre || "UN MÉDICO DE LA RED";
-            const peticion = Array.isArray(sol.estudios_etiquetas) ? sol.estudios_etiquetas.join(', ') : 'ANÁLISIS CLÍNICOS';
-
-            const aceptar = confirm(
-                `📩 ¡SOLICITUD ENTRANTE DETECTADA!\n\n` +
-                `El Dr. ${medicoNombre} ha remitido a este paciente para:\n` +
-                `"${peticion}"\n\n` +
-                `¿Deseas precargar los datos de esta solicitud para registrar/subir sus resultados?`
-            );
-
-            if (aceptar) {
-                autovincularLaboratorioParaSubida(sol);
-                alert("✅ Solicitud vinculada. Adjunta los resultados o documenta y presiona 'REGISTRAR Y ENVIAR'.");
-            }
-        }
-    } catch (e) {
-        console.warn("⚠️ No se pudieron verificar solicitudes pendientes de laboratorio:", e);
-    }
-}
-
+// ============================================================================
+// 🔗 AUTOVINCULACIÓN INTELIGENTE DE SOLICITUDES
+// ============================================================================
 function autovincularLaboratorioParaSubida(solicitud) {
     window.solicitudLaboratorioActivaId = solicitud.id;
 
-    // Precargar Médico Solicitante
     const inputDoc = document.getElementById('buscador-doctor');
-    if (inputDoc && solicitud.medico_referente_nombre) {
-        inputDoc.value = solicitud.medico_referente_nombre.toUpperCase();
+    
+    // 🛠️ AMPLIAMOS la búsqueda de nombres de columna para atrapar el nombre sí o sí
+    const nombreRealDoc = solicitud.medico_referente_nombre || solicitud.doctor_referente_nombre || solicitud.medico_solicitante_manual || "MÉDICO EN RED";
+    
+    if (inputDoc && nombreRealDoc) {
+        inputDoc.value = nombreRealDoc.toUpperCase();
     }
+    
     const hiddenDoc = document.getElementById('id-doctor-referente-final');
     if (hiddenDoc && solicitud.doctor_emisor_id) {
         hiddenDoc.value = solicitud.doctor_emisor_id;
     }
 
-    // Seleccionar los checkboxes de los estudios solicitados
     if (Array.isArray(solicitud.id_estudio_catalogo)) {
         solicitud.id_estudio_catalogo.forEach(idCat => {
             const chk = document.querySelector(`.check-estudio[value="${idCat}"]`);
@@ -2141,6 +2144,8 @@ function autovincularLaboratorioParaSubida(solicitud) {
     }
 }
 
+
+
 window.autocompletarHomoclaveRenapo = autocompletarHomoclaveRenapo;
 window.guardarEstudioLaboratorio = guardarEstudioLaboratorio;
 window.abrirDictaminacion = abrirDictaminacion;
@@ -2148,3 +2153,4 @@ window.abrirVisorLaboratorio = abrirVisorLaboratorio;
 window.cerrarVisorLaboratorio = cerrarVisorLaboratorio;
 window.cambiarTomaLaboratorio = cambiarTomaLaboratorio;
 window.eliminarPDFLaboratorio = eliminarPDFLaboratorio;
+window.abrirModalTutorExpress = abrirModalTutorExpress; 

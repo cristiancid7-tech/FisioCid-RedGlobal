@@ -1428,11 +1428,12 @@ window.enviarSolicitudLab = async () => {
                 creado_por: user.id,                          // UUID
                 id_doctor_referente: user.id,                 // UUID
                 doctor_referente_nombre: nombreDocStr.toUpperCase(),
-                paciente_nombre: nombrePacienteStr.toUpperCase(),
-                paciente_curp: curpPaciente,                  // OBLIGATORIO (NOT NULL EN BD)
+                paciente_nombre: pacData?.nombre ? pacData.nombre.toUpperCase() : 'PACIENTE', // 👈 SOLO EL NOMBRE DE PILA
+                paciente_curp: curpPaciente,                  
                 apellido_paterno: pacData?.apellido_paterno || '',
                 apellido_materno: pacData?.apellido_materno || '',
                 fecha_nacimiento: pacData?.fecha_nacimiento || null,
+                edad_actual: edadCalculada, // 👈 EDAD INSERTADA
                 genero: pacData?.genero || 'NO ESPECIFICADO',
                 telefono_paciente: pacData?.telefono || '',
               //  estudios_etiquetas: [estudioTexto],           // Array de texto text[]
