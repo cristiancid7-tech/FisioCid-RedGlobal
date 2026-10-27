@@ -1400,7 +1400,7 @@ window.enviarSolicitudLab = async () => {
         
         let idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
         
-        // Validar que idClinicaEmisora sea un UUID valido de 36 caracteres; si no, usar user.id
+        // Validar formato UUID para idClinicaEmisora
         const esUUIDValido = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
         if (!esUUIDValido(idClinicaEmisora)) {
             idClinicaEmisora = user.id;
@@ -1408,18 +1408,33 @@ window.enviarSolicitudLab = async () => {
 
         if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
 
+        // 🔍 CONSULTAR DATOS DEL PACIENTE MAESTRO PARA EXTRAER LA CURP Y DEMOGRÁFICOS
+        const { data: pacData } = await fisioNet
+            .from('pacientes_maestros')
+            .select('curp, apellido_paterno, apellido_materno, fecha_nacimiento, genero, telefono')
+            .eq('id', idPacienteActual)
+            .maybeSingle();
+
+        const curpPaciente = pacData?.curp ? pacData.curp.toUpperCase().trim() : 'SIN_CURP';
+
         if (tipoServicio === 'LAB') {
-            // 🧪 ENVIO A LABORATORIO CLINICO (100% Empatado con el esquema de la BD)
+            // 🧪 ENVIO A LABORATORIO CLINICO
             const payloadLaboratorio = {
-                paciente_id: idPacienteActual,                // UUID del paciente
+                paciente_id: idPacienteActual,                // UUID
                 id_socio_emisor: idClinicaEmisora,            // UUID
                 id_clinica: idClinicaEmisora,                  // UUID
-                id_socio_receptor: idSocioDestino,            // UUID del laboratorio receptor
-                especialista_quimico: idSocioDestino,         // 🎯 UUID (En tu BD es columna tipo UUID)
+                id_socio_receptor: idSocioDestino,            // UUID
+                especialista_quimico: idSocioDestino,         // UUID
                 creado_por: user.id,                          // UUID
                 id_doctor_referente: user.id,                 // UUID
                 doctor_referente_nombre: nombreDocStr.toUpperCase(),
                 paciente_nombre: nombrePacienteStr.toUpperCase(),
+                paciente_curp: curpPaciente,                  // OBLIGATORIO (NOT NULL EN BD)
+                apellido_paterno: pacData?.apellido_paterno || '',
+                apellido_materno: pacData?.apellido_materno || '',
+                fecha_nacimiento: pacData?.fecha_nacimiento || null,
+                genero: pacData?.genero || 'NO ESPECIFICADO',
+                telefono_paciente: pacData?.telefono || '',
                 estudios_etiquetas: [estudioTexto],           // Array de texto text[]
                 indicaciones_medicas: estudioTexto,          // Texto
                 estado: 'PENDIENTE', 
