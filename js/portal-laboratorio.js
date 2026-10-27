@@ -476,60 +476,79 @@ function crearBotonDesbloqueoDinamico() {
 const inputNombre = document.getElementById('valNombre');
 const listaSugerencias = document.getElementById('sugerencias-laboratorio');
 
+// --- BUSCADOR INTELIGENTE EN LABORATORIO CON DETECCIÓN DE SOLICITUDES ---
 inputNombre?.addEventListener('input', async (e) => {
     const texto = e.target.value.trim().toUpperCase();
+    clearTimeout(debounceTimer);
     if (texto.length < 3) {
         listaSugerencias?.classList.add('d-none');
         return;
     }
 
-    try {
-        const palabras = texto.split(/\s+/).filter(p => p.length > 0);
-        let query = fisioNet.from('pacientes_maestros').select('*');
-        
-        palabras.forEach(palabra => {
-            query = query.or(`nombre.ilike.%${palabra}%,apellido_paterno.ilike.%${palabra}%,apellido_materno.ilike.%${palabra}%,curp.ilike.%${palabra}%`);
-        });
+    debounceTimer = setTimeout(async () => {
+        try {
+            const { data: pacientes, error } = await fisioNet
+                .from('pacientes_maestros')
+                .select('*')
+                .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%,curp.ilike.%${texto}%`)
+                .limit(10);
 
-        const { data: pacientes, error } = await query.limit(5);
-        if (error) throw error;
+            if (error) throw error;
 
-        if (pacientes && pacientes.length > 0) {
-            listaSugerencias.innerHTML = '';
-            listaSugerencias.classList.remove('d-none');
+            if (pacientes && pacientes.length > 0) {
+                const idsPacientes = pacientes.map(p => p.id);
 
-            pacientes.forEach(p => {
-                const btn = document.createElement('button');
-                btn.className = 'list-group-item list-group-item-action p-2.5 text-start';
-                
-                let fechaFormateada = 'N/A';
-                if (p.fecha_nacimiento) {
-                    const [anio, mes, dia] = p.fecha_nacimiento.split('-');
-                    fechaFormateada = `${dia}/${mes}/${anio}`;
-                }
+                // Consultar órdenes de laboratorio pendientes (últimos 7 días)
+                const { data: ordenesPendientes } = await fisioNet
+                    .from('estudios_laboratorio')
+                    .select('paciente_id, id')
+                    .in('paciente_id', idsPacientes)
+                    .or('estado.eq.SOLICITADO,estado.eq.PENDIENTE');
 
-                btn.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong class="text-dark fs-7">${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}</strong>
-                        <span class="badge bg-light text-secondary border">🎂 ${fechaFormateada}</span>
-                    </div>
-                    <div class="text-muted mt-1" style="font-size: 0.65rem;">
-                        <i class="fas fa-id-card me-1"></i>CURP: <span class="fw-bold text-primary">${p.curp || 'N/A'}</span>
-                    </div>
-                `;
-                
-                btn.onclick = (event) => {
-                    event.preventDefault();
-                    autorrellenarCamposLaboratorio(p);
-                };
-                listaSugerencias.appendChild(btn);
-            });
-        } else {
-            listaSugerencias.classList.add('d-none');
+                const conteoOrdenes = {};
+                (ordenesPendientes || []).forEach(o => {
+                    conteoOrdenes[o.paciente_id] = (conteoOrdenes[o.paciente_id] || 0) + 1;
+                });
+
+                listaSugerencias.innerHTML = '';
+                listaSugerencias.classList.remove('d-none');
+
+                pacientes.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.className = 'list-group-item list-group-item-action p-2.5 text-start';
+                    const nombreCompleto = `${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+                    const tieneOrdenes = conteoOrdenes[p.id] || 0;
+
+                    const badgeSolicitud = tieneOrdenes > 0 
+                        ? `<span class="badge bg-danger animate__animated animate__pulse animate__infinite ms-2"><i class="fas fa-bell me-1"></i>${tieneOrdenes} SOLICITUD PENDIENTE</span>`
+                        : '';
+
+                    btn.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="text-dark fs-7">${nombreCompleto.toUpperCase()}</strong>
+                                ${badgeSolicitud}
+                            </div>
+                            <span class="badge bg-light text-secondary border">🎂 ${p.fecha_nacimiento || 'S/F'}</span>
+                        </div>
+                        <div class="text-muted mt-1" style="font-size: 0.65rem;">
+                            <i class="fas fa-id-card me-1"></i>CURP: <span class="fw-bold text-primary">${p.curp || 'N/A'}</span>
+                        </div>
+                    `;
+                    
+                    btn.onclick = (event) => {
+                        event.preventDefault();
+                        autorrellenarCamposLaboratorio(p);
+                    };
+                    listaSugerencias.appendChild(btn);
+                });
+            } else {
+                listaSugerencias.classList.add('d-none');
+            }
+        } catch (err) {
+            console.error("Error en búsqueda:", err.message);
         }
-    } catch (err) {
-        console.error("Error en búsqueda:", err.message);
-    }
+    }, 300);
 });
 
 document.addEventListener('click', (e) => {
@@ -583,6 +602,7 @@ function autorrellenarCamposLaboratorio(p) {
     crearBotonDesbloqueoDinamico();
 
     actualizarInterfazEdad();
+    verificarSolicitudesPendientesLaboratorio(p.id);
    
     // Ejecutamos la búsqueda o cálculo del folio de la sede para el nuevo expediente local
     if (typeof gestionarFolioAutomatico === 'function') {
@@ -715,9 +735,9 @@ async function guardarEstudioLaboratorio(event) {
     const inputQuimicoTexto = document.getElementById('buscador-quimico')?.value.trim();
     const inputDoctorTexto = document.getElementById('buscador-doctor')?.value.trim();
 
-    // Validar seleccion de Quimico y Doctor
+    // Validar selección de Químico y Doctor
     if (!inputQuimicoTexto) {
-        alert("⚠️ ¡Error! Debes ingresar o seleccionar al Quimico / Especialista asignado.");
+        alert("⚠️ ¡Error! Debes ingresar o seleccionar al Químico / Especialista asignado.");
         return;
     }
     if (!inputDoctorTexto) {
@@ -737,12 +757,12 @@ async function guardarEstudioLaboratorio(event) {
     }
     
     try {
-        // 1. Obtener usuario en sesion
+        // 1. Obtener usuario en sesión
         const { data: { user }, error: authError } = await fisioNet.auth.getUser();
-        if (authError || !user) throw new Error("No hay sesion activa.");
+        if (authError || !user) throw new Error("No hay sesión activa.");
 
         const idClinicaActiva = localStorage.getItem('id_clinica_activa');
-        if (!idClinicaActiva) throw new Error("Falta ID de clinica activa.");
+        if (!idClinicaActiva) throw new Error("Falta ID de clínica activa.");
 
         // 2. Registrar o recuperar Paciente en la Ficha Maestra
         let idPacienteActual = pacienteExistenteId; 
@@ -750,7 +770,7 @@ async function guardarEstudioLaboratorio(event) {
             idPacienteActual = await registrarPacienteNuevo(); 
         }
 
-        // 🎯 VERIFICAR O CREAR EXPEDIENTE CLINICO EN LA SEDE ACTIVA
+        // 3. Verificar o crear expediente clínico en la sede activa
         const { data: expExistente } = await fisioNet
             .from('expedientes_clinicos')
             .select('folio_personalizado')
@@ -775,7 +795,7 @@ async function guardarEstudioLaboratorio(event) {
             }
         }
 
-        // 3. Subida de archivos (PDFs/Fotos)
+        // 4. Subida de archivos (PDFs/Fotos)
         let rutasSubidas = [];
         try {
             const resultadosSubida = await subirArchivosASupabase(
@@ -788,7 +808,7 @@ async function guardarEstudioLaboratorio(event) {
             console.error("❌ Error en subida de archivos:", uploadErr);
         }
 
-        // 4. Preparacion de etiquetas de estudio
+        // 5. Preparación de etiquetas y CURP
         const etiquetas = [];
         document.querySelectorAll('.check-estudio:checked').forEach(ch => {
             const label = document.querySelector(`label[for="${ch.id}"]`);
@@ -797,7 +817,6 @@ async function guardarEstudioLaboratorio(event) {
         const otro = document.getElementById('otro-estudio')?.value?.trim();
         if (otro) etiquetas.push(otro.toUpperCase());
 
-        // 5. Construccion de CURP completa
         const p1 = document.getElementById('curp-parte1')?.value || '';
         const p2 = document.getElementById('curp-estado')?.value || '';
         const p3 = document.getElementById('curp-consonantes')?.value || '';
@@ -806,39 +825,67 @@ async function guardarEstudioLaboratorio(event) {
 
         const doctorReferenteId = elDoctorHidden?.value || null;
 
-        // 6. Payload Final para la tabla estudios_laboratorio
-        const payloadLaboratorio = {
-            paciente_id: idPacienteActual,
-            id_socio_emisor: idClinicaActiva,
-            creado_por: user.id,
-            doctor_emisor_id: doctorReferenteId,
-            id_radiologo_firmante: elQuimicoHidden?.value || null,
-            medico_referente_nombre: inputDoctorTexto.toUpperCase(),
-            quimico_asignado_nombre: inputQuimicoTexto.toUpperCase(),
-            paciente_nombre: document.getElementById('valNombre')?.value.toUpperCase(),
-            apellido_paterno: document.getElementById('valPaterno')?.value.toUpperCase(),
-            apellido_materno: document.getElementById('valMaterno')?.value?.toUpperCase() || null,
-            paciente_curp: curpCompleta.length === 18 ? curpCompleta : null,
-            fecha_nacimiento: document.getElementById('valFecha')?.value || null,
-            estudios_etiquetas: etiquetas,
-            id_estudio_catalogo: arrayNumeros,
-            archivo_pdf_url: rutasSubidas.length > 0 ? rutasSubidas.join(',') : null,
-            estado: 'PENDIENTE',
-            metodo_carga: 'CAPTURA',
-            folio_expediente: folioSede
-        };
+        // 🌟 6. LA MAGIA: EVALUAR SI ES SOLICITUD EN RED (UPDATE) O DIRECTA (INSERT)
+        const idSolicitudActiva = window.solicitudLaboratorioActivaId;
+        let resEstudioId = idSolicitudActiva; // Se usa como base para la galería
 
-        const { data: resEstudio, error: errInsert } = await fisioNet
-            .from('estudios_laboratorio')
-            .insert([payloadLaboratorio])
-            .select('id')
-            .single();
+        if (idSolicitudActiva) {
+            // 🔄 CASO A: ACTUALIZAR ORDEN EMITIDA POR EL MÉDICO
+            const { error: errUpdate } = await fisioNet
+                .from('estudios_laboratorio')
+                .update({
+                    quimico_asignado_nombre: inputQuimicoTexto.toUpperCase(),
+                    id_radiologo_firmante: elQuimicoHidden?.value || null,
+                    estudios_etiquetas: etiquetas,
+                    id_estudio_catalogo: arrayNumeros,
+                    archivo_pdf_url: rutasSubidas.length > 0 ? rutasSubidas.join(',') : null,
+                    estado: 'PENDIENTE', 
+                    folio_expediente: folioSede,
+                    paciente_curp: curpCompleta.length === 18 ? curpCompleta : null
+                })
+                .eq('id', idSolicitudActiva);
 
-        if (errInsert) throw errInsert;
+            if (errUpdate) throw errUpdate;
+            
+            // Limpiar la memoria temporal
+            window.solicitudLaboratorioActivaId = null;
 
-        // 🛡️ 7. VINCULACION AUTOMATICA A GALERIA MULTIMEDIA (SOLO SI VIENE DE UN DOCTOR DE LA RED)
+        } else {
+            // 🆕 CASO B: CREAR NUEVO REGISTRO DESDE CERO
+            const payloadLaboratorio = {
+                paciente_id: idPacienteActual,
+                id_socio_emisor: idClinicaActiva,
+                creado_por: user.id,
+                doctor_emisor_id: doctorReferenteId,
+                id_radiologo_firmante: elQuimicoHidden?.value || null,
+                medico_referente_nombre: inputDoctorTexto.toUpperCase(),
+                quimico_asignado_nombre: inputQuimicoTexto.toUpperCase(),
+                paciente_nombre: document.getElementById('valNombre')?.value.toUpperCase(),
+                apellido_paterno: document.getElementById('valPaterno')?.value.toUpperCase(),
+                apellido_materno: document.getElementById('valMaterno')?.value?.toUpperCase() || null,
+                paciente_curp: curpCompleta.length === 18 ? curpCompleta : null,
+                fecha_nacimiento: document.getElementById('valFecha')?.value || null,
+                estudios_etiquetas: etiquetas,
+                id_estudio_catalogo: arrayNumeros,
+                archivo_pdf_url: rutasSubidas.length > 0 ? rutasSubidas.join(',') : null,
+                estado: 'PENDIENTE',
+                metodo_carga: 'CAPTURA',
+                folio_expediente: folioSede
+            };
+
+            const { data: resEstudio, error: errInsert } = await fisioNet
+                .from('estudios_laboratorio')
+                .insert([payloadLaboratorio])
+                .select('id')
+                .single();
+
+            if (errInsert) throw errInsert;
+            resEstudioId = resEstudio?.id;
+        }
+
+        // 7. VINCULACIÓN MULTIMEDIA AL MÉDICO REMITENTE
         if (doctorReferenteId && doctorReferenteId !== "" && rutasSubidas.length > 0) {
-            const descEstudios = etiquetas.length > 0 ? etiquetas.join(', ') : 'ANALISIS CLINICOS';
+            const descEstudios = etiquetas.length > 0 ? etiquetas.join(', ') : 'ANÁLISIS CLÍNICOS';
             
             const registrosEvidencia = rutasSubidas.map(rutaStorage => ({
                 id_paciente: idPacienteActual,
@@ -850,7 +897,7 @@ async function guardarEstudioLaboratorio(event) {
                 descripcion: `ESTUDIO DE LABORATORIO: ${descEstudios}`,
                 fecha_registro: new Date().toISOString(),
                 es_privado_clinica: false,
-                id_estudio_laboratorio: resEstudio?.id || null
+                id_estudio_laboratorio: resEstudioId || null
             }));
 
             const { error: errEvidencia } = await fisioNet
@@ -858,11 +905,11 @@ async function guardarEstudioLaboratorio(event) {
                 .insert(registrosEvidencia);
 
             if (errEvidencia) {
-                console.warn("⚠️ Advertencia al registrar evidencia multimedia para el doctor:", errEvidencia.message);
+                console.warn("⚠️ Advertencia al registrar evidencia multimedia:", errEvidencia.message);
             }
         }
 
-        alert("✅ ESTUDIO DE LABORATORIO ASIGNADO Y EXPEDIENTE REGISTRADO EN RED.");
+        alert("✅ ESTUDIO DE LABORATORIO PROCESADO EXITOSAMENTE.");
         window.location.reload();
 
     } catch (err) {
@@ -875,7 +922,6 @@ async function guardarEstudioLaboratorio(event) {
         }
     }
 }
-
 
 
 function eliminarPDFLaboratorio(index) {
@@ -2030,6 +2076,70 @@ document.getElementById('curp-homo')?.addEventListener('input', async (e) => {
         }
     }
 });
+
+async function verificarSolicitudesPendientesLaboratorio(pacienteId) {
+    if (!pacienteId) return;
+    try {
+        const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: solicitudes, error } = await fisioNet
+            .from('estudios_laboratorio')
+            .select('*')
+            .eq('paciente_id', pacienteId)
+            .or('estado.eq.SOLICITADO,estado.eq.PENDIENTE')
+            .gte('created_at', hace7Dias)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (error) throw error;
+
+        if (solicitudes && solicitudes.length > 0) {
+            const sol = solicitudes[0];
+            const medicoNombre = sol.medico_referente_nombre || "UN MÉDICO DE LA RED";
+            const peticion = Array.isArray(sol.estudios_etiquetas) ? sol.estudios_etiquetas.join(', ') : 'ANÁLISIS CLÍNICOS';
+
+            const aceptar = confirm(
+                `📩 ¡SOLICITUD ENTRANTE DETECTADA!\n\n` +
+                `El Dr. ${medicoNombre} ha remitido a este paciente para:\n` +
+                `"${peticion}"\n\n` +
+                `¿Deseas precargar los datos de esta solicitud para registrar/subir sus resultados?`
+            );
+
+            if (aceptar) {
+                autovincularLaboratorioParaSubida(sol);
+                alert("✅ Solicitud vinculada. Adjunta los resultados o documenta y presiona 'REGISTRAR Y ENVIAR'.");
+            }
+        }
+    } catch (e) {
+        console.warn("⚠️ No se pudieron verificar solicitudes pendientes de laboratorio:", e);
+    }
+}
+
+function autovincularLaboratorioParaSubida(solicitud) {
+    window.solicitudLaboratorioActivaId = solicitud.id;
+
+    // Precargar Médico Solicitante
+    const inputDoc = document.getElementById('buscador-doctor');
+    if (inputDoc && solicitud.medico_referente_nombre) {
+        inputDoc.value = solicitud.medico_referente_nombre.toUpperCase();
+    }
+    const hiddenDoc = document.getElementById('id-doctor-referente-final');
+    if (hiddenDoc && solicitud.doctor_emisor_id) {
+        hiddenDoc.value = solicitud.doctor_emisor_id;
+    }
+
+    // Seleccionar los checkboxes de los estudios solicitados
+    if (Array.isArray(solicitud.id_estudio_catalogo)) {
+        solicitud.id_estudio_catalogo.forEach(idCat => {
+            const chk = document.querySelector(`.check-estudio[value="${idCat}"]`);
+            if (chk) chk.checked = true;
+        });
+    }
+
+    const statusFolio = document.getElementById('statusFolio');
+    if (statusFolio) {
+        statusFolio.innerHTML = `<i class="fas fa-link text-success"></i> VINCULADO A ORDEN DE LAB (#${solicitud.id.substring(0,6)})`;
+    }
+}
 
 window.autocompletarHomoclaveRenapo = autocompletarHomoclaveRenapo;
 window.guardarEstudioLaboratorio = guardarEstudioLaboratorio;
