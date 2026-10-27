@@ -1381,7 +1381,7 @@ window.enviarSolicitudLab = async () => {
     if (!estudioTexto) { alert("⚠️ Especifica que estudio o indicacion necesitas."); return; }
     if (!inputLabVal) { alert("⚠️ Selecciona a que socio lo vas a enviar."); return; }
 
-    // 🔍 Extraer el ID único (UUID) del laboratorio destinatario
+    // 🔍 Extraer el ID único (UUID) desde el datalist
     const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${CSS.escape(inputLabVal)}"]`);
     const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
 
@@ -1400,20 +1400,24 @@ window.enviarSolicitudLab = async () => {
         const idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
         if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
-        
+
         if (tipoServicio === 'LAB') {
-            // 🧪 ENVÍO ESTÁNDAR A LABORATORIO CLÍNICO UNIFICADO
+            // 🧪 ENVIO A LABORATORIO CLINICO
+            // Limpiamos el nombre para quitar emojis o caracteres extra por si se guarda en texto
+            const nombreQuimicoLimpio = inputLabVal.replace(/[^\w\s-]/gi, '').trim().toUpperCase();
+
             const payloadLaboratorio = {
-              paciente_id: idPacienteActual,
-                id_socio_emisor: idClinicaEmisora || user.id, // UUID de tu clínica
-                id_clinica: idClinicaEmisora || user.id,      // UUID de tu clínica
-                id_socio_receptor: idSocioDestino,            // 🎯 UUID DEL LABORATORIO DESTINATARIO
-                creado_por: user.id,                          // UUID de tu usuario
-                id_doctor_referente: user.id,                 // UUID de tu usuario
+                paciente_id: idPacienteActual,                // UUID
+                id_socio_emisor: idClinicaEmisora || user.id, // UUID
+                id_clinica: idClinicaEmisora || user.id,      // UUID
+                id_socio_receptor: idSocioDestino,            // UUID (Aquí va el id, NO el texto)
+                creado_por: user.id,                          // UUID
+                id_doctor_referente: user.id,                 // UUID
                 doctor_referente_nombre: nombreDocStr.toUpperCase(),
-                especialista_quimico: inputLabVal.toUpperCase(), // Nombre del laboratorio/químico en texto
+                especialista_quimico: idSocioDestino,         // 👈 SI tu columna especialista_quimico en BD es UUID, mandamos idSocioDestino. Si es TEXTO, se ajusta a nombreQuimicoLimpio.
                 paciente_nombre: nombrePacienteStr.toUpperCase(),
-                indicaciones_medicas: estudioTexto,          // Texto libre de la orden
+                estudios_etiquetas: [estudioTexto],           // Array
+                indicaciones_medicas: estudioTexto,
                 estado: 'PENDIENTE', 
                 metodo_carga: 'CAPTURA',
                 fecha_captura: new Date().toISOString()
