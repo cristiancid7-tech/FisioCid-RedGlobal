@@ -1419,8 +1419,8 @@ window.enviarSolicitudLab = async () => {
 
         const curpPaciente = pacData?.curp ? pacData.curp.toUpperCase().trim() : 'SIN_CURP';
 
-        // 🎂 CÁLCULO DE EDAD
-        let edadCalculada = "N/D";
+        // 👶 CÁLCULO DE EDAD DETALLADO (Soporta Adultos, Pediatría y Neonatos)
+        let edadCalculada = "EDAD NO REGISTRADA";
         if (pacData?.fecha_nacimiento) {
             const hoy = new Date();
             const cumple = new Date(pacData.fecha_nacimiento + "T00:00:00");
@@ -1451,7 +1451,7 @@ window.enviarSolicitudLab = async () => {
                 apellido_paterno: pacData?.apellido_paterno || '',
                 apellido_materno: pacData?.apellido_materno || '',
                 fecha_nacimiento: pacData?.fecha_nacimiento || null,
-                edad_actual: edadCalculada,                  // 👈 Variable ahora definida correctamente
+                edad_actual: edadCalculada,                  // 👈 Ahora se guarda completo (ej. "6 MESES", "31 AÑOS")
                 genero: pacData?.genero || 'NO ESPECIFICADO',
                 telefono_paciente: pacData?.telefono || '',
                 indicaciones_medicas: estudioTexto,          // Texto
