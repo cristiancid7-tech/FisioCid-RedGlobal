@@ -1435,7 +1435,7 @@ window.enviarSolicitudLab = async () => {
                 fecha_nacimiento: pacData?.fecha_nacimiento || null,
                 genero: pacData?.genero || 'NO ESPECIFICADO',
                 telefono_paciente: pacData?.telefono || '',
-                estudios_etiquetas: [estudioTexto],           // Array de texto text[]
+              //  estudios_etiquetas: [estudioTexto],           // Array de texto text[]
                 indicaciones_medicas: estudioTexto,          // Texto
                 estado: 'PENDIENTE', 
                 metodo_carga: 'CAPTURA',
