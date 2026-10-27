@@ -1381,7 +1381,7 @@ window.enviarSolicitudLab = async () => {
     if (!estudioTexto) { alert("⚠️ Especifica que estudio o indicacion necesitas."); return; }
     if (!inputLabVal) { alert("⚠️ Selecciona a que socio lo vas a enviar."); return; }
 
-    // 🔍 Extraer el ID único (UUID) desde el datalist
+    // 🔍 Extraer el ID único (UUID) del laboratorio destinatario desde el datalist
     const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${CSS.escape(inputLabVal)}"]`);
     const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
 
@@ -1397,27 +1397,31 @@ window.enviarSolicitudLab = async () => {
         const idPacienteActual = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
         const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
         const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
-        const idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+        
+        let idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+        
+        // Validar que idClinicaEmisora sea un UUID valido de 36 caracteres; si no, usar user.id
+        const esUUIDValido = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        if (!esUUIDValido(idClinicaEmisora)) {
+            idClinicaEmisora = user.id;
+        }
 
         if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
 
         if (tipoServicio === 'LAB') {
-            // 🧪 ENVIO A LABORATORIO CLINICO
-            // Limpiamos el nombre para quitar emojis o caracteres extra por si se guarda en texto
-            const nombreQuimicoLimpio = inputLabVal.replace(/[^\w\s-]/gi, '').trim().toUpperCase();
-
+            // 🧪 ENVIO A LABORATORIO CLINICO (100% Empatado con el esquema de la BD)
             const payloadLaboratorio = {
-                paciente_id: idPacienteActual,                // UUID
-                id_socio_emisor: idClinicaEmisora || user.id, // UUID
-                id_clinica: idClinicaEmisora || user.id,      // UUID
-                id_socio_receptor: idSocioDestino,            // UUID (Aquí va el id, NO el texto)
+                paciente_id: idPacienteActual,                // UUID del paciente
+                id_socio_emisor: idClinicaEmisora,            // UUID
+                id_clinica: idClinicaEmisora,                  // UUID
+                id_socio_receptor: idSocioDestino,            // UUID del laboratorio receptor
+                especialista_quimico: idSocioDestino,         // 🎯 UUID (En tu BD es columna tipo UUID)
                 creado_por: user.id,                          // UUID
                 id_doctor_referente: user.id,                 // UUID
                 doctor_referente_nombre: nombreDocStr.toUpperCase(),
-                especialista_quimico: idSocioDestino,         // 👈 SI tu columna especialista_quimico en BD es UUID, mandamos idSocioDestino. Si es TEXTO, se ajusta a nombreQuimicoLimpio.
                 paciente_nombre: nombrePacienteStr.toUpperCase(),
-                estudios_etiquetas: [estudioTexto],           // Array
-                indicaciones_medicas: estudioTexto,
+                estudios_etiquetas: [estudioTexto],           // Array de texto text[]
+                indicaciones_medicas: estudioTexto,          // Texto
                 estado: 'PENDIENTE', 
                 metodo_carga: 'CAPTURA',
                 fecha_captura: new Date().toISOString()
@@ -1430,13 +1434,13 @@ window.enviarSolicitudLab = async () => {
             if (errLab) throw errLab;
 
         } else {
-            // 🩻 ENVÍO A GABINETE / IMAGENOLOGÍA (Se mantiene tu lógica que ya funciona)
+            // 🩻 ENVÍO A GABINETE / IMAGENOLOGÍA
             const { error: errGab } = await fisioNet.from('estudios_gabinete').insert([{
-                paciente_id: idPacienteActual,
-                doctor_emisor_id: user.id,
+                paciente_id: idPacienteActual,                // UUID
+                doctor_emisor_id: user.id,                    // UUID
                 medico_solicitante_manual: nombreDocStr,
-                id_socio_receptor: idSocioDestino, 
-                id_socio_emisor: idClinicaEmisora || user.id,          
+                id_socio_receptor: idSocioDestino,            // UUID
+                id_socio_emisor: idClinicaEmisora,            // UUID
                 indicaciones_medicas: estudioTexto,
                 paciente_nombre_manual: nombrePacienteStr,
                 estado_estudio: 'SOLICITADO', 
@@ -2082,7 +2086,7 @@ async function verificarNotificacionesEstudios(idPacienteActual) {
             .from('estudios_laboratorio')
             .select('id', { count: 'exact', head: true })
             .eq('paciente_id', idPacienteActual)
-            .eq('doctor_emisor_id', user.id)
+            .eq('id_doctor_referente', user.id)               // 👈 Nombre correcto de la columna en BD
             .eq('estado', 'DICTAMINADO');
 
         if (errLab) console.warn("Aviso en consulta de laboratorios:", errLab.message);
@@ -2098,6 +2102,8 @@ async function verificarNotificacionesEstudios(idPacienteActual) {
         console.error("❌ Error consultando notificaciones de estudios:", err.message);
     }
 }
+
+
 function inyectarBadgeBoton(idBoton, cantidad) {
     const btn = document.getElementById(idBoton);
     if (!btn) return;
