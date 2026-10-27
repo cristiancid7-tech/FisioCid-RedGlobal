@@ -1380,15 +1380,15 @@ window.enviarSolicitudLab = async () => {
     const inputLabVal = document.getElementById('inputLabDestino')?.value.trim();
     const btn = document.getElementById('btnEnviarLab');
 
-    if (!estudioTexto) { alert("⚠️ Especifica que estudio o indicacion necesitas."); return; }
-    if (!inputLabVal) { alert("⚠️ Selecciona a que socio lo vas a enviar."); return; }
+    if (!estudioTexto) { alert("⚠️ Especifica qué estudio o indicación necesitas."); return; }
+    if (!inputLabVal) { alert("⚠️ Selecciona a qué socio lo vas a enviar."); return; }
 
     // 🔍 Extraer el ID único (UUID) del laboratorio destinatario desde el datalist
     const opcionSeleccionada = document.querySelector(`#listaLabs option[value="${CSS.escape(inputLabVal)}"]`);
     const idSocioDestino = opcionSeleccionada ? opcionSeleccionada.getAttribute('data-id') : null;
 
     if (!idSocioDestino) { 
-        alert("⚠️ Por favor, selecciona un laboratorio valido de la lista sugerida."); 
+        alert("⚠️ Por favor, selecciona un laboratorio válido de la lista sugerida."); 
         return; 
     }
 
@@ -1410,17 +1410,33 @@ window.enviarSolicitudLab = async () => {
 
         if (!idPacienteActual) throw new Error("No hay un paciente activo en la consulta.");
 
-        // 🔍 CONSULTAR DATOS DEL PACIENTE MAESTRO PARA EXTRAER LA CURP Y DEMOGRÁFICOS
+        // 🔍 CONSULTAR DATOS DEL PACIENTE MAESTRO
         const { data: pacData } = await fisioNet
             .from('pacientes_maestros')
-            .select('curp, apellido_paterno, apellido_materno, fecha_nacimiento, genero, telefono')
+            .select('curp, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, genero, telefono')
             .eq('id', idPacienteActual)
             .maybeSingle();
 
         const curpPaciente = pacData?.curp ? pacData.curp.toUpperCase().trim() : 'SIN_CURP';
 
+        // 🎂 CÁLCULO DE EDAD
+        let edadCalculada = "N/D";
+        if (pacData?.fecha_nacimiento) {
+            const hoy = new Date();
+            const cumple = new Date(pacData.fecha_nacimiento + "T00:00:00");
+            let años = hoy.getFullYear() - cumple.getFullYear();
+            let meses = hoy.getMonth() - cumple.getMonth();
+            let dias = hoy.getDate() - cumple.getDate();
+            if (dias < 0) { meses--; dias += new Date(hoy.getFullYear(), hoy.getMonth(), 0).getDate(); }
+            if (meses < 0) { años--; meses += 12; }
+
+            if (años >= 2) edadCalculada = `${años} AÑOS`;
+            else if (años === 1) edadCalculada = meses > 0 ? `1 AÑO, ${meses} MESES` : `1 AÑO`;
+            else edadCalculada = meses > 0 ? (dias > 0 ? `${meses} MESES, ${dias} DÍAS` : `${meses} MESES`) : `${dias} DÍAS`;
+        }
+
         if (tipoServicio === 'LAB') {
-            // 🧪 ENVIO A LABORATORIO CLINICO
+            // 🧪 ENVÍO A LABORATORIO CLÍNICO
             const payloadLaboratorio = {
                 paciente_id: idPacienteActual,                // UUID
                 id_socio_emisor: idClinicaEmisora,            // UUID
@@ -1430,15 +1446,14 @@ window.enviarSolicitudLab = async () => {
                 creado_por: user.id,                          // UUID
                 id_doctor_referente: user.id,                 // UUID
                 doctor_referente_nombre: nombreDocStr.toUpperCase(),
-                paciente_nombre: pacData?.nombre ? pacData.nombre.toUpperCase() : 'PACIENTE', // 👈 SOLO EL NOMBRE DE PILA
+                paciente_nombre: pacData?.nombre ? pacData.nombre.toUpperCase() : 'PACIENTE',
                 paciente_curp: curpPaciente,                  
                 apellido_paterno: pacData?.apellido_paterno || '',
                 apellido_materno: pacData?.apellido_materno || '',
                 fecha_nacimiento: pacData?.fecha_nacimiento || null,
-                edad_actual: edadCalculada, // 👈 EDAD INSERTADA
+                edad_actual: edadCalculada,                  // 👈 Variable ahora definida correctamente
                 genero: pacData?.genero || 'NO ESPECIFICADO',
                 telefono_paciente: pacData?.telefono || '',
-              //  estudios_etiquetas: [estudioTexto],           // Array de texto text[]
                 indicaciones_medicas: estudioTexto,          // Texto
                 estado: 'PENDIENTE', 
                 metodo_carga: 'CAPTURA',
@@ -1475,7 +1490,7 @@ window.enviarSolicitudLab = async () => {
 
     } catch (err) {
         console.error("Error al enviar solicitud:", err);
-        alert("Fallo la conexión: " + err.message);
+        alert("Falló la conexión: " + err.message);
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = "ENVIAR SOLICITUD 🚀"; }
     }
