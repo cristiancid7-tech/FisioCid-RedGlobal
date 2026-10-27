@@ -1238,7 +1238,7 @@ async function guardarEstudioLaboratorio(event) {
                 paciente_curp: curpCompleta.length === 18 ? curpCompleta : null
             };
 
-            console.log("📦 PAYLOAD PATCH ENVIADO A SUPABASE:", updatePayload);
+          //  console.log("📦 PAYLOAD PATCH ENVIADO A SUPABASE:", updatePayload);
 
             const { error: errUpdate } = await fisioNet
                 .from('estudios_laboratorio')

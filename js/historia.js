@@ -1399,7 +1399,8 @@ window.enviarSolicitudLab = async () => {
         const idPacienteActual = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
         const nombrePacienteStr = document.getElementById('nombre')?.innerText || "PACIENTE"; 
         const nombreDocStr = document.getElementById('doc-nombre')?.innerText || "PROFESIONAL ACTIVO";
-        
+        const inputCorreoPaciente = document.getElementById('valCorreo')?.value?.trim() || 
+                            document.getElementById('correo_paciente')?.value?.trim() || null;
         let idClinicaEmisora = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
         
         // Validar formato UUID para idClinicaEmisora
@@ -1453,6 +1454,7 @@ window.enviarSolicitudLab = async () => {
                 fecha_nacimiento: pacData?.fecha_nacimiento || null,
                 edad_actual: edadCalculada,                  // 👈 Ahora se guarda completo (ej. "6 MESES", "31 AÑOS")
                 genero: pacData?.genero || 'NO ESPECIFICADO',
+               correo_paciente: inputCorreoPaciente,
                 telefono_paciente: pacData?.telefono || '',
                 indicaciones_medicas: estudioTexto,          // Texto
                 estado: 'PENDIENTE', 
@@ -1820,6 +1822,9 @@ const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_pacie
 });
 
 
+// ============================================================================
+// 📂 CARGA UNIFICADA DE HISTORIAL CON CORRECCIÓN DE BUCKETS Y SIGNED URLS
+// ============================================================================
 async function cargarHistorialEvidencias() {
     const contenedor = document.getElementById('contenedor_lista_evidencias');
     if (!contenedor) return;
@@ -1842,58 +1847,92 @@ async function cargarHistorialEvidencias() {
             .select('*')
             .eq('id_paciente', pacienteActualId);
 
-        // B) Consultar Estudios de Gabinete con Resultados
+        // B) Consultar Estudios de Gabinete
         const { data: gabinetes } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
-            .eq('paciente_id', pacienteActualId)
-            .not('archivo_url', 'eq', 'EMPTY');
+            .eq('paciente_id', pacienteActualId);
 
-        // C) Consultar Estudios de Laboratorio Dictaminados
+        // C) Consultar Estudios de Laboratorio
         const { data: laboratorios } = await fisioNet
             .from('estudios_laboratorio')
             .select('*')
-            .eq('paciente_id', pacienteActualId)
-            .eq('estado', 'DICTAMINADO');
+            .eq('paciente_id', pacienteActualId);
 
         // Normalizar en una sola estructura uniforme
         const listaUnificada = [
             ...(evidencias || []).map(e => ({
                 id: e.id,
-                categoria: e.categoria_especialidad || 'EVIDENCIA',
+                categoria: e.categoria_especialidad || e.categoria_especial || 'EVIDENCIA',
                 descripcion: e.descripcion || 'Sin descripción',
                 fecha: e.fecha_registro,
-                url: e.url_imagen,
-                ruta_storage: e.ruta_storage,
+                fecha_registro: e.fecha_registro,
+                url: e.url_imagen || e.archivo_url,
+                ruta_storage: e.ruta_storage || e.url_imagen,
+                bucket_origen: 'expedientes-multimedia', // Bucket por defecto de evidencias
                 tipo_origen: 'MULTIMEDIA'
             })),
-            ...(gabinetes || []).map(g => ({
-                id: g.id,
-                categoria: `GABINETE: ${g.tipo_estudio || 'IMAGEN'}`,
-                descripcion: g.hallazgos_resumen || g.indicaciones_medicas || 'Estudio de Gabinete',
-                fecha: g.fecha_registro,
-                url: g.archivo_url,
-                ruta_storage: g.ruta_storage,
-                tipo_origen: 'GABINETE'
-            })),
-            ...(laboratorios || []).map(l => ({
-                id: l.id,
-                categoria: 'LABORATORIO CLÍNICO',
-                descripcion: l.indicaciones_medicas || 'Resultados de laboratorio',
-                fecha: l.fecha_captura || l.created_at,
-                url: l.archivo_resultado_url || l.archivo_url,
-                ruta_storage: null,
-                tipo_origen: 'LABORATORIO'
-            }))
-        ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            ...(gabinetes || []).map(g => {
+                // Si la orden de gabinete guarda varias tomas separadas por coma, tomamos la primera
+                const primerArchivo = g.archivo_url ? g.archivo_url.split(',')[0].trim() : '';
+                return {
+                    id: g.id,
+                    categoria: `GABINETE: ${g.tipo_estudio || 'IMAGEN'}`,
+                    descripcion: g.hallazgos_resumen || g.indicaciones_medicas || 'Estudio de Gabinete',
+                    fecha: g.fecha_registro,
+                    fecha_registro: g.fecha_registro,
+                    url: primerArchivo,
+                    ruta_storage: primerArchivo,
+                    bucket_origen: 'expedientes-clinicos', // Bucket por defecto de Gabinete/PACS
+                    tipo_origen: 'GABINETE'
+                };
+            }),
+            ...(laboratorios || []).map(l => {
+                const etiquetas = Array.isArray(l.estudios_etiquetas) ? l.estudios_etiquetas.join(', ') : '';
+                const urlLab = l.archivo_pdf_url || l.archivo_resultado_url || l.archivo_url || l.url_imagen || '';
+                const primerLab = urlLab.split(',')[0].trim();
+                return {
+                    id: l.id,
+                    categoria: 'LABORATORIO CLÍNICO',
+                    descripcion: etiquetas || l.indicaciones_medicas || 'Resultados de laboratorio',
+                    fecha: l.fecha_captura || l.created_at,
+                    fecha_registro: l.fecha_captura || l.created_at,
+                    url: primerLab,
+                    ruta_storage: l.ruta_storage || primerLab,
+                    bucket_origen: 'expedientes-clinicos',
+                    tipo_origen: 'LABORATORIO'
+                };
+            })
+        ].filter(item => item.url && item.url !== 'EMPTY' && item.url !== 'NULL')
+         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
-        // Firmar URLs que provengan de Storage privado
+        // Generar URLs firmadas seguras en base a sus buckets reales
         const listaConFirmas = await Promise.all(listaUnificada.map(async (item) => {
-            if (item.ruta_storage && !item.ruta_storage.startsWith('http')) {
-                const { data: signedData } = await fisioNet.storage
-                    .from('expedientes-multimedia')
-                    .createSignedUrl(item.ruta_storage, 3600);
-                if (signedData?.signedUrl) item.url = signedData.signedUrl;
+            let rutaRaw = item.ruta_storage || item.url || '';
+            
+            // Si no es una URL pública externa (http...), procedemos a firmar
+            if (rutaRaw && !rutaRaw.startsWith('http')) {
+                const rutaLimpia = rutaRaw.replace(/^\/+/, '').trim();
+                
+                // Priorizamos el bucket específico de la entidad y probamos con el secundario si falla
+                const bucketsAProbar = [item.bucket_origen, 'expedientes-clinicos', 'expedientes-multimedia'];
+                let urlFirmadaExitosa = null;
+
+                for (const bucket of bucketsAProbar) {
+                    if (!bucket) continue;
+                    const { data: signedData, error: errSigned } = await fisioNet.storage
+                        .from(bucket)
+                        .createSignedUrl(rutaLimpia, 3600);
+
+                    if (!errSigned && signedData?.signedUrl) {
+                        urlFirmadaExitosa = signedData.signedUrl;
+                        break;
+                    }
+                }
+
+                if (urlFirmadaExitosa) {
+                    item.url = urlFirmadaExitosa;
+                }
             }
             return item;
         }));
@@ -1907,6 +1946,19 @@ async function cargarHistorialEvidencias() {
     }
 }
 
+
+
+function resetFiltrosEvidencia() {
+    const fechaInput = document.getElementById('filtro_fecha_evidencia');
+    const catInput = document.getElementById('filtro_categoria_evidencia');
+    if (fechaInput) fechaInput.value = '';
+    if (catInput) catInput.value = 'TODAS';
+    renderizarListaEvidencias(coleccionEvidenciasPaciente);
+}
+
+// ============================================================================
+// 🎨 RENDERIZADO UNIFICADO DE EVIDENCIAS Y ESTUDIOS
+// ============================================================================
 function renderizarListaEvidencias(lista) {
     const contenedor = document.getElementById('contenedor_lista_evidencias');
     if (!contenedor) return;
@@ -1915,7 +1967,7 @@ function renderizarListaEvidencias(lista) {
         contenedor.innerHTML = `
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-folder-open fa-3x mb-3 text-slate-300"></i>
-                <h6>No hay evidencias registradas para este paciente en esta clínica.</h6>
+                <h6>No hay evidencias ni estudios registrados para este paciente.</h6>
                 <small>Usa la opción <b>📸 Subir Foto</b> para añadir imágenes o estudios.</small>
             </div>
         `;
@@ -1925,20 +1977,33 @@ function renderizarListaEvidencias(lista) {
     let html = '';
 
     lista.forEach(item => {
-        const fechaObj = new Date(item.fecha_registro);
-        const fechaFormateada = fechaObj.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        const esPDF = item.url_imagen?.toLowerCase().endsWith('.pdf');
+        // 1. Detección segura de la propiedad de fecha y URL
+        const fechaRaw = item.fecha || item.fecha_registro || item.created_at;
+        const fechaObj = new Date(fechaRaw);
         
-        // 🎯 Mapeo adaptado para categoria_especial
-const catNombre = item.categoria_especialidad || item.categoria_especial || 'EVIDENCIA';
+        const fechaFormateada = isNaN(fechaObj.getTime()) 
+            ? 'Fecha reciente' 
+            : fechaObj.toLocaleDateString('es-MX', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              });
+
+        const urlFinal = item.url || item.url_imagen || item.archivo_url || item.archivo_pdf_url || '';
+        const esPDF = urlFinal.toLowerCase().includes('.pdf');
+        
+        const catNombre = item.categoria || item.categoria_especialidad || item.categoria_especial || 'EVIDENCIA';
+        const descLimpia = (item.descripcion || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
         
         html += `
-            <div class="tarjeta-evidencia-item" onclick="verEvidenciaPantallaCompleta('${item.url_imagen}', ${esPDF}, '${catNombre}', '${fechaFormateada}', '${(item.descripcion || '').replace(/'/g, "\\'")}')">
+            <div class="tarjeta-evidencia-item p-2 mb-2 rounded border bg-white shadow-sm" style="cursor: pointer;" onclick="verEvidenciaPantallaCompleta('${urlFinal}', ${esPDF}, '${catNombre}', '${fechaFormateada}', '${descLimpia}')">
                 <div class="d-flex gap-3 align-items-center">
                     <div style="width: 70px; height: 70px; border-radius: 10px; overflow: hidden; background: #0f172a; display: flex; justify-content: center; align-items: center; flex-shrink: 0;">
                         ${esPDF 
                             ? `<i class="fas fa-file-pdf text-danger fa-2x"></i>` 
-                            : `<img src="${item.url_imagen}" style="width: 100%; height: 100%; object-fit: cover;" alt="Evidencia">`
+                            : `<img src="${urlFinal}" style="width: 100%; height: 100%; object-fit: cover;" alt="Evidencia" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\\'fas fa-file-alt text-secondary fa-2x\\'></i>';">`
                         }
                     </div>
                     <div style="flex: 1;">
@@ -1950,7 +2015,7 @@ const catNombre = item.categoria_especialidad || item.categoria_especial || 'EVI
                             ${item.descripcion || 'Sin descripción adicional.'}
                         </p>
                     </div>
-                    <div class="text-secondary opacity-50">
+                    <div class="text-secondary opacity-50 me-2">
                         <i class="fas fa-expand-alt fa-lg"></i>
                     </div>
                 </div>
@@ -1961,20 +2026,29 @@ const catNombre = item.categoria_especialidad || item.categoria_especial || 'EVI
     contenedor.innerHTML = html;
 }
 
+// ============================================================================
+// 🎨 FILTRADO LOCAL CORREGIDO POR FECHA Y CATEGORÍA
+// ============================================================================
 function filtrarEvidenciasLocales() {
-    const fechaSeleccionada = document.getElementById('filtro_fecha_evidencia').value;
-    const catSeleccionada = document.getElementById('filtro_categoria_evidencia').value;
+    const fechaInput = document.getElementById('filtro_fecha_evidencia');
+    const catInput = document.getElementById('filtro_categoria_evidencia');
+
+    const fechaSeleccionada = fechaInput ? fechaInput.value : '';
+    const catSeleccionada = catInput ? catInput.value : 'TODAS';
 
     let resultado = [...coleccionEvidenciasPaciente];
 
     if (fechaSeleccionada) {
-        resultado = resultado.filter(item => item.fecha_registro.split('T')[0] === fechaSeleccionada);
+        resultado = resultado.filter(item => {
+            const fechaItem = item.fecha || item.fecha_registro;
+            return fechaItem && fechaItem.split('T')[0] === fechaSeleccionada;
+        });
     }
 
     if (catSeleccionada && catSeleccionada !== 'TODAS') {
         resultado = resultado.filter(item => {
-            const cat = item.categoria_especial || item.categoria_especialidad || '';
-            return cat.startsWith(catSeleccionada);
+            const cat = (item.categoria || '').toUpperCase();
+            return cat.includes(catSeleccionada.toUpperCase());
         });
     }
 
@@ -1989,7 +2063,10 @@ function resetFiltrosEvidencia() {
     renderizarListaEvidencias(coleccionEvidenciasPaciente);
 }
 
-function verEvidenciaPantallaCompleta(url, esPDF, categoria, fecha, descripcion) {
+// ============================================================================
+// 🔍 VISOR FULLSCREEN COMPATIBLE CON IMÁGENES Y PDFS
+// ============================================================================
+function verEvidenciaPantallaCompleta(url, esPDFParam, categoria, fecha, descripcion) {
     const modalFull = document.getElementById('modalVisorFullscreen');
     const contenedorArchivo = document.getElementById('full_contenido_archivo');
     if (!modalFull || !contenedorArchivo) return;
@@ -1998,10 +2075,21 @@ function verEvidenciaPantallaCompleta(url, esPDF, categoria, fecha, descripcion)
     document.getElementById('full_fecha_evidencia').innerText = `Fecha de Registro: ${fecha}`;
     document.getElementById('full_descripcion_evidencia').innerText = descripcion ? `"${descripcion}"` : '';
 
+    // Detección mejorada de PDF (mira si la URL incluye .pdf ignorando mayúsculas o parámetros query)
+    const esPDF = esPDFParam || /\.pdf/i.test(url);
+
     if (esPDF) {
-        contenedorArchivo.innerHTML = `<iframe src="${url}" style="width: 100%; height: 100%; border: none; border-radius: 12px; background: white;"></iframe>`;
+        contenedorArchivo.innerHTML = `
+            <iframe src="${url}" 
+                    style="width: 100%; height: 80vh; border: none; border-radius: 12px; background: white;" 
+                    allowfullscreen>
+            </iframe>`;
     } else {
-        contenedorArchivo.innerHTML = `<img src="${url}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" alt="Evidencia Fullscreen">`;
+        contenedorArchivo.innerHTML = `
+            <img src="${url}" 
+                 style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" 
+                 alt="Evidencia Fullscreen"
+                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'text-white text-center p-5\\'><i class=\\'fas fa-exclamation-triangle fa-3x text-warning mb-3\\'></i><p>No se pudo visualizar el archivo directamente. <br><a href=\\'${url}\\' target=\\'_blank\\' class=\\'btn btn-sm btn-light mt-2\\'>Abrir en pestaña nueva</a></p></div>';">`;
     }
 
     modalFull.style.display = 'flex';
