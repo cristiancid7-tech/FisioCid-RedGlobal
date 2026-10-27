@@ -38,18 +38,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     configurarBuscadorQuimico();
 
     // 3. Mayúsculas automáticas globales
-    document.addEventListener('input', (e) => {
-        const el = e.target;
-        if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && 
-            el.type !== 'email' && el.type !== 'password' && el.id !== 'valEmail' && el.id !== 'correo-tutor') {
-            el.value = el.value.toUpperCase();
-        }
-    });
+ document.addEventListener('input', (e) => {
+    const el = e.target;
+    if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && 
+        el.type !== 'email' && el.type !== 'password' && el.type !== 'file' && el.id !== 'valEmail' && el.id !== 'correo-tutor') {
+        el.value = el.value.toUpperCase();
+    }
+});
 
-    // 4. Gestión Multi-archivo
+    // 4. Gestión Multi-archivo y Clics en Cajas de Arrastre
     const inputArchivos = document.getElementById('file-pdf');
     const inputArchivosModal = document.getElementById('file-pdf-modal');
+    const zonaCargaPrincipal = document.getElementById('zona-carga-pdf');
+    const zonaCargaModal = document.getElementById('zona-carga-pdf-modal');
 
+    // Asignación de cambio de archivo
     if (inputArchivos) {
         inputArchivos.removeEventListener('change', manejarSeleccionArchivos);
         inputArchivos.addEventListener('change', manejarSeleccionArchivos);
@@ -57,6 +60,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inputArchivosModal) {
         inputArchivosModal.removeEventListener('change', manejarSeleccionArchivos);
         inputArchivosModal.addEventListener('change', manejarSeleccionArchivos);
+    }
+
+    // Eventos de clic para abrir el selector de archivos
+    if (zonaCargaPrincipal && inputArchivos) {
+        zonaCargaPrincipal.addEventListener('click', () => inputArchivos.click());
+    }
+    if (zonaCargaModal && inputArchivosModal) {
+        zonaCargaModal.addEventListener('click', () => inputArchivosModal.click());
     }
 
     // 5. Escuchas para CURP y Folios
@@ -105,7 +116,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
-
 // Lista de los que mandan en el laboratorio
 const especialidadesDictaminadoras = ['QUIMICO', 'BIOQUIMICO', 'PATOLOGO', 'GENETISTA'];
 
@@ -114,16 +124,19 @@ function esDictaminadorAutorizado() {
     return especialidadesDictaminadoras.includes(especialidadUsuario.toUpperCase());
 }
 
-// ============================================================================
-// 📑 MANEJO Y SUBIDA DE ARCHIVOS (STORAGE)
-// ============================================================================
 function manejarSeleccionArchivos(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
     const input = e.target;
+    if (!input || !input.files || input.files.length === 0) return;
+
     const nuevosArchivos = Array.from(input.files);
     const permitidos = ['application/pdf', 'image/jpeg', 'image/png'];
 
     nuevosArchivos.forEach(archivo => {
         if (permitidos.includes(archivo.type)) {
+            // Evitar duplicados por nombre
             if (!archivosLaboratorio.some(a => a.name === archivo.name)) {
                 archivosLaboratorio.push(archivo);
             }
@@ -131,18 +144,17 @@ function manejarSeleccionArchivos(e) {
             alert(`El archivo ${archivo.name} no es válido. Solo PDF, JPG o PNG.`);
         }
     });
+
     renderizarListaPDFs();
 
-    const nuevoInput = document.createElement('input');
-    nuevoInput.type = 'file';
-    nuevoInput.id = input.id;
-    nuevoInput.className = input.className;
-    nuevoInput.accept = 'application/pdf, image/jpeg, image/png';
-    nuevoInput.style.display = 'none';
-    nuevoInput.multiple = true;
-    nuevoInput.addEventListener('change', manejarSeleccionArchivos);
-    
-    input.parentNode.replaceChild(nuevoInput, input);
+    // Reset seguro usando try/catch para garantizar compatibilidad entre navegadores
+    try {
+        input.value = '';
+    } catch (err) {
+        // En caso de que el navegador bloquee la reasignación en el e.target
+        input.type = 'text';
+        input.type = 'file';
+    }
 }
 
 function renderizarListaPDFs() {
@@ -1305,31 +1317,26 @@ async function configurarBuscadorQuimico() {
         const query = e.target.value.trim().toUpperCase();
         if (inputHidden) inputHidden.value = "";
 
-        if (query.length < 3) { lista.classList.add('d-none'); return; }
+        if (query.length < 3) { 
+            lista.classList.add('d-none'); 
+            return; 
+        }
 
         try {
-            const idClinica = localStorage.getItem('id_clinica_activa');
-
+            // Consulta directa a perfiles_profesionales filtrando por nombre
             const { data: resultados, error } = await fisioNet
-                .from('colaboradores_clinica')
-                .select('id_profesional, perfiles_profesionales(nombre_completo, especialidad)')
-                .eq('id_clinica', idClinica)
-                .eq('estado', 'ACTIVO');
+                .from('perfiles_profesionales')
+                .select('id, nombre_completo, especialidad')
+                .ilike('nombre_completo', `%${query}%`)
+                .limit(5);
 
             if (error) throw error;
 
             lista.innerHTML = '';
 
-            const filtrados = (resultados || []).filter(r => {
-                const nom = (r.perfiles_profesionales?.nombre_completo || '').toUpperCase();
-                const esp = (r.perfiles_profesionales?.especialidad || '').toUpperCase();
-                return nom.includes(query) || ESPECIALIDADES_DICTAMINADORAS.some(e => esp.includes(e));
-            });
-
-            if (filtrados.length > 0) {
+            if (resultados && resultados.length > 0) {
                 lista.classList.remove('d-none');
-                filtrados.forEach(r => {
-                    const perfil = r.perfiles_profesionales;
+                resultados.forEach(perfil => {
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'list-group-item list-group-item-action p-2 text-start';
@@ -1340,11 +1347,13 @@ async function configurarBuscadorQuimico() {
                     btn.onclick = (evt) => {
                         evt.preventDefault();
                         input.value = perfil.nombre_completo.toUpperCase();
-                        if (inputHidden) inputHidden.value = r.id_profesional;
+                        if (inputHidden) inputHidden.value = perfil.id;
                         lista.classList.add('d-none');
                     };
                     lista.appendChild(btn);
                 });
+            } else {
+                lista.classList.add('d-none');
             }
         } catch (err) {
             console.error("❌ Error en buscador de químicos:", err);
