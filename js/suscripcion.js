@@ -31,6 +31,7 @@ async function cargarPlanesDinamicos() {
 
         planes.forEach(plan => {
             const esEsencial = plan.codigo_plan === 'ESENCIAL';
+            const esPrimerosPasos = plan.codigo_plan === 'PRIMEROS_PASOS' || plan.codigo_plan === 'IMPULSO';
             const esGratuito = Number(plan.precio_mensual) === 0;
 
             const card = document.createElement('div');
@@ -38,16 +39,20 @@ async function cargarPlanesDinamicos() {
                 ? "bg-slate-800 border-2 border-amber-500/80 rounded-2xl p-6 flex flex-col justify-between relative shadow-lg shadow-amber-500/10"
                 : "bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition";
 
-            const txtPacientes = plan.limite_pacientes 
-                ? `Hasta <b>${plan.limite_pacientes} Pacientes</b>` 
+            // 🛠️ VALIDACIÓN DE -1 (ILIMITADO) PARA PACIENTES
+            const txtPacientes = (plan.limite_pacientes && Number(plan.limite_pacientes) > 0)
+                ? `Hasta <b>${plan.limite_pacientes} Pacientes</b>`
                 : '<b>Pacientes Ilimitados</b>';
 
-            const txtUsuarios = plan.limite_usuarios 
-                ? `<b>${plan.limite_usuarios}</b> ${plan.limite_usuarios === 1 ? 'Usuario Profesional' : 'Usuarios Especialistas'}` 
+            // 🛠️ VALIDACIÓN DE -1 (ILIMITADO) PARA USUARIOS
+            const txtUsuarios = (plan.limite_usuarios && Number(plan.limite_usuarios) > 0)
+                ? `<b>${plan.limite_usuarios}</b> ${Number(plan.limite_usuarios) === 1 ? 'Usuario Profesional' : 'Usuarios Especialistas'}`
                 : '<b>Usuarios Ilimitados</b>';
 
             card.innerHTML = `
                 ${esEsencial ? '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-black uppercase px-3 py-1 rounded-full">Más Popular</span>' : ''}
+                ${esPrimerosPasos ? '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-sky-500 text-slate-950 text-[10px] font-black uppercase px-3 py-1 rounded-full">Ideal Para Iniciar</span>' : ''}
+
                 <div>
                     <span class="text-xs font-bold ${esEsencial ? 'text-amber-400' : 'text-sky-400'} uppercase tracking-wider">${plan.codigo_plan}</span>
                     <h3 class="text-xl font-bold text-white mt-1">${plan.nombre}</h3>
@@ -61,6 +66,7 @@ async function cargarPlanesDinamicos() {
                         ${plan.permite_adjuntos ? `<li><i class="fas fa-check ${esEsencial ? 'text-amber-400' : 'text-sky-400'} mr-2"></i>Archivos pesados / Adjuntos</li>` : ''}
                     </ul>
                 </div>
+
                 ${esGratuito 
                     ? `<button id="btnPlanGratuito" onclick="solicitarCambioPlan('${plan.codigo_plan}')" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl transition">Elegir Gratuito</button>`
                     : `<button onclick="abrirModalPago('${plan.codigo_plan}', ${plan.precio_mensual})" class="w-full py-2.5 ${esEsencial ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black' : 'bg-sky-600 hover:bg-sky-500 text-white font-bold'} text-xs rounded-xl transition">Seleccionar Plan</button>`
