@@ -12,18 +12,16 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Recibir datos (ya NO dependemos del 'monto' del cliente)
     const { codigoPlan, userId, originUrl } = await req.json()
 
-    // 2. Inicializar cliente de Supabase interno
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 3. Consultar precio oficial y nombre del plan en la BD
+    // 1. Consultar el plan INCLUYENDO las columnas de descuento
     const { data: plan, error: errPlan } = await supabase
       .from('planes_suscripcion')
-      .select('codigo_plan, nombre, precio_mensual')
+      .select('codigo_plan, nombre, precio_mensual, tiene_descuento, porcentaje_descuento, cupos_restantes')
       .eq('codigo_plan', codigoPlan)
       .eq('activo', true)
       .single()
@@ -35,17 +33,17 @@ serve(async (req) => {
       })
     }
 
-    // 4. Obtener Access Token de las variables de entorno
-    const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN")
+    // 2. CÁLCULO DE PRECIO CON DESCUENTO SI TIENE CUPOS
+    let precioCobro = Number(plan.precio_mensual);
 
-    if (!mpAccessToken) {
-      return new Response(JSON.stringify({ error: "Falta configurar MP_ACCESS_TOKEN en Supabase Secrets." }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      })
+    if (plan.tiene_descuento && Number(plan.cupos_restantes) > 0 && Number(plan.porcentaje_descuento) > 0) {
+      const descuento = (precioCobro * Number(plan.porcentaje_descuento)) / 100;
+      precioCobro = Math.round(precioCobro - descuento); // Redondea al entero más cercano
     }
 
-    // 5. Crear la preferencia en Mercado Pago con el PRECIO REAL
+    const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN") || "APP_USR-5830452230405605-100403-80ba0a7257f81d69c770efa3b6c02135-240030910";
+
+    // 3. Crear la preferencia en Mercado Pago con el PRECIO CALCULADO DE FORMA SEGURA
     const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -57,12 +55,12 @@ serve(async (req) => {
           {
             id: plan.codigo_plan,
             title: `Plan ${plan.nombre} - FisioCid`,
-            unit_price: Number(plan.precio_mensual), // 👈 Inalterable desde el navegador
+            unit_price: precioCobro, // 👈 Se manda el precio real (con o sin oferta)
             quantity: 1,
             currency_id: "MXN"
           }
         ],
-        external_reference: `${userId}|${plan.codigo_plan}`, // 👈 Manda ID y Plan para el Webhook
+        external_reference: `${userId}|${plan.codigo_plan}`,
         back_urls: {
           success: `${originUrl}?plan=${plan.codigo_plan}&collection_status=approved`,
           failure: `${originUrl}?pago=fallido`,

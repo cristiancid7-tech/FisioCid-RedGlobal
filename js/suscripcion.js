@@ -20,46 +20,77 @@ async function cargarPlanesDinamicos() {
     try {
         const { data: planes, error } = await fisioNet
             .from('planes_suscripcion')
-            .select('id, codigo_plan, nombre, precio_mensual, limite_pacientes, limite_usuarios, permite_adjuntos, activo')
+            .select('id, codigo_plan, nombre, precio_mensual, limite_pacientes, limite_usuarios, permite_adjuntos, activo, tiene_descuento, porcentaje_descuento, cupos_totales, cupos_restantes')
             .eq('activo', true)
             .order('precio_mensual', { ascending: true });
 
         if (error) throw error;
         if (!planes || planes.length === 0) return;
 
-        contenedor.innerHTML = ''; // Limpiar loader o contenido estático
+        contenedor.innerHTML = ''; // Limpiar loader
 
         planes.forEach(plan => {
             const esEsencial = plan.codigo_plan === 'ESENCIAL';
             const esPrimerosPasos = plan.codigo_plan === 'PRIMEROS_PASOS' || plan.codigo_plan === 'IMPULSO';
             const esGratuito = Number(plan.precio_mensual) === 0;
 
-            const card = document.createElement('div');
-            card.className = esEsencial
-                ? "bg-slate-800 border-2 border-amber-500/80 rounded-2xl p-6 flex flex-col justify-between relative shadow-lg shadow-amber-500/10"
-                : "bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition";
+            // 🛠️ LÓGICA FOMO / DESCUENTO
+            let precioFinal = Number(plan.precio_mensual);
+            let htmlPrecio = `<span class="text-3xl font-black ${esEsencial ? 'text-amber-400' : 'text-white'}">$${plan.precio_mensual}</span>`;
+            let bannerFOMO = '';
 
-            // 🛠️ VALIDACIÓN DE -1 (ILIMITADO) PARA PACIENTES
+            if (plan.tiene_descuento && plan.cupos_restantes > 0 && plan.porcentaje_descuento > 0) {
+                const precioOriginal = Number(plan.precio_mensual);
+                precioFinal = Math.round(precioOriginal * (1 - (plan.porcentaje_descuento / 100)));
+
+                // Precio tachado + precio con oferta
+                htmlPrecio = `
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-black ${esEsencial ? 'text-amber-400' : 'text-emerald-400'}">$${precioFinal}</span>
+                        <span class="text-sm text-slate-500 line-through font-bold">$${precioOriginal}</span>
+                    </div>
+                `;
+
+                // Banner interactivo de cupos limitados
+                bannerFOMO = `
+                    <div class="mb-3 p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center animate-pulse">
+                        <span class="text-[11px] font-black text-amber-400 block">🔥 ¡OFERTA ${plan.porcentaje_descuento}% OFF!</span>
+                        <div class="text-[10px] text-amber-200 mt-0.5">
+                            Solo quedan <b id="cupos-${plan.codigo_plan}" class="text-white text-xs px-1.5 py-0.5 bg-amber-500/20 rounded border border-amber-400/40">${plan.cupos_restantes}</b> de ${plan.cupos_totales} cupos
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Validaciones de ilimitados (-1)
             const txtPacientes = (plan.limite_pacientes && Number(plan.limite_pacientes) > 0)
                 ? `Hasta <b>${plan.limite_pacientes} Pacientes</b>`
                 : '<b>Pacientes Ilimitados</b>';
 
-            // 🛠️ VALIDACIÓN DE -1 (ILIMITADO) PARA USUARIOS
             const txtUsuarios = (plan.limite_usuarios && Number(plan.limite_usuarios) > 0)
                 ? `<b>${plan.limite_usuarios}</b> ${Number(plan.limite_usuarios) === 1 ? 'Usuario Profesional' : 'Usuarios Especialistas'}`
                 : '<b>Usuarios Ilimitados</b>';
+
+            const card = document.createElement('div');
+            card.className = esEsencial
+                ? "bg-slate-800 border-2 border-amber-500/80 rounded-2xl p-6 flex flex-col justify-between relative shadow-lg shadow-amber-500/10"
+                : "bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition";
 
             card.innerHTML = `
                 ${esEsencial ? '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-black uppercase px-3 py-1 rounded-full">Más Popular</span>' : ''}
                 ${esPrimerosPasos ? '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-sky-500 text-slate-950 text-[10px] font-black uppercase px-3 py-1 rounded-full">Ideal Para Iniciar</span>' : ''}
 
                 <div>
+                    ${bannerFOMO}
+
                     <span class="text-xs font-bold ${esEsencial ? 'text-amber-400' : 'text-sky-400'} uppercase tracking-wider">${plan.codigo_plan}</span>
                     <h3 class="text-xl font-bold text-white mt-1">${plan.nombre}</h3>
+
                     <div class="my-4">
-                        <span class="text-3xl font-black ${esEsencial ? 'text-amber-400' : 'text-white'}">$${plan.precio_mensual}</span>
+                        ${htmlPrecio}
                         <span class="text-xs text-slate-400"> MXN / mes</span>
                     </div>
+
                     <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
                         <li><i class="fas fa-check ${esEsencial ? 'text-amber-400' : 'text-sky-400'} mr-2"></i>${txtPacientes}</li>
                         <li><i class="fas fa-check ${esEsencial ? 'text-amber-400' : 'text-sky-400'} mr-2"></i>${txtUsuarios}</li>
@@ -69,7 +100,7 @@ async function cargarPlanesDinamicos() {
 
                 ${esGratuito 
                     ? `<button id="btnPlanGratuito" onclick="solicitarCambioPlan('${plan.codigo_plan}')" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl transition">Elegir Gratuito</button>`
-                    : `<button onclick="abrirModalPago('${plan.codigo_plan}', ${plan.precio_mensual})" class="w-full py-2.5 ${esEsencial ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black' : 'bg-sky-600 hover:bg-sky-500 text-white font-bold'} text-xs rounded-xl transition">Seleccionar Plan</button>`
+                    : `<button onclick="abrirModalPago('${plan.codigo_plan}', ${precioFinal})" class="w-full py-2.5 ${esEsencial ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black' : 'bg-sky-600 hover:bg-sky-500 text-white font-bold'} text-xs rounded-xl transition">Seleccionar Plan</button>`
                 }
             `;
 
@@ -146,6 +177,12 @@ async function cargarEstadoSuscripcion() {
 async function abrirModalPago(codigoPlan, monto) {
     planSeleccionadoModal = codigoPlan;
     montoSeleccionadoModal = monto;
+
+    // Actualizar labels del modal de respaldo SPEI
+    const lblPlan = document.getElementById('lblPlanModal');
+    const lblMonto = document.getElementById('lblMontoModal');
+    if (lblPlan) lblPlan.innerText = codigoPlan;
+    if (lblMonto) lblMonto.innerText = `$${monto}.00 MXN`;
 
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
@@ -336,3 +373,15 @@ async function solicitarCambioPlan(codigoPlan) {
         alert("⚠️ No se pudo cambiar de plan: " + err.message);
     }
 }
+
+// ESCUCHAR CAMBIOS EN TIEMPO REAL EN LOS CUPOS DE LOS PLANES
+fisioNet
+  .channel('fomo-planes-realtime')
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'planes_suscripcion' }, payload => {
+      const planActualizado = payload.new;
+      const elCupo = document.getElementById(`cupos-${planActualizado.codigo_plan}`);
+      if (elCupo && planActualizado.cupos_restantes !== undefined) {
+          elCupo.innerText = planActualizado.cupos_restantes;
+      }
+  })
+  .subscribe();
