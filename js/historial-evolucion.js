@@ -572,7 +572,7 @@ async function procesarAltaPortalPaciente(boton) {
 }
 
 // ============================================================================
-// 📊 MOTOR QUERY UNIFICADO FISIOCID: EXPEDIENTE CLÍNICO HÍBRIDO (AISLADO POR CLÍNICA)
+// 📊 MOTOR QUERY UNIFICADO FISIOCID: EXPEDIENTE CLÍNICO HÍBRIDO (FILTRADO POR CLÍNICA)
 // ============================================================================
 window.lineaTiempoGlobalCache = []; 
 window.tipoSeccionActiva = 'notas'; // Por defecto arranca en notas clínicas
@@ -597,28 +597,34 @@ async function cargarLineaTiempoClinica(idPaciente) {
             return;
         }
 
-        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Notas y Recetas estrictamente filtradas por id_clinica)
+        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Todas filtradas estrictamente por id_clinica)
         const [promesaNotas, promesaRecetas, promesaEstudios, promesaLaboratorio] = await Promise.all([
+            // 1. Notas clínicas
             fisioNet.from('historial_clinico')
                 .select('*')
                 .eq('id_paciente', idPaciente)
                 .eq('id_clinica', idClinicaActiva) // 🔒 Blindaje por clínica activa
                 .order('fecha_nota', { ascending: false }),
                 
+            // 2. Recetas médicas
             fisioNet.from('recetas_medicas')
                 .select('*')
                 .eq('id_paciente', idPaciente)
                 .eq('id_clinica', idClinicaActiva) // 🔒 Blindaje por clínica activa
                 .order('fecha_creacion', { ascending: false }),
                 
+            // 3. Estudios de Gabinete (PACS)
             fisioNet.from('estudios_gabinete')
                 .select('*')
                 .eq('paciente_id', idPaciente)
+                .eq('id_clinica', idClinicaActiva) // 🔒 ¡AÑADIDO! Blindaje por clínica activa
                 .order('fecha_registro', { ascending: false }),
                 
+            // 4. Estudios de Laboratorio
             fisioNet.from('estudios_laboratorio')
                 .select('*')
                 .eq('paciente_id', idPaciente)
+                .eq('id_clinica', idClinicaActiva) // 🔒 ¡AÑADIDO! Blindaje por clínica activa
                 .order('created_at', { ascending: false })
         ]);
 
@@ -655,6 +661,7 @@ async function cargarLineaTiempoClinica(idPaciente) {
             };
         });
 
+        // 🩻 NORMALIZACIÓN DE GABINETE
         const estudiosFormateados = dataEstudios.map(estudio => ({
             id_registro: estudio.id,
             fecha_cruda: estudio.fecha_registro,
@@ -668,6 +675,7 @@ async function cargarLineaTiempoClinica(idPaciente) {
             fecha_orden: new Date(estudio.fecha_registro || new Date())
         }));
 
+        // 🧪 NORMALIZACIÓN DE LABORATORIO
         const laboratoriosFormateados = dataLaboratorio.map(lab => ({
             id_registro: lab.id,
             fecha_cruda: lab.created_at,
