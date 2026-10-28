@@ -1,4 +1,4 @@
-// 1. INICIALIZAR MERCADO PAGO CON TU PUBLIC KEY DE PRODUCCIÓN (Seguro en cliente)
+// 1. INICIALIZAR MERCADO PAGO CON TU PUBLIC KEY DE PRODUCCIÓN
 const mp = new MercadoPago('APP_USR-c45a6e3b-7d14-4edf-a8ae-e552042f155e', {
     locale: 'es-MX'
 });
@@ -7,11 +7,75 @@ let planSeleccionadoModal = null;
 let montoSeleccionadoModal = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await cargarPlanesDinamicos(); // 👈 Carga la rejilla desde Supabase
     await cargarEstadoSuscripcion();
-    await procesarRetornoMercadoPago(); // 👈 Detecta y activa suscripción tras pago exitoso
+    await procesarRetornoMercadoPago();
 });
 
-// 2. CARGAR Y MOSTRAR ESTADO DEL USUARIO
+// 2. CARGAR PLANES DINÁMICAMENTE DESDE LA TABLA planes_suscripcion
+async function cargarPlanesDinamicos() {
+    const contenedor = document.getElementById('contenedorPlanes');
+    if (!contenedor) return;
+
+    try {
+        const { data: planes, error } = await fisioNet
+            .from('planes_suscripcion')
+            .select('id, codigo_plan, nombre, precio_mensual, limite_pacientes, limite_usuarios, permite_adjuntos, activo')
+            .eq('activo', true)
+            .order('precio_mensual', { ascending: true });
+
+        if (error) throw error;
+        if (!planes || planes.length === 0) return;
+
+        contenedor.innerHTML = ''; // Limpiar loader o contenido estático
+
+        planes.forEach(plan => {
+            const esEsencial = plan.codigo_plan === 'ESENCIAL';
+            const esGratuito = Number(plan.precio_mensual) === 0;
+
+            const card = document.createElement('div');
+            card.className = esEsencial
+                ? "bg-slate-800 border-2 border-amber-500/80 rounded-2xl p-6 flex flex-col justify-between relative shadow-lg shadow-amber-500/10"
+                : "bg-slate-800/60 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-500 transition";
+
+            const txtPacientes = plan.limite_pacientes 
+                ? `Hasta <b>${plan.limite_pacientes} Pacientes</b>` 
+                : '<b>Pacientes Ilimitados</b>';
+
+            const txtUsuarios = plan.limite_usuarios 
+                ? `<b>${plan.limite_usuarios}</b> ${plan.limite_usuarios === 1 ? 'Usuario Profesional' : 'Usuarios Especialistas'}` 
+                : '<b>Usuarios Ilimitados</b>';
+
+            card.innerHTML = `
+                ${esEsencial ? '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-black uppercase px-3 py-1 rounded-full">Más Popular</span>' : ''}
+                <div>
+                    <span class="text-xs font-bold ${esEsencial ? 'text-amber-400' : 'text-sky-400'} uppercase tracking-wider">${plan.codigo_plan}</span>
+                    <h3 class="text-xl font-bold text-white mt-1">${plan.nombre}</h3>
+                    <div class="my-4">
+                        <span class="text-3xl font-black ${esEsencial ? 'text-amber-400' : 'text-white'}">$${plan.precio_mensual}</span>
+                        <span class="text-xs text-slate-400"> MXN / mes</span>
+                    </div>
+                    <ul class="text-xs text-slate-300 space-y-2.5 mb-6">
+                        <li><i class="fas fa-check ${esEsencial ? 'text-amber-400' : 'text-sky-400'} mr-2"></i>${txtPacientes}</li>
+                        <li><i class="fas fa-check ${esEsencial ? 'text-amber-400' : 'text-sky-400'} mr-2"></i>${txtUsuarios}</li>
+                        ${plan.permite_adjuntos ? `<li><i class="fas fa-check ${esEsencial ? 'text-amber-400' : 'text-sky-400'} mr-2"></i>Archivos pesados / Adjuntos</li>` : ''}
+                    </ul>
+                </div>
+                ${esGratuito 
+                    ? `<button id="btnPlanGratuito" onclick="solicitarCambioPlan('${plan.codigo_plan}')" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl transition">Elegir Gratuito</button>`
+                    : `<button onclick="abrirModalPago('${plan.codigo_plan}', ${plan.precio_mensual})" class="w-full py-2.5 ${esEsencial ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black' : 'bg-sky-600 hover:bg-sky-500 text-white font-bold'} text-xs rounded-xl transition">Seleccionar Plan</button>`
+                }
+            `;
+
+            contenedor.appendChild(card);
+        });
+
+    } catch (err) {
+        console.error("Error al cargar los planes desde Supabase:", err);
+    }
+}
+
+// 3. CARGAR Y MOSTRAR ESTADO DEL USUARIO
 async function cargarEstadoSuscripcion() {
     const badge = document.getElementById('badgeEstadoActual');
     const alertaVencimiento = document.getElementById('alertaVencimiento');
@@ -72,7 +136,7 @@ async function cargarEstadoSuscripcion() {
     }
 }
 
-// 3. ABRIR PASARELA DE PAGO VÍA EDGE FUNCTION DE SUPABASE (CONEXIÓN SEGURA)
+// 4. ABRIR PASARELA DE PAGO VÍA EDGE FUNCTION DE SUPABASE
 async function abrirModalPago(codigoPlan, monto) {
     planSeleccionadoModal = codigoPlan;
     montoSeleccionadoModal = monto;
@@ -81,17 +145,15 @@ async function abrirModalPago(codigoPlan, monto) {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return alert("Sesión no válida. Por favor, inicia sesión nuevamente.");
 
-        // Invocación a la Edge Function
+        // Solo enviamos codigoPlan y userId. La Edge Function valida el precio en BD
         const { data: prefData, error: prefErr } = await fisioNet.functions.invoke('crear-preferencia-mp', {
             body: {
                 codigoPlan: codigoPlan,
-                monto: Number(monto),
                 userId: user.id,
                 originUrl: window.location.origin + window.location.pathname
             }
         });
 
-        // 🔍 IMPRIMIR EN CONSOLA LA RESPUESTA REAL DE MERCADO PAGO
         console.log("🔍 Respuesta de la Edge Function / Mercado Pago:", prefData, prefErr);
 
         if (prefErr) throw prefErr;
@@ -104,7 +166,6 @@ async function abrirModalPago(codigoPlan, monto) {
                 autoOpen: true
             });
         } else {
-            // Si Mercado Pago devolvió un error (ej. credenciales inválidas), lo mostramos en pantalla:
             const errorMsg = prefData?.message || prefData?.error || "Respuesta inválida de Mercado Pago.";
             throw new Error(errorMsg);
         }
@@ -119,7 +180,7 @@ function cerrarModalPago() {
     document.getElementById('modalPago')?.classList.add('hidden');
 }
 
-// 4. PROCESAR RETORNO AUTOMÁTICO DE MERCADO PAGO
+// 5. PROCESAR RETORNO AUTOMÁTICO DE MERCADO PAGO
 async function procesarRetornoMercadoPago() {
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('collection_status') || urlParams.get('status');
@@ -131,7 +192,6 @@ async function procesarRetornoMercadoPago() {
             const { data: { user } } = await fisioNet.auth.getUser();
             if (!user) return;
 
-            // Prevenir doble procesamiento comprobando si la referencia ya fue registrada
             const { data: pagoExistente } = await fisioNet
                 .from('pagos_suscripciones')
                 .select('id')
@@ -139,7 +199,6 @@ async function procesarRetornoMercadoPago() {
                 .maybeSingle();
 
             if (pagoExistente) {
-                // Limpiar parámetros de la URL sin recargar la página
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
@@ -150,18 +209,16 @@ async function procesarRetornoMercadoPago() {
                 .eq('id', user.id)
                 .single();
 
-            // A. Registrar el pago de Mercado Pago
             await fisioNet.from('pagos_suscripciones').insert([{
                 id_profesional: user.id,
                 nombre_profesional: perfil?.nombre_completo || "Doctor FisioCid",
                 codigo_plan: plan || 'PROFESIONAL',
-                monto: 0, // Se actualizará vía Webhook si registras el monto exacto
+                monto: 0,
                 metodo_pago: 'MERCADO_PAGO',
                 referencia_pago: paymentId,
                 estado_pago: 'APROBADO'
             }]);
 
-            // B. Extender suscripción 30 días
             const nuevaFechaExp = new Date();
             nuevaFechaExp.setDate(nuevaFechaExp.getDate() + 30);
 
@@ -181,7 +238,7 @@ async function procesarRetornoMercadoPago() {
     }
 }
 
-// 5. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
+// 6. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
 document.getElementById('formNotificarPago')?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -227,7 +284,7 @@ document.getElementById('formNotificarPago')?.addEventListener('submit', async (
         if (errPerfil) throw errPerfil;
 
         alert("🎉 ¡Pago registrado con éxito! Tu plan ha sido renovado por 30 días.");
-        cerrarModalPago(); // 👈 Arreglado el typo anterior
+        cerrarModalPago();
         window.location.reload();
 
     } catch (err) {
@@ -236,7 +293,7 @@ document.getElementById('formNotificarPago')?.addEventListener('submit', async (
     }
 });
 
-// 6. CAMBIO A PLAN GRATUITO (CON BLOQUEO DE ÚNICO USO)
+// 7. CAMBIO A PLAN GRATUITO
 async function solicitarCambioPlan(codigoPlan) {
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
