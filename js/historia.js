@@ -1,11 +1,15 @@
 // ============================================================================
 // 🔒 A) LIMPIEZA DE PERMISOS OTP E INICIALIZACIÓN UNIFICADA
 // ============================================================================
+// Agregarlo justo dentro del DOMContentLoaded existente:
 document.addEventListener('DOMContentLoaded', () => {
     const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
     if (idPacienteLimpio) {
         sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
         sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
+        
+        // 📝 RESTAURAR BORRADOR SI EXISTE PARA ESTE PACIENTE
+        restaurarBorradorLocal(idPacienteLimpio);
     }
     
     // Ejecución inicial limpia
@@ -16,6 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 🔔 Verificación inicial de notificaciones
     actualizarBadgeNotificaciones();
+
+    // 📝 ACTIVAR LISTENERS PARA AUTOGUARDADO DE BORRADOR
+    activarAutoguardadoBorrador();
 });
 
 // B) LIMPIAR PERMISOS AL CERRAR O SALIR DE LA PÁGINA
@@ -418,6 +425,7 @@ const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
 if (idPacienteLimpio) {
     sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
     sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
+    localStorage.removeItem(`fisiocid_draft_exploracion_${idPacienteLimpio}`);
 }
 
             // 6. IMPRESIÓN Y GENERACIÓN DE PDF MEDIANTE MOTOR JSPDF
@@ -2359,4 +2367,74 @@ async function alAbrirGaleriaEvidencias() {
     } catch (err) {
         console.error("Error al marcar notificaciones como leídas:", err);
     }
+}
+
+// ============================================================================
+// 📝 MOTOR DE BORRADOR LOCAL AUTO-GUARDADO (RESPALDO CONTRA CAÍDAS DE RED)
+// ============================================================================
+
+function restaurarBorradorLocal(pacienteId) {
+    if (!pacienteId) return;
+    const clave = `fisiocid_draft_exploracion_${pacienteId}`;
+    const borrador = localStorage.getItem(clave);
+    
+    if (borrador) {
+        try {
+            const datos = JSON.parse(borrador);
+            const llenarCampo = (id, val) => {
+                const el = document.getElementById(id);
+                if (el && val) {
+                    el.value = val;
+                    el.style.backgroundColor = "#fffbebf5"; // Destacado amarillo tenue de borrador
+                }
+            };
+
+            llenarCampo('motivo', datos.motivo);
+            llenarCampo('sintomas', datos.sintomas);
+            llenarCampo('evolucion', datos.evolucion);
+            llenarCampo('exploracion', datos.exploracion);
+            llenarCampo('plan_tratamiento', datos.plan_tratamiento);
+            llenarCampo('plan', datos.plan);
+            llenarCampo('diagnostico_principal', datos.diagnostico_principal);
+            llenarCampo('diagnostico_funcional', datos.diagnostico_funcional);
+
+            console.log("📝 [Borrador Local]: Avance recuperado de localStorage para paciente:", pacienteId);
+        } catch (e) {
+            console.error("Error al restaurar borrador local:", e);
+        }
+    }
+}
+
+let timerAutoguardado = null;
+function activarAutoguardadoBorrador() {
+    const idPacienteLimpio = idPaciente || window.pacienteCargado?.id || localStorage.getItem('paciente_seleccionado_id');
+    if (!idPacienteLimpio) return;
+
+    const camposAObservar = [
+        'motivo', 'sintomas', 'evolucion', 'exploracion', 
+        'plan_tratamiento', 'plan', 'diagnostico_principal', 'diagnostico_funcional'
+    ];
+
+    camposAObservar.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => {
+                clearTimeout(timerAutoguardado);
+                timerAutoguardado = setTimeout(() => {
+                    const payload = {
+                        motivo: document.getElementById('motivo')?.value || '',
+                        sintomas: document.getElementById('sintomas')?.value || '',
+                        evolucion: document.getElementById('evolucion')?.value || '',
+                        exploracion: document.getElementById('exploracion')?.value || '',
+                        plan_tratamiento: document.getElementById('plan_tratamiento')?.value || '',
+                        plan: document.getElementById('plan')?.value || '',
+                        diagnostico_principal: document.getElementById('diagnostico_principal')?.value || '',
+                        diagnostico_funcional: document.getElementById('diagnostico_funcional')?.value || '',
+                        fechaModificacion: new Date().toISOString()
+                    };
+                    localStorage.setItem(`fisiocid_draft_exploracion_${idPacienteLimpio}`, JSON.stringify(payload));
+                }, 500); // Guarda 500ms después de que el doctor deja de escribir
+            });
+        }
+    });
 }
