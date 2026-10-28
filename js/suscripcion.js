@@ -224,71 +224,72 @@ function cerrarModalPago() {
 }
 
 // 5. PROCESAR RETORNO AUTOMÁTICO DE MERCADO PAGO
-// 5. PROCESAR RETORNO AUTOMÁTICO DE MERCADO PAGO
 async function procesarRetornoMercadoPago() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('collection_status') || urlParams.get('status');
-    const paymentId = urlParams.get('payment_id');
-    const plan = urlParams.get('plan');
+  const urlParams = new URLSearchParams(window.location.search);
+  const status = urlParams.get('collection_status') || urlParams.get('status');
+  const paymentId = urlParams.get('payment_id');
+  const plan = urlParams.get('plan');
 
-    if (status === 'approved' && paymentId) {
-        try {
-            const { data: { user } } = await fisioNet.auth.getUser();
-            if (!user) return;
+  if (status === 'approved' && paymentId) {
+    // 1. Limpiar los parámetros de la URL INMEDIATAMENTE para evitar congelamiento / bucles al recargar
+    const urlLimpia = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState({}, document.title, urlLimpia);
 
-            const { data: pagoExistente } = await fisioNet
-                .from('pagos_suscripciones')
-                .select('id')
-                .eq('referencia_pago', paymentId)
-                .maybeSingle();
+    try {
+      // 2. Verificar la sesión activa del profesional
+      const { data: { user } } = await fisioNet.auth.getUser();
+      if (!user) return;
 
-            if (pagoExistente) {
-                window.history.replaceState({}, document.title, window.location.pathname);
-                return;
-            }
+      // 3. Pausa táctica de 1.5 segundos para dar tiempo a que la Edge Function (mp-webhook) actualice la BD
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-            const { data: perfil } = await fisioNet
-                .from('perfiles_profesionales')
-                .select('nombre_completo')
-                .eq('id', user.id)
-                .single();
+      // 4. Verificar si la Edge Function ya registró el pago
+      const { data: pagoExistente } = await fisioNet
+        .from('pagos_suscripciones')
+        .select('id')
+        .eq('referencia_pago', paymentId)
+        .maybeSingle();
 
-            await fisioNet.from('pagos_suscripciones').insert([{
-                id_profesional: user.id,
-                nombre_profesional: perfil?.nombre_completo || "Doctor FisioCid",
-                codigo_plan: plan || 'PROFESIONAL',
-                monto: 0,
-                metodo_pago: 'MERCADO_PAGO',
-                referencia_pago: paymentId,
-                estado_pago: 'APROBADO'
-            }]);
+      // Si el Webhook de Supabase aún no lo inserta, lo respaldamos desde el cliente
+      if (!pagoExistente) {
+        const { data: perfil } = await fisioNet
+          .from('perfiles_profesionales')
+          .select('nombre_completo')
+          .eq('id', user.id)
+          .single();
 
-            const nuevaFechaExp = new Date();
-            nuevaFechaExp.setDate(nuevaFechaExp.getDate() + 30);
+        await fisioNet.from('pagos_suscripciones').insert([{
+          id_profesional: user.id,
+          nombre_profesional: perfil?.nombre_completo || "Doctor FisioCid",
+          codigo_plan: plan || 'PROFESIONAL',
+          monto: 0,
+          metodo_pago: 'MERCADO_PAGO',
+          referencia_pago: paymentId,
+          estado_pago: 'APROBADO'
+        }]);
 
-            // 💡 DETERMINAR SI EL PLAN ASCIENDE AL USUARIO A DUEÑO
-            // Si el plan no es gratuito/demo, se convierte en DUENO
-            const esPlanDePago = plan && plan !== 'PRIMEROS_PASOS' && plan !== 'GRATUITO';
-            const nuevoTipoPerfil = esPlanDePago ? 'DUENO' : 'INDEPENDIENTE';
+        const nuevaFechaExp = new Date();
+        nuevaFechaExp.setDate(nuevaFechaExp.getDate() + 30);
 
-            await fisioNet.from('perfiles_profesionales').update({
-                nivel_suscripcion: plan || 'PROFESIONAL',
-                suscripcion_activa: true,
-                fecha_expiracion: nuevaFechaExp.toISOString(),
-                tipo_perfil: 'DUENO' // 👈 ¡AQUÍ CONVERTIMOS A DUEÑO!
-            }).eq('id', user.id);
+        await fisioNet.from('perfiles_profesionales').update({
+          nivel_suscripcion: plan || 'PROFESIONAL',
+          suscripcion_activa: true,
+          fecha_expiracion: nuevaFechaExp.toISOString(),
+          tipo_perfil: 'DUENO'
+        }).eq('id', user.id);
+      }
 
-            alert("🎉 ¡PAGO APROBADO CON ÉXITO! Tu suscripción ha sido activada y tus permisos de administración han sido habilitados.");
-            window.history.replaceState({}, document.title, window.location.pathname);
-            window.location.reload();
+      // 5. Refrescar el badge visual y el estado del usuario SIN RECARGAR la página completa
+      await cargarEstadoSuscripcion();
 
-        } catch (err) {
-            console.error("Error al procesar el retorno del pago:", err);
-        }
+      alert("🎉 ¡PAGO APROBADO CON ÉXITO! Tu suscripción ha sido activada y tus permisos de administración han sido habilitados.");
+
+    } catch (err) {
+      console.error("Error al procesar el retorno del pago:", err);
     }
+  }
 }
 
-// 6. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
 // 6. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
 document.getElementById('formNotificarPago')?.addEventListener('submit', async (e) => {
     e.preventDefault();
