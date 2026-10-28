@@ -224,6 +224,7 @@ function cerrarModalPago() {
 }
 
 // 5. PROCESAR RETORNO AUTOMÁTICO DE MERCADO PAGO
+// 5. PROCESAR RETORNO AUTOMÁTICO DE MERCADO PAGO
 async function procesarRetornoMercadoPago() {
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('collection_status') || urlParams.get('status');
@@ -265,13 +266,19 @@ async function procesarRetornoMercadoPago() {
             const nuevaFechaExp = new Date();
             nuevaFechaExp.setDate(nuevaFechaExp.getDate() + 30);
 
+            // 💡 DETERMINAR SI EL PLAN ASCIENDE AL USUARIO A DUEÑO
+            // Si el plan no es gratuito/demo, se convierte en DUENO
+            const esPlanDePago = plan && plan !== 'PRIMEROS_PASOS' && plan !== 'GRATUITO';
+            const nuevoTipoPerfil = esPlanDePago ? 'DUENO' : 'INDEPENDIENTE';
+
             await fisioNet.from('perfiles_profesionales').update({
                 nivel_suscripcion: plan || 'PROFESIONAL',
                 suscripcion_activa: true,
-                fecha_expiracion: nuevaFechaExp.toISOString()
+                fecha_expiracion: nuevaFechaExp.toISOString(),
+                tipo_perfil: 'DUENO' // 👈 ¡AQUÍ CONVERTIMOS A DUEÑO!
             }).eq('id', user.id);
 
-            alert("🎉 ¡PAGO APROBADO CON ÉXITO! Tu suscripción ha sido activada por 30 días.");
+            alert("🎉 ¡PAGO APROBADO CON ÉXITO! Tu suscripción ha sido activada y tus permisos de administración han sido habilitados.");
             window.history.replaceState({}, document.title, window.location.pathname);
             window.location.reload();
 
@@ -281,6 +288,7 @@ async function procesarRetornoMercadoPago() {
     }
 }
 
+// 6. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
 // 6. REGISTRAR PAGO MANUAL / SPEI (RESPALDO)
 document.getElementById('formNotificarPago')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -320,13 +328,14 @@ document.getElementById('formNotificarPago')?.addEventListener('submit', async (
             .update({
                 nivel_suscripcion: planSeleccionadoModal,
                 suscripcion_activa: true,
-                fecha_expiracion: nuevaFechaExp.toISOString()
+                fecha_expiracion: nuevaFechaExp.toISOString(),
+                tipo_perfil: 'DUENO' // 👈 ¡HABILITA BOTÓN DE MI EQUIPO Y SEDES!
             })
             .eq('id', user.id);
 
         if (errPerfil) throw errPerfil;
 
-        alert("🎉 ¡Pago registrado con éxito! Tu plan ha sido renovado por 30 días.");
+        alert("🎉 ¡Pago registrado con éxito! Tu plan ha sido renovado y se han actualizado tus permisos.");
         cerrarModalPago();
         window.location.reload();
 

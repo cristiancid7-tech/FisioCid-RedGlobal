@@ -5,6 +5,123 @@ if (typeof window.sedesDisponibles === 'undefined') {
     window.sedesDisponibles = [];
 }
 
+async function validarEstadoPagoSede(idUsuario) {
+    try {
+        if (!idUsuario) return { pagado: true };
+
+        // Consultamos directo en perfiles_profesionales
+        const { data: perfil, error } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('suscripcion_activa, nivel_suscripcion, fecha_expiracion')
+            .eq('id', idUsuario)
+            .maybeSingle();
+
+        if (error) {
+            console.error("❌ Error en Supabase al consultar suscripción:", error);
+            return { pagado: true }; // Manejo de falla por red/conexion
+        }
+
+        if (!perfil) {
+            console.warn("⚠️ No se encontró el perfil profesional ID:", idUsuario);
+            return { pagado: true };
+        }
+
+        // 1. Verificación directa por bandera booleana
+        if (perfil.suscripcion_activa === false) {
+            return {
+                pagado: false,
+                motivo: 'SUSCRIPCION_INACTIVA',
+                fechaCorte: perfil.fecha_expiracion
+            };
+        }
+
+        // 2. Verificación por nivel de suscripción
+        const nivel = (perfil.nivel_suscripcion || '').toLowerCase().trim();
+        if (nivel === 'vencido' || nivel === 'suspendido' || nivel === 'cancelado') {
+            return {
+                pagado: false,
+                motivo: 'SUSCRIPCION_VENCIDA',
+                fechaCorte: perfil.fecha_expiracion
+            };
+        }
+
+        // 3. Verificación por fecha de expiración
+        if (perfil.fecha_expiracion) {
+            const hoy = new Date();
+            const fechaExpiracion = new Date(perfil.fecha_expiracion);
+
+            if (hoy > fechaExpiracion) {
+                return {
+                    pagado: false,
+                    motivo: 'FECHA_EXPIRADA',
+                    fechaCorte: perfil.fecha_expiracion
+                };
+            }
+        }
+
+        return { pagado: true, nivel: perfil.nivel_suscripcion };
+
+    } catch (e) {
+        console.error("❌ Error inesperado validando cuenta:", e);
+        return { pagado: true };
+    }
+}
+
+function bloquearDashboardPorFaltaDePago(datosPago) {
+    // Si ya existe el modal, no lo duplicamos
+    if (document.getElementById('modalBloqueoPago')) return;
+
+    const fechaFormateada = datosPago.fechaCorte 
+        ? new Date(datosPago.fechaCorte).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) 
+        : 'Reciente';
+
+    const htmlModal = `
+    <div id="modalBloqueoPago" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: #ffffff; width: 100%; max-width: 480px; border-radius: 20px; padding: 35px 25px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 2px solid #ef4444; animation: popIn 0.3s ease-out;">
+            <div style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;">
+                <i class="fas fa-lock" style="font-size: 2rem; color: #dc2626;"></i>
+            </div>
+            
+            <h2 style="margin: 0 0 10px 0; font-size: 1.4rem; color: #0f172a; font-weight: 900; text-transform: uppercase;">
+                Suscripción Requerida
+            </h2>
+            
+            <p style="color: #64748b; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px;">
+                El periodo de acceso de esta sede venció el <strong>${fechaFormateada}</strong>. Para continuar agendando citas y consultando expedientes, renueva tu suscripción a FisioCid.
+            </p>
+
+            <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 15px; margin-bottom: 25px; text-align: left;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #475569; margin-bottom: 5px;">
+                    <span>Estatus del servicio:</span>
+                    <strong style="color: #dc2626;">🔴 SUSPENDIDO TEMPORALMENTE</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #475569;">
+                    <span>Tus datos y expedientes:</span>
+                    <strong style="color: #166534;">🔒 100% SEGUROS</strong>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button onclick="window.location.href='suscripcion.html'" style="background: #2563eb; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                    💳 RENOVAR SUSCRIPCIÓN AHORA
+                </button>
+                <button onclick="document.getElementById('btnCerrarSesion')?.click()" style="background: transparent; color: #64748b; border: none; padding: 10px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">
+                    👋 Cerrar Sesión
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes popIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', htmlModal);
+}
+
 // Verificar estado de sesión al cargar la página
 async function verificarSesionSegura() {
     // 1. Verificar sesión activa con Supabase
@@ -2705,6 +2822,19 @@ function cerrarModalColega() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+   
+const { data: { session } } = await fisioNet.auth.getSession();
+    const idUsuarioActivo = session?.user?.id || localStorage.getItem('id_usuario_activo');
+
+    if (idUsuarioActivo) {
+        // 🔒 Validar estado del perfil profesional
+        const estadoPago = await validarEstadoPagoSede(idUsuarioActivo);
+        
+        if (!estadoPago.pagado) {
+            bloquearDashboardPorFaltaDePago(estadoPago);
+            return; // 🛑 Detiene la ejecución del dashboard de FisioCid App
+        }
+    }
     try {
         // 1. Intento principal con getSession()
         let { data: { session }, error: sessionError } = await fisioNet.auth.getSession();

@@ -7,8 +7,16 @@ serve(async (req) => {
 
     // Mercado Pago envía notificaciones cuando se genera o actualiza un pago
     if (data.action === "payment.created" || data.type === "payment" || data.action === "payment.updated") {
+
       const paymentId = data.data?.id || data.id;
-      const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN") || "APP_USR-5830452230405605-100403-80ba0a7257f81d69c770efa3b6c02135-240030910";
+
+      // 🛡️ LECTURA SEGURA DESDE SUPABASE SECRETS (Sin token hardcodeado)
+      const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN");
+
+      if (!mpAccessToken) {
+        console.error("Error: MP_ACCESS_TOKEN no está configurado en los Secrets de Supabase.");
+        return new Response(JSON.stringify({ error: "Configuración de servidor incompleta" }), { status: 500 });
+      }
 
       // 1. Consultar estado real del pago a la API de Mercado Pago
       const resMp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -58,7 +66,7 @@ serve(async (req) => {
               estado_pago: 'APROBADO'
             }]);
 
-          // 4. 🔥 DESCONTAR CUPO DE LA OFERTA SI APLICA
+          // 4. 🔥 DESCONTAR CUPO DE LA OFERTA AUTOMÁTICAMENTE
           if (codigoPlan) {
             await supabase.rpc('descontar_cupo_plan', { p_codigo_plan: codigoPlan });
           }
