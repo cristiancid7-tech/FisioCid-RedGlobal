@@ -20,6 +20,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="estilos.css">
     <style>
+
+        .sugerencias-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+.sugerencia-item {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+}
+.sugerencia-item:hover {
+    background-color: #f0fdf4;
+}
 /* Popover Contextual flotante encima del botón */
 .quick-popover-card {
   position: absolute;
@@ -412,34 +433,48 @@
     </div>
 <!-- SELECTOR DE SEDE Y BOTÓN DE NUEVA SUCURSAL -->
 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
-    <div style="display: flex; align-items: center; gap: 6px; background: #f1f5f9; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-        <i class="fas fa-clinic-medical" style="color: var(--primary); font-size: 0.8rem;"></i>
-        <select id="selectSedeActual" onchange="cambiarSedeActiva(this.value)" 
-            style="background: transparent; border: none; font-weight: 700; font-size: 0.75rem; color: #334155; text-transform: uppercase; cursor: pointer; outline: none; padding: 0;">
-            <option value="">Cargando sedes...</option>
-        </select>
-        <button type="button" onclick="abrirModalNuevaSede()" title="Agregar nueva sucursal" 
-            style="background: var(--primary); color: white; border: none; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-left: 4px;">
-            <i class="fas fa-plus"></i>
-        </button>
-    </div>
- </div>
+  
+  <div style="display: flex; align-items: center; gap: 6px; background: #f1f5f9; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+      
+      <i class="fas fa-clinic-medical" style="color: var(--primary); font-size: 0.8rem;"></i>
+
+      <!-- Selector de sedes (Siempre visible) -->
+      <select id="selectSedeActual" onchange="cambiarSedeActiva(this.value)"
+              style="background: transparent; border: none; font-weight: 700; font-size: 0.75rem; color: #334155; text-transform: uppercase; cursor: pointer; outline: none; padding: 0;">
+          <option value="">Cargando sedes...</option>
+      </select>
+
+      <!-- Botón (+) Agregar Nueva Sede: Solo visible para DUEÑO, ADMIN o ADMINISTRATIVO -->
+      <button type="button" id="btnNuevaSede" onclick="abrirModalNuevaSede()" title="Agregar nueva sucursal" 
+              style="background: var(--primary); color: white; border: none; border-radius: 6px; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-left: 4px;">
+          <i class="fas fa-plus"></i>
+      </button>
+
+  </div>
 </div>
-    <div id="btnMiEquipo" class="equipo-container" onclick="window.location.href='gestion-equipo.html'">
-        <div class="equipo-card">
-            <div class="equipo-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            
-            <div class="equipo-texto">
-                <span class="equipo-titulo">MI EQUIPO</span>
-                <span class="equipo-sub">ESPECIALISTAS</span>
-            </div>
-            <div class="equipo-flecha">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-            </div>
+
+<!-- Tarjeta MI EQUIPO: Solo visible para DUEÑO, ADMIN o ADMINISTRATIVO -->
+<div id="btnMiEquipo" class="equipo-container" onclick="window.location.href='gestion-equipo.html'" style="display: none;">
+    <div class="equipo-card">
+        <div class="equipo-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+        </div>
+        
+        <div class="equipo-texto">
+            <span class="equipo-titulo">MI EQUIPO</span>
+            <span class="equipo-sub">ESPECIALISTAS</span>
+        </div>
+
+        <div class="equipo-flecha">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6"/>
+            </svg>
         </div>
     </div>
+</div>
 
     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;">
         <div id="btnAbrirConfig" style="cursor:pointer; padding: 6px 10px; border-radius: 6px; background: #f8fafc; border: 1px solid #f1f5f9; font-size: 0.75rem; font-weight: 600;">

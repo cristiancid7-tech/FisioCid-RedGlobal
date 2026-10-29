@@ -122,23 +122,68 @@ function bloquearDashboardPorFaltaDePago(datosPago) {
     document.body.insertAdjacentHTML('beforeend', htmlModal);
 }
 
-// Verificar estado de sesión al cargar la página
 async function verificarSesionSegura() {
-    // 1. Verificar sesión activa con Supabase
-    const { data: { session } } = await fisioNet.auth.getSession();
-    const clinicaActiva = localStorage.getItem('id_clinica_activa');
+    try {
+        // 1. Verificar sesion activa con Supabase
+        const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
+        const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
-    // Si no hay sesión válida o faltan credenciales locales
-    if (!session || !clinicaActiva) {
-        // Limpiar memoria residual por seguridad
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // Redirigir usando replace() para que no se guarde el dashboard en la pila del navegador
-        window.location.replace("login.html"); // Cambia por el nombre de tu archivo de Login
+        if (sessionError || !session || !clinicaActiva) {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.replace("login.html");
+            return;
+        }
+
+        const userId = session.user.id;
+
+        // 2. Consultar el perfil profesional usando la columna 'id'
+        const { data: perfil, error: perfilError } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('id, tipo_perfil')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (perfilError) throw perfilError;
+
+        let tienePermisoEspecial = false;
+        let tipoPerfil = '';
+        let rolSistema = '';
+
+        if (perfil) {
+            tipoPerfil = (perfil.tipo_perfil || '').toUpperCase();
+
+            // Regla A: Si en tipo_perfil dice DUENO o DUEÑO
+            if (tipoPerfil === 'DUENO' || tipoPerfil === 'DUEÑO') {
+                tienePermisoEspecial = true;
+            } 
+            // Regla B: Si es STAFF u otro, buscar en colaboradores_clinica usando 'id_profesional' y 'rol_sistema'
+            else {
+                const { data: colaborador, error: colabError } = await fisioNet
+                    .from('colaboradores_clinica')
+                    .select('rol_sistema')
+                    .eq('id_profesional', perfil.id)
+                    .eq('id_clinica', clinicaActiva)
+                    .maybeSingle();
+
+                if (!colabError && colaborador) {
+                    rolSistema = (colaborador.rol_sistema || '').toUpperCase();
+                    if (rolSistema === 'ADMINISTRADOR' || rolSistema === 'ADMINISTRATIVO') {
+                        tienePermisoEspecial = true;
+                    }
+                }
+            }
+        }
+
+      
+
+        // 3. Renderizar o guardar visibilidad de elementos
+        evaluarAccesoElementosUI(tienePermisoEspecial);
+
+    } catch (err) {
+        console.error("Error verificando permisos de acceso:", err);
     }
 }
-
 // Ejecutar verificación de inmediato
 verificarSesionSegura();
 
@@ -3991,5 +4036,17 @@ document.getElementById('formNuevaSede')?.addEventListener('submit', async (e) =
     }
 });
 
+function evaluarAccesoElementosUI(permitido) {
+    const btnNuevaSede = document.getElementById('btnNuevaSede');
+    const btnMiEquipo = document.getElementById('btnMiEquipo');
+
+    if (permitido) {
+        if (btnNuevaSede) btnNuevaSede.style.setProperty('display', 'flex', 'important');
+        if (btnMiEquipo) btnMiEquipo.style.setProperty('display', 'block', 'important');
+    } else {
+        if (btnNuevaSede) btnNuevaSede.style.setProperty('display', 'none', 'important');
+        if (btnMiEquipo) btnMiEquipo.style.setProperty('display', 'none', 'important');
+    }
+}
 window.buscarColegasFisioCid = buscarColegasFisioCid;
 window.verDetalleColega = verDetalleColega;

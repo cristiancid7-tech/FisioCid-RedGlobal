@@ -1,6 +1,8 @@
-// --- lista.js ---
+// ============================================================================
+// 📋 LISTA DE PACIENTES OPTIMIZADA (CARGA ULTRA-RÁPIDA EN MEMORIA)
+// ============================================================================
 
-// --- lista.js (Corregido para Multisede y Relación de Expedientes) ---
+let todosLosPacientes = []; // Caché local para evitar llamadas extra a Supabase
 
 async function verificarAcceso() {
     const { data: { session } } = await fisioNet.auth.getSession();
@@ -13,7 +15,7 @@ async function verificarAcceso() {
             .from('perfiles_profesionales')
             .select('nombre_completo')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
 
         if (perfil && perfil.nombre_completo) {
             nombre = perfil.nombre_completo;
@@ -26,7 +28,7 @@ async function verificarAcceso() {
     if (elSaludo) elSaludo.innerText = `HOLA, ${nombre.toUpperCase()}`;
 }
 
-async function obtenerPacientes(terminoBusqueda = "") {
+async function obtenerPacientes() {
     const idClinicaActiva = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
 
     if (!idClinicaActiva) {
@@ -35,7 +37,7 @@ async function obtenerPacientes(terminoBusqueda = "") {
     }
 
     try {
-        // 🛡️ CORRECCIÓN: Se realiza JOIN con expedientes_clinicos filtrado por la sede activa
+        // Consulta directa con JOIN optimizado
         const { data: pacientes, error } = await fisioNet
             .from('pacientes_maestros')
             .select(`
@@ -51,31 +53,18 @@ async function obtenerPacientes(terminoBusqueda = "") {
             .order('nombre', { ascending: true });
 
         if (error) {
-            console.error("❌ Error en Supabase al consultar lista de pacientes:", error.message);
+            console.error("❌ Error al consultar pacientes:", error.message);
             return [];
         }
 
-        // Mapeamos los datos para obtener el folio asignado en esta sede
-        const listaMapeada = pacientes.map(p => {
+        // Mapear el folio directamente en la lista en memoria
+        return pacientes.map(p => {
             const exp = Array.isArray(p.expedientes_clinicos) ? p.expedientes_clinicos[0] : p.expedientes_clinicos;
             return {
                 ...p,
                 folio_display: exp?.folio_personalizado || exp?.numero_consecutivo || 'S/F'
             };
         });
-
-        // Búsqueda dinámica por Nombre, CURP o Folio de Sede
-        if (terminoBusqueda && terminoBusqueda.trim() !== "") {
-            const t = terminoBusqueda.toUpperCase().trim();
-            return listaMapeada.filter(p => {
-                const nom = (p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`).toUpperCase();
-                const curp = (p.curp || '').toUpperCase();
-                const folio = (p.folio_display || '').toUpperCase();
-                return nom.includes(t) || curp.includes(t) || folio.includes(t);
-            });
-        }
-
-        return listaMapeada;
 
     } catch (e) {
         console.error("Error inesperado en obtenerPacientes:", e);
@@ -86,21 +75,22 @@ async function obtenerPacientes(terminoBusqueda = "") {
 function dibujarTabla(lista) {
     const tabla = document.getElementById('tablaPacientes');
     if (!tabla) return;
-    tabla.innerHTML = '';
 
     if (lista.length === 0) {
         tabla.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No se encontraron pacientes en esta sede.</td></tr>';
         return;
     }
 
-    lista.forEach(p => {
+    const hoy = new Date();
+    
+    // Generación de HTML mediante fragmento/map para 1 sola renderizada del DOM (Ultra rápido)
+    const htmlFilas = lista.map(p => {
         const nombreCompleto = p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`;
         const idPaciente = p.id;
         
-        // CÁLCULO DE EDAD DINÁMICA
+        // CÁLCULO DE EDAD
         let edadTexto = "---";
         if (p.fecha_nacimiento) {
-            const hoy = new Date();
             const cumple = new Date(p.fecha_nacimiento + "T00:00:00");
             let edad = hoy.getFullYear() - cumple.getFullYear();
             const m = hoy.getMonth() - cumple.getMonth();
@@ -116,61 +106,57 @@ function dibujarTabla(lista) {
 
         const esRegistroCompleto = p.curp && p.curp.length === 18 && !p.curp.includes('??');
 
-        const fila = document.createElement('tr');
-        let contenidoBotones = "";
-
-        if (esRegistroCompleto) {
-            contenidoBotones = `
-                <button onclick="verFichaContacto('${idPaciente}')" title="Ficha de Contacto"
-                    style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
-                    📇 CONTACTO
-                </button>
-                <button onclick="verHistorial('${idPaciente}')" title="Ver Historia Clínica"
-                    style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
-                    👁️ HISTORIAL
-                </button>
-                <button onclick="abrirReceta('${idPaciente}')" title="Crear Receta Rápida"
-                    style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
-                    💊 + RECETA
-                </button>
-                <button onclick="abrirNuevaNota('${idPaciente}')" title="Nueva Nota"
-                    style="background: var(--primary); color: white; border: none; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
-                    📝 + NOTA
-                </button>
-            `;
-        } else {
-            contenidoBotones = `
-                <button onclick="location.href='nuevo-paciente.html?id=${idPaciente}'"
-                    style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 4px 10px; font-size: 0.7rem; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
-                    ⚠️ COMPLETAR REGISTRO
-                </button>
-            `;
-        }
-
-        fila.innerHTML = `
-            <td style="padding: 12px; border-bottom: 1px solid #eee;">
-                <div style="font-size: 0.75rem; font-weight: 800; color: var(--primary); font-family: monospace; margin-bottom: 2px;">
-                    ${p.folio_display}
-                </div>
-                <div style="font-weight: bold; color: #1e293b; font-size: 0.9rem;">${nombreCompleto.toUpperCase()}</div>
-                <div style="font-size: 0.65rem; color: #94a3b8;">${p.curp || 'FALTA CURP'}</div>
-            </td>
-            <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">
-                <span style="background: #f8fafc; color: #475569; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; border: 1px solid #e2e8f0;">
-                    ${edadTexto}
-                </span>
-            </td>
-            <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">
-                <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                    ${contenidoBotones}
-                </div>
-            </td>
+        let contenidoBotones = esRegistroCompleto ? `
+            <button onclick="verFichaContacto('${idPaciente}')" title="Ficha de Contacto"
+                style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
+                📇 CONTACTO
+            </button>
+            <button onclick="verHistorial('${idPaciente}')" title="Ver Historia Clínica"
+                style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
+                👁️ HISTORIAL
+            </button>
+            <button onclick="abrirReceta('${idPaciente}')" title="Crear Receta Rápida"
+                style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
+                💊 + RECETA
+            </button>
+            <button onclick="abrirNuevaNota('${idPaciente}')" title="Nueva Nota"
+                style="background: var(--primary, #3b82f6); color: white; border: none; padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; cursor: pointer; font-weight: 700; white-space: nowrap;">
+                📝 + NOTA
+            </button>
+        ` : `
+            <button onclick="location.href='nuevo-paciente.html?id=${idPaciente}'"
+                style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 4px 10px; font-size: 0.7rem; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+                ⚠️ COMPLETAR REGISTRO
+            </button>
         `;
-        tabla.appendChild(fila);
-    });
+
+        return `
+            <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #eee;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--primary, #3b82f6); font-family: monospace; margin-bottom: 2px;">
+                        ${p.folio_display}
+                    </div>
+                    <div style="font-weight: bold; color: #1e293b; font-size: 0.9rem;">${nombreCompleto.toUpperCase()}</div>
+                    <div style="font-size: 0.65rem; color: #94a3b8;">${p.curp || 'FALTA CURP'}</div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">
+                    <span style="background: #f8fafc; color: #475569; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; border: 1px solid #e2e8f0;">
+                        ${edadTexto}
+                    </span>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">
+                    <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                        ${contenidoBotones}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    tabla.innerHTML = htmlFilas;
 }
 
-// FUNCIONES DE NAVEGACIÓN
+// 🎯 NAVEGACIÓN
 window.verHistorial = (id) => {
     localStorage.setItem('paciente_seleccionado_id', id);
     window.location.href = `historial-evolucion.html?id=${id}`;
@@ -186,99 +172,13 @@ window.abrirNuevaNota = (id) => {
     window.location.href = `historia-clinica.html?id=${id}`;
 };
 
-// INICIALIZACIÓN
-document.addEventListener('DOMContentLoaded', async () => {
-    await verificarAcceso();
-    let todosLosPacientes = await obtenerPacientes();
-    dibujarTabla(todosLosPacientes);
-
-    const inputBusqueda = document.getElementById('buscador');
-    if (inputBusqueda) {
-        inputBusqueda.addEventListener('input', async (e) => {
-            const termino = e.target.value;
-            const filtrados = await obtenerPacientes(termino);
-            dibujarTabla(filtrados);
-        });
-    }
-});
-
-
-
-
-
-
-
-// 🎯 FUNCIONES DE NAVEGACIÓN BLINDADAS (Envían el ID en la URL y guardan en localStorage por respaldo)
-window.verHistorial = (id) => {
-    localStorage.setItem('paciente_seleccionado_id', id);
-    window.location.href = `historial-evolucion.html?id=${id}`;
-};
-
-window.abrirReceta = (id) => {
-    localStorage.setItem('paciente_seleccionado_id', id);
-    window.location.href = `portal-recetas.html?id=${id}`;
-};
-
-window.abrirNuevaNota = (id) => {
-    localStorage.setItem('paciente_seleccionado_id', id);
-    window.location.href = `historia-clinica.html?id=${id}`;
-};
-
-
-// 🔍 INICIALIZACIÓN Y BUSCADOR TRI-FACTOR (NOMBRE, CURP, FOLIO)
-document.addEventListener('DOMContentLoaded', async () => {
-    await verificarAcceso();
-    let todosLosPacientes = await obtenerPacientes();
-    dibujarTabla(todosLosPacientes);
-
-    const inputBusqueda = document.getElementById('buscador');
-    if (inputBusqueda) {
-        inputBusqueda.addEventListener('input', (e) => {
-            const termino = e.target.value.toUpperCase().trim();
-            
-            const filtrados = todosLosPacientes.filter(p => {
-                const nom = (p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`).toUpperCase();
-                const curp = (p.curp || '').toUpperCase();
-                const folio = (p.numero_expediente_sede || '').toUpperCase();
-                
-                return nom.includes(termino) || curp.includes(termino) || folio.includes(termino);
-            });
-            
-            dibujarTabla(filtrados);
-        });
-    }
-});
-
-async function cargarNotas() {
-    const idClinica = localStorage.getItem('clinica_activa_id') || localStorage.getItem('id_clinica_activa');
-    
-    const { data, error } = await fisioNet
-        .from('historial_clinico')
-        .select('*')
-        .eq('id_paciente', pacienteId)
-        .eq('id_clinica', idClinica) // 🛡️ Filtro de seguridad
-        .order('fecha_nota', { ascending: false });
-
-    if (data) {
-        notasCache = data;
-        document.getElementById('totalNotas').innerText = data.length;
-        if(data.length > 0) document.getElementById('ultimaFecha').innerText = new Date(data[0].fecha_nota).toLocaleDateString();
-        renderizar(data);
-    }
-}
-
-// ==========================================
-// 📡 PUENTE AL PORTAL DE GABINETE
-// ==========================================
+// 📡 PUENTE A GABINETE
 window.saltarAlGabinete = (curp, nombre, genero, fechaNac) => {
     const url = new URL('portal-gabinete.html', window.location.origin);
-    
-    // Empacamos los datos
     url.searchParams.set('curp', curp !== 'null' && curp ? curp : 'SIN-CURP');
     url.searchParams.set('nombre', nombre);
     url.searchParams.set('genero', genero !== 'null' && genero ? genero : 'NO ESPECIFICADO');
 
-    // Calculamos la edad fija
     let edadFija = 0;
     if (fechaNac && fechaNac !== 'null') {
         const hoy = new Date();
@@ -289,8 +189,6 @@ window.saltarAlGabinete = (curp, nombre, genero, fechaNac) => {
         }
     }
     url.searchParams.set('edad', edadFija);
-
-    // ¡Salto al portal!
     window.location.href = url.toString();
 };
 
@@ -308,14 +206,11 @@ async function verFichaContacto(idPaciente) {
     const telPrincipal = esMenor ? p.telefono_tutor : p.telefono;
     const etiquetaPrincipal = esMenor ? "RESPONSABLE LEGAL" : "PACIENTE";
     
-    // Colores dinámicos
-    const colorBadge = esMenor ? '#ef4444' : '#22c55e'; // Rojo si es menor, Verde si es adulto
+    const colorBadge = esMenor ? '#ef4444' : '#22c55e';
     const textoBadge = esMenor ? 'PACIENTE MENOR' : 'PACIENTE ADULTO';
 
-    // HTML con estilos 100% incrustados (no necesita Bootstrap)
     const contenidoHTML = `
         <div style="text-align: left; font-family: system-ui, -apple-system, sans-serif;">
-            
             <div style="text-align: center; margin-bottom: 20px;">
                 <h5 style="margin: 0; font-weight: 800; font-size: 1.3rem; color: #1e293b; text-transform: uppercase;">
                     ${p.nombre} ${p.apellido_paterno}
@@ -329,10 +224,10 @@ async function verFichaContacto(idPaciente) {
                 <p style="font-size: 0.75rem; color: #64748b; font-weight: bold; margin: 0 0 5px 0;">${etiquetaPrincipal}</p>
                 <h6 style="font-weight: 800; font-size: 1rem; margin: 0 0 15px 0; color: #0f172a; text-transform: uppercase;">${nombreContacto}</h6>
                 
-                <a href="tel:${telPrincipal}" style="display: block; width: 100%; text-align: center; background-color: #0ea5e9; color: white; text-decoration: none; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-weight: bold; font-size: 0.9rem; transition: 0.2s;">
+                <a href="tel:${telPrincipal}" style="display: block; width: 100%; text-align: center; background-color: #0ea5e9; color: white; text-decoration: none; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-weight: bold; font-size: 0.9rem;">
                     📞 Llamar: ${telPrincipal}
                 </a>
-                <a href="https://wa.me/52${telPrincipal}" target="_blank" style="display: block; width: 100%; text-align: center; background-color: #25d366; color: white; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; transition: 0.2s;">
+                <a href="https://wa.me/52${telPrincipal}" target="_blank" style="display: block; width: 100%; text-align: center; background-color: #25d366; color: white; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
                     💬 Enviar WhatsApp
                 </a>
             </div>
@@ -345,16 +240,49 @@ async function verFichaContacto(idPaciente) {
                     🚨 Llamar: ${p.contacto_emergencia_tel || 'S/N'}
                 </a>
             </div>
-            
         </div>
     `;
 
-    Swal.fire({
-        html: contenidoHTML,
-        showConfirmButton: false,
-        showCloseButton: true,
-        width: '400px',
-        padding: '1.5em',
-        background: '#ffffff'
-    });
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            html: contenidoHTML,
+            showConfirmButton: false,
+            showCloseButton: true,
+            width: '400px',
+            padding: '1.5em',
+            background: '#ffffff'
+        });
+    }
 }
+
+// 🚀 INICIALIZACIÓN ÚNICA Y BUSCADOR INSTANTÁNEO EN MEMORIA
+document.addEventListener('DOMContentLoaded', async () => {
+    await verificarAcceso();
+    
+    // 1. Cargar desde BD solo 1 vez al entrar a la página
+    todosLosPacientes = await obtenerPacientes();
+    dibujarTabla(todosLosPacientes);
+
+    // 2. Buscador ultra-rápido sobre los datos en memoria
+    const inputBusqueda = document.getElementById('buscador');
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', (e) => {
+            const termino = e.target.value.toUpperCase().trim();
+            
+            if (!termino) {
+                dibujarTabla(todosLosPacientes);
+                return;
+            }
+
+            const filtrados = todosLosPacientes.filter(p => {
+                const nom = (p.nombre_completo || `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`).toUpperCase();
+                const curp = (p.curp || '').toUpperCase();
+                const folio = (p.folio_display || '').toUpperCase();
+                
+                return nom.includes(termino) || curp.includes(termino) || folio.includes(termino);
+            });
+            
+            dibujarTabla(filtrados);
+        });
+    }
+});

@@ -450,9 +450,11 @@ if (idPacienteLimpio) {
 }
 
 // ============================================================================
-// 4. BUSCADOR CIE-10 (CON APOYO INTELIGENTE)
+// 4. BUSCADOR CIE-10 ULTRA-RÁPIDO (OPTIMIZADO CON ABORTCONTROLLER Y DEBOUNCE)
 // ============================================================================
 let timeoutBusqueda = null;
+let controladorPeticionCIE = null; // Cancela peticiones previas en curso
+
 const inputBusqueda = document.getElementById('buscador_diagnostico');
 const divResultados = document.getElementById('resultados_busqueda');
 const banderasRojas = ["FRACTURA", "TUMOR", "NEOPLASIA", "CAUDA EQUINA", "MENINGITIS", "INFARTO", "LUXACIÓN"];
@@ -460,42 +462,75 @@ const banderasRojas = ["FRACTURA", "TUMOR", "NEOPLASIA", "CAUDA EQUINA", "MENING
 if (inputBusqueda) {
     inputBusqueda.addEventListener('input', (e) => {
         const valor = e.target.value.trim().toUpperCase();
+        
+        // Cancelar timer activo y petición HTTP previa que siga volando
         clearTimeout(timeoutBusqueda);
-        if (valor.length < 3) { if(divResultados) divResultados.style.display = 'none'; return; }
+        if (controladorPeticionCIE) {
+            controladorPeticionCIE.abort();
+        }
 
+        if (valor.length < 3) { 
+            if (divResultados) divResultados.style.display = 'none'; 
+            return; 
+        }
+
+        // Debounce optimizado a 200ms para máxima fluidez
         timeoutBusqueda = setTimeout(async () => {
-            const { data: sugerencias } = await fisioNet.from('catalogo_diagnosticos')
-                .select('clave, descripcion').ilike('descripcion', `%${valor}%`).limit(10);
-            
-            if (sugerencias?.length > 0 && divResultados) {
-                divResultados.innerHTML = sugerencias.map(i => `
-                    <div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="seleccionarCIE('${i.clave}', '${i.descripcion}')">
-                        <strong>${i.clave}</strong> - ${i.descripcion}
-                    </div>`).join('');
-                divResultados.style.display = 'block';
+            controladorPeticionCIE = new AbortController();
+
+            try {
+                // Búsqueda por prefijo de palabra o clave CIE (Usa índices nativos de DB)
+                const { data: sugerencias, error } = await fisioNet
+                    .from('catalogo_diagnosticos')
+                    .select('clave, descripcion')
+                    .or(`descripcion.ilike.${valor}%,clave.ilike.${valor}%,descripcion.ilike.% ${valor}%`)
+                    .limit(10)
+                    .abortSignal(controladorPeticionCIE.signal);
+
+                if (error) return;
+
+                if (sugerencias?.length > 0 && divResultados) {
+                    divResultados.innerHTML = sugerencias.map(i => `
+                        <div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="seleccionarCIE('${i.clave}', '${i.descripcion.replace(/'/g, "\\'")}')">
+                            <strong>${i.clave}</strong> - ${i.descripcion}
+                        </div>`).join('');
+                    divResultados.style.display = 'block';
+                } else if (divResultados) {
+                    divResultados.style.display = 'none';
+                }
+            } catch (err) {
+                // Silenciar error si la consulta fue abortada por nuevo tecleo
+                if (err.name !== 'AbortError') {
+                    console.error("Error al consultar CIE-10:", err);
+                }
             }
-        }, 300);
+        }, 200);
     });
 }
 
 window.seleccionarCIE = (codigo, texto) => {
     const textoMayus = texto.toUpperCase();
-    document.getElementById('diagnostico_principal').value = textoMayus;
-    document.getElementById('codigo_cie_final').value = codigo;
-    if(divResultados) divResultados.style.display = 'none';
+    const inputDiag = document.getElementById('diagnostico_principal');
+    const inputCodigo = document.getElementById('codigo_cie_final');
+    
+    if (inputDiag) inputDiag.value = textoMayus;
+    if (inputCodigo) inputCodigo.value = codigo;
+    if (divResultados) divResultados.style.display = 'none';
     
     alertaActual = "";
     const esPeligroso = banderasRojas.some(b => textoMayus.includes(b));
     let divAlerta = document.getElementById('alertaInteligente');
-    if (!divAlerta) {
+    
+    if (!divAlerta && inputDiag) {
         divAlerta = document.createElement('div');
         divAlerta.id = 'alertaInteligente';
-        document.getElementById('diagnostico_principal').parentNode.appendChild(divAlerta);
+        inputDiag.parentNode.appendChild(divAlerta);
     }
-    if (esPeligroso) {
+    
+    if (esPeligroso && divAlerta) {
         alertaActual = "ALERTA MÉDICA AUTOMÁTICA";
         divAlerta.innerHTML = `<div style="background: #fef2f2; border: 1px solid #ef4444; color: #b91c1c; padding: 10px; border-radius: 8px; margin-top: 10px; font-weight: bold; font-size: 0.85rem;">⚠️ BANDERA ROJA DETECTADA: Interconsulta sugerida.</div>`;
-    } else {
+    } else if (divAlerta) {
         divAlerta.innerHTML = ""; 
     }
 };
