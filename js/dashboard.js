@@ -1350,14 +1350,14 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
 
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
-        
+
         const clinicaId = localStorage.getItem('id_clinica_activa');
         const idPaciente = document.getElementById('idPacienteSeleccionado').value;
         const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
         const telefonoInput = document.getElementById('telefonoExpress')?.value.trim() || '';
         
         const modalidad = document.getElementById('modalidadCita').value;
-        const horaElegida = document.getElementById('horaCita').value; 
+        const horaElegida = document.getElementById('horaCita').value;
         const fechaElegida = document.getElementById('fechaCita').value;
 
         if (!nombreInput) { alert("Escribe el nombre del paciente."); return; }
@@ -1403,10 +1403,12 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             for (let turno of turnosHoy) {
                 const [hI, mI] = turno.inicio.split(':').map(Number);
                 const [hF, mF] = turno.fin.split(':').map(Number);
+
                 const minApertura = (hI * 60) + mI;
                 const minCierre = (hF * 60) + mF;
 
                 const [hUlt, mUlt] = ultimaHoraSalida.split(':').map(Number);
+
                 if (minCierre > ((hUlt * 60) + mUlt)) {
                     ultimaHoraSalida = turno.fin;
                 }
@@ -1419,7 +1421,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
 
             if (!esHorarioValido) {
                 alert(`❌ HORARIO NO DISPONIBLE: La hora seleccionada está fuera de tus turnos de trabajo. (Última hora de salida hoy: ${ultimaHoraSalida}).`);
-                return; 
+                return;
             }
         }
 
@@ -1439,6 +1441,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         const costoDomicilio = colab.costo_domicilio_base !== null ? Number(colab.costo_domicilio_base) : 1200;
         const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
         
+        // 🔄 CORREGIDO: Multiplicación de porcentaje
         const descuentoCalculado = (precioBase * porcentaje) / 100;
         const precioFinal = precioBase - descuentoCalculado;
 
@@ -1500,6 +1503,11 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
                 console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
             }
 
+            // --- RECARGAR SALA DE ESPERA (FUERA DEL TRY/CATCH) ---
+            if (typeof cargarSalaEspera === 'function') {
+                await cargarSalaEspera();
+            }
+
             alert("¡SOLICITUD EXPRÉS CREADA Y SINCRONIZADA! 📝✨");
 
         } else {
@@ -1526,7 +1534,6 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             }
 
             try {
-                // Si Supabase retornó el join se arma con él; si no, usaremos el texto ingresado en el buscador
                 let nombrePacienteSync = nombreInput.trim();
                 if (datosCita?.pacientes_maestros?.nombre) {
                     nombrePacienteSync = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno} ${datosCita.pacientes_maestros.apellido_materno || ''}`.trim();
@@ -1550,6 +1557,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         // Limpieza de Modal y Formularios
         const modalCita = document.getElementById('modalCita');
         if (modalCita) modalCita.style.display = 'none';
+
         document.getElementById('formNuevaCita').reset();
         document.getElementById('idPacienteSeleccionado').value = '';
         
