@@ -353,21 +353,18 @@ async function renderizarHoras() {
             return;
         }
 
-        // 1. Consultar Citas y Rangos de Bloqueo Logístico en agenda_maestra
-      // 1. Consultar Citas y Rangos de Bloqueo Logístico en agenda_maestra
-let queryAgenda = fisioNet
-    .from('agenda_maestra')
-    .select('hora_inicio_cita, inicio_bloqueo, fin_bloqueo, modalidad, estado, estatus')
-    .eq('fecha', window.fechaSeleccionada)
-    .eq('id_clinica', window.clinicaSeleccionadaId)
-    .neq('estatus', 'CANCELADA')  // 👈 Ignora canceladas en femenino
-    .neq('estatus', 'CANCELADO'); // 👈 Ignora canceladas en masculino
+        // 1. Citas activas en agenda_maestra
+        let queryAgenda = fisioNet
+            .from('agenda_maestra')
+            .select('hora_inicio_cita, inicio_bloqueo, fin_bloqueo, modalidad, estado, estatus')
+            .eq('fecha', window.fechaSeleccionada)
+            .eq('id_clinica', window.clinicaSeleccionadaId);
 
         if (window.especialistaSeleccionadoId) {
             queryAgenda = queryAgenda.eq('id_profesional', window.especialistaSeleccionadoId);
         }
 
-        // 2. Consultar Bloqueos Personales/Vacaciones en bloqueos_agenda
+        // 2. Bloqueos Personales/Vacaciones en bloqueos_agenda
         let queryBloqueos = fisioNet
             .from('bloqueos_agenda')
             .select('fecha_inicio, fecha_fin, tipo_bloqueo')
@@ -378,42 +375,77 @@ let queryAgenda = fisioNet
             queryBloqueos = queryBloqueos.eq('id_profesional', window.especialistaSeleccionadoId);
         }
 
+        // 3. Solicitudes de web en solicitudes_citas
+        let querySolicitudes = fisioNet
+            .from('solicitudes_citas')
+            .select('hora_cita, estado')
+            .eq('fecha_cita', window.fechaSeleccionada)
+            .eq('id_clinica_solicitada', window.clinicaSeleccionadaId);
+
         // Ejecución en paralelo
-        const [{ data: citasAgenda, error: errAgenda }, { data: bloqueosPersonales, error: errBloqueos }] = await Promise.all([
+        const [
+            { data: citasAgenda, error: errAgenda },
+            { data: bloqueosPersonales, error: errBloqueos },
+            { data: solicitudesCitas, error: errSolicitudes }
+        ] = await Promise.all([
             queryAgenda,
-            queryBloqueos
+            queryBloqueos,
+            querySolicitudes
         ]);
 
         if (errAgenda) throw errAgenda;
         if (errBloqueos) throw errBloqueos;
+        if (errSolicitudes) throw errSolicitudes;
 
         grid.innerHTML = ''; 
 
         slotsDinamicos.forEach(hora => {
             const timestampSlot = new Date(`${window.fechaSeleccionada}T${hora}:00`).getTime();
 
-            // A) Validar si la hora choca con alguna Cita o Bloqueo Logístico (Domicilio) en agenda_maestra
+            // A) Validar Ocupación en Agenda Maestra (Excluyendo Canceladas)
             const estaOcupadoEnAgenda = (citasAgenda || []).some(cita => {
-                // Si la cita tiene asignados rangos explícitos de inicio/fin de bloqueo (ej. domicilio)
+                const estatusLimpio = String(cita.estatus || '').toUpperCase();
+                const estadoLimpio = String(cita.estado || '').toUpperCase();
+                
+                // Si está cancelada, NO ocupa lugar
+                if (
+                    estatusLimpio.includes('CANCEL') || 
+                    estadoLimpio.includes('CANCEL') || 
+                    estatusLimpio === 'ANULADA'
+                ) {
+                    return false;
+                }
+
+                // Bloqueo logístico por servicio a domicilio
                 if (cita.inicio_bloqueo && cita.fin_bloqueo) {
                     const tInicioBloqueo = new Date(`${window.fechaSeleccionada}T${cita.inicio_bloqueo}`).getTime();
                     const tFinBloqueo = new Date(`${window.fechaSeleccionada}T${cita.fin_bloqueo}`).getTime();
                     return timestampSlot >= tInicioBloqueo && timestampSlot < tFinBloqueo;
                 }
                 
-                // Si es una cita normal presencial sin rango extendido
+                // Cita normal en consultorio
                 const horaLimpiaCita = cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0, 5) : '';
                 return horaLimpiaCita === hora;
             });
 
-            // B) Validar si la hora choca con Bloqueos Personales / Vacaciones
+            // B) Validar Bloqueos Personales / Vacaciones
             const estaBloqueadoPersonal = (bloqueosPersonales || []).some(b => {
                 const tInicio = new Date(b.fecha_inicio).getTime();
                 const tFin = new Date(b.fecha_fin).getTime();
                 return timestampSlot >= tInicio && timestampSlot < tFin;
             });
 
-            const noDisponible = estaOcupadoEnAgenda || estaBloqueadoPersonal;
+            // C) Validar Solicitudes Web Pendientes (Excluyendo rechazadas o canceladas)
+            const estaOcupadoEnSolicitudes = (solicitudesCitas || []).some(sol => {
+                const estadoSol = String(sol.estado || '').toUpperCase();
+                if (estadoSol.includes('CANCEL') || estadoSol.includes('RECHAZA') || estadoSol.includes('ATENDIDA')) {
+                    return false; // La solicitud ya no está pendiente -> Libera horario
+                }
+                const horaSolLimpia = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '';
+                return horaSolLimpia === hora;
+            });
+
+            const noDisponible = estaOcupadoEnAgenda || estaBloqueadoPersonal || estaOcupadoEnSolicitudes;
 
             const btn = document.createElement('button');
             btn.innerText = hora;

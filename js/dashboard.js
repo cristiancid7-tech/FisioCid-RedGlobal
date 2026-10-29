@@ -2220,12 +2220,31 @@ async function verificarDisponibilidadReal() {
     inputHoraOculto.value = ""; 
 
     try {
-        // 🚀 CONSULTAMOS EN PARALELO UTILIZANDO COLABORADORES_CLINICA PARA EL HORARIO
+        // 🚀 CONSULTAMOS EN PARALELO Y FILTRAMOS CITAS CANCELADAS EN AGENDA_MAESTRA
         const [ocupadasRes, pendientesRes, confirmadasRes, colabRes] = await Promise.all([
-            fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
-            fisioNet.from('solicitudes_citas').select('hora_cita').eq('fecha_cita', fechaElegida).eq('id_clinica_solicitada', clinicaId).eq('id_profesional_solicitado', user.id).eq('estado', 'PENDIENTE'),
-            fisioNet.from('solicitudes_citas').select('hora_cita').eq('fecha_cita', fechaElegida).eq('id_clinica_solicitada', clinicaId).eq('id_profesional_solicitado', user.id).eq('estado', 'CONFIRMADO'),
-            fisioNet.from('colaboradores_clinica').select('horario_atencion, intervalo_cita').eq('id_profesional', user.id).eq('id_clinica', clinicaId).maybeSingle()
+            fisioNet.from('agenda_maestra')
+                .select('hora_inicio_cita')
+                .eq('fecha', fechaElegida)
+                .eq('id_clinica', clinicaId)
+                .eq('estado', 'ACTIVO')
+                .neq('estatus', 'CANCELADO'), // 👈 Evita bloqueo por citas canceladas
+            fisioNet.from('solicitudes_citas')
+                .select('hora_cita')
+                .eq('fecha_cita', fechaElegida)
+                .eq('id_clinica_solicitada', clinicaId)
+                .eq('id_profesional_solicitado', user.id)
+                .eq('estado', 'PENDIENTE'),
+            fisioNet.from('solicitudes_citas')
+                .select('hora_cita')
+                .eq('fecha_cita', fechaElegida)
+                .eq('id_clinica_solicitada', clinicaId)
+                .eq('id_profesional_solicitado', user.id)
+                .eq('estado', 'CONFIRMADO'),
+            fisioNet.from('colaboradores_clinica')
+                .select('horario_atencion, intervalo_cita')
+                .eq('id_profesional', user.id)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle()
         ]);
 
         const ocupadasCitas = ocupadasRes.data || [];
@@ -2243,7 +2262,11 @@ async function verificarDisponibilidadReal() {
             : colab.horario_atencion;
 
         const intervalo = parseInt(colab.intervalo_cita) || 30; 
-        const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+        
+        // 🗓️ Parseo seguro del día de la semana sin problemas de zona horaria UTC
+        const [pAño, pMes, pDia] = fechaElegida.split('-').map(Number);
+        const diaNum = new Date(pAño, pMes - 1, pDia).getDay();
+
         const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
 
         const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
@@ -2267,10 +2290,10 @@ async function verificarDisponibilidadReal() {
             while (inicio + intervalo <= fin) {
                 const horaGen = minToH(inicio);
                 
-                // 🔍 Validamos si la hora está ocupada en CUALQUIERA de las 3 fuentes
-                const estaEnAgenda = ocupadasCitas.some(o => o.hora_inicio_cita.startsWith(horaGen));
-                const estaPendiente = ocupadasPendientes.some(s => s.hora_cita.startsWith(horaGen));
-                const estaConfirmada = ocupadasConfirmadas.some(s => s.hora_cita.startsWith(horaGen));
+                // 🔍 Validamos si la hora está ocupada en CUALQUIERA de las 3 fuentes (con safe checks)
+                const estaEnAgenda = ocupadasCitas.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
+                const estaPendiente = ocupadasPendientes.some(s => s.hora_cita && s.hora_cita.startsWith(horaGen));
+                const estaConfirmada = ocupadasConfirmadas.some(s => s.hora_cita && s.hora_cita.startsWith(horaGen));
                 
                 const estaOcupada = estaEnAgenda || estaPendiente || estaConfirmada;
                 
@@ -2293,7 +2316,9 @@ async function verificarDisponibilidadReal() {
 
         espaciosDisponibles.forEach(hora => {
             const pastilla = document.createElement('div');
-            pastilla.className = 'pastilla-hora disponible'; 
+            const estaSeleccionada = inputHoraOculto.value === hora;
+            
+            pastilla.className = `pastilla-hora disponible ${estaSeleccionada ? 'seleccionada' : ''}`; 
             pastilla.innerText = hora;
             pastilla.onclick = () => {
                 document.querySelectorAll('.pastilla-hora').forEach(p => p.classList.remove('seleccionada'));
