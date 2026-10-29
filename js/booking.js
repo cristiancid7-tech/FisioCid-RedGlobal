@@ -354,12 +354,14 @@ async function renderizarHoras() {
         }
 
         // 1. Consultar Citas y Rangos de Bloqueo Logístico en agenda_maestra
-        let queryAgenda = fisioNet
-            .from('agenda_maestra')
-            .select('hora_inicio_cita, inicio_bloqueo, fin_bloqueo, modalidad, estado, estatus')
-            .eq('fecha', window.fechaSeleccionada)
-            .eq('id_clinica', window.clinicaSeleccionadaId)
-            .neq('estatus', 'CANCELADA'); // Ignoramos las citas canceladas
+      // 1. Consultar Citas y Rangos de Bloqueo Logístico en agenda_maestra
+let queryAgenda = fisioNet
+    .from('agenda_maestra')
+    .select('hora_inicio_cita, inicio_bloqueo, fin_bloqueo, modalidad, estado, estatus')
+    .eq('fecha', window.fechaSeleccionada)
+    .eq('id_clinica', window.clinicaSeleccionadaId)
+    .neq('estatus', 'CANCELADA')  // 👈 Ignora canceladas en femenino
+    .neq('estatus', 'CANCELADO'); // 👈 Ignora canceladas en masculino
 
         if (window.especialistaSeleccionadoId) {
             queryAgenda = queryAgenda.eq('id_profesional', window.especialistaSeleccionadoId);
