@@ -1,389 +1,445 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FisioCid - La Red para Fisioterapeutas</title>
-    <!-- Google Fonts Inter para aspecto profesional -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"> 
-    <!-- Tus otros estilos y metadatos actuales -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0ea5e9">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="FisioCid">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FisioCid - La Red para Fisioterapeutas</title>
+  
+  <!-- Google Fonts Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"> 
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FisioCid">
 
-    <style>
-        :root {
-            --primary: #0284c7;
-            --primary-dark: #0369a1;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-        }
+  <style>
+      :root {
+          --primary: #0284c7;
+          --primary-dark: #0369a1;
+          --text-main: #0f172a;
+          --text-muted: #64748b;
+      }
 
-        * {
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-        }
+      * {
+          box-sizing: border-box;
+          font-family: 'Inter', sans-serif;
+      }
 
-        body {
-            margin: 0;
-            padding: 0;
-            background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 50%, #e0f2fe 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: var(--text-main);
-        }
+      body {
+          margin: 0;
+          padding: 0;
+          background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 50%, #e0f2fe 100%);
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          color: var(--text-main);
+      }
 
-        .container {
-            width: 100%;
-            max-width: 650px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
+      .container {
+          width: 100%;
+          max-width: 650px;
+          margin: 0 auto;
+          padding: 2rem 1rem;
+      }
 
-        header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
+      header {
+          text-align: center;
+          margin-bottom: 2rem;
+      }
 
-        .logo-img {
-            max-width: 195px;
-            height: auto;
-            object-fit: contain;
-            margin-bottom: 12px;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.08));
-        }
+      .logo-img {
+          max-width: 195px;
+          height: auto;
+          object-fit: contain;
+          margin-bottom: 12px;
+          filter: drop-shadow(0 4px 8px rgba(0,0,0,0.08));
+      }
 
-        h1 {
-            color: var(--primary);
-            font-size: 2.2rem;
-            font-weight: 800;
-            margin: 0 0 5px 0;
-            letter-spacing: -0.5px;
-        }
+      h1 {
+          color: var(--primary);
+          font-size: 2.2rem;
+          font-weight: 800;
+          margin: 0 0 5px 0;
+          letter-spacing: -0.5px;
+      }
 
-        .subtitle {
-            color: var(--text-muted);
-            font-size: 1rem;
-            margin: 0;
-            font-weight: 500;
-        }
+      .subtitle {
+          color: var(--text-muted);
+          font-size: 1rem;
+          margin: 0;
+          font-weight: 500;
+      }
 
-        .card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 20px;
-            padding: 35px 30px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
-        }
+      .card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 20px;
+          padding: 35px 30px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+      }
 
-        /* GRID RESPONSIVO PARA SELECCIÓN DE PERFIL */
-        .grid-perfiles {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
+      /* GRID RESPONSIVO PARA SELECCIÓN DE PERFIL */
+      .grid-perfiles {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+      }
 
-        .btn-perfil {
-            padding: 20px;
-            border: 2px solid #e2e8f0;
-            background: white;
-            cursor: pointer;
-            border-radius: 14px;
-            transition: all 0.25s ease;
-            text-align: center;
-        }
+      .btn-perfil {
+          position: relative;
+          padding: 24px 18px 20px 18px;
+          border: 2px solid #e2e8f0;
+          background: white;
+          cursor: pointer;
+          border-radius: 14px;
+          transition: all 0.25s ease;
+          text-align: center;
+      }
 
-        .btn-perfil:hover {
-            border-color: var(--primary);
-            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
-            transform: translateY(-2px);
-        }
+      .btn-perfil:hover {
+          border-color: var(--primary);
+          box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
+          transform: translateY(-2px);
+      }
 
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
+      /* BADGES DE PRECIO / PLAN */
+      .badge-plan {
+          position: absolute;
+          top: -12px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 0.68rem;
+          font-weight: 800;
+          padding: 3px 10px;
+          border-radius: 20px;
+          white-space: nowrap;
+          letter-spacing: 0.5px;
+      }
 
-        .form-group label {
-            display: block;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            letter-spacing: 0.5px;
-        }
+      .badge-pago {
+          background: #0f766e;
+          color: #ffffff;
+          box-shadow: 0 2px 6px rgba(15, 118, 110, 0.25);
+      }
 
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 10px;
-            border: 1px solid #cbd5e1;
-            font-size: 0.95rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
+      .badge-gratis {
+          background: #3b82f6;
+          color: #ffffff;
+          box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
+      }
 
-        .form-group input:focus, .form-group select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
-        }
+      .form-group {
+          margin-bottom: 1.25rem;
+      }
 
-        button[type="submit"] {
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 14px;
-            font-weight: 700;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
+      .form-group label {
+          display: block;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: var(--text-muted);
+          margin-bottom: 6px;
+          letter-spacing: 0.5px;
+      }
 
-        button[type="submit"]:hover {
-            background: var(--primary-dark);
-        }
+      .form-group input, .form-group select {
+          width: 100%;
+          padding: 12px 14px;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          font-size: 0.95rem;
+          outline: none;
+          transition: border-color 0.2s;
+      }
 
-        /* 📱 MEDIA QUERIES PARA CELULARES Y TABLETS PEQUEÑAS */
-        @media (max-width: 600px) {
-            .container {
-                padding: 1rem 0.5rem;
-            }
-            .card {
-                padding: 25px 18px;
-                border-radius: 16px;
-            }
-            .grid-perfiles {
-                grid-template-columns: 1fr; /* Los botones se ponen uno debajo del otro en celular */
-            }
-            h1 {
-                font-size: 1.8rem;
-            }
-        }
-    </style>
+      .form-group input:focus, .form-group select:focus {
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+      }
+
+      button[type="submit"] {
+          background: var(--primary);
+          color: white;
+          border: none;
+          border-radius: 10px;
+          padding: 14px;
+          font-weight: 700;
+          font-size: 0.95rem;
+          cursor: pointer;
+          transition: background 0.2s;
+      }
+
+      button[type="submit"]:hover {
+          background: var(--primary-dark);
+      }
+
+      @media (max-width: 600px) {
+          .container {
+              padding: 1rem 0.5rem;
+          }
+
+          .card {
+              padding: 25px 18px;
+              border-radius: 16px;
+          }
+
+          .grid-perfiles {
+              grid-template-columns: 1fr;
+              gap: 22px; /* Mayor separación en celular por los badges */
+          }
+
+          h1 {
+              font-size: 1.8rem;
+          }
+      }
+  </style>
 </head>
 <body>
 
-    <div class="container">
-        
-        <header>
-            <img src="img/logo-fisiocid.png" alt="FisioCid Logo" class="logo-img">
-        
-                 <p style="text-align: center; font-size: 0.75rem; color: var(--secondary); margin-bottom: 1.5rem; font-weight: 600; letter-spacing: 0.5px;">
+  <div class="container">
+
+      <header>
+          <img src="img/logo-fisiocid.png" alt="FisioCid Logo" class="logo-img">
+          <p style="text-align: center; font-size: 0.75rem; color: var(--secondary); margin-bottom: 1.5rem; font-weight: 600; letter-spacing: 0.5px;">
               ÚNETE A LA RED PROFESIONAL DE GESTIÓN CLÍNICA
-            </p>
-        </header>
+          </p>
+      </header>
 
-        <div class="card" id="cardRegistro">
-            <div id="paso1">
-                <h3 style="text-align: center; margin-bottom: 1.5rem; font-size: 0.95rem; color: var(--primary); letter-spacing: 0.5px;">¿CÓMO USARÁS LA PLATAFORMA?</h3>
-                
-                <!-- Clase aplicada para que sea responsiva -->
-                <div class="grid-perfiles">
-                    <button class="btn-perfil" onclick="seleccionarPerfil('DUENO')">
-                        <span style="font-size: 2rem;">🏢</span><br>
-                        <strong style="font-size: 0.9rem; color: var(--text-main);">DUEÑO DE CLÍNICA</strong><br>
-                        <small style="color: #94a3b8; font-size: 0.75rem;">TENGO EQUIPO Y SUCURSAL.</small>
-                    </button>
-                    
-                    <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')">
-                        <span style="font-size: 2rem;">🩺</span><br>
-                        <strong style="font-size: 0.9rem; color: var(--text-main);">INDEPENDIENTE</strong><br>
-                        <small style="color: #94a3b8; font-size: 0.75rem;">GESTIÓN PERSONAL.</small>
-                    </button>
-                </div>
-            </div>
+      <div class="card" id="cardRegistro">
 
-            <form id="formRegistroNuevo" style="display: none; margin-top: 0.5rem;">
-                <input type="hidden" id="tipoPerfil">
-                
-                <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 1.5rem; text-align: center; font-size: 1rem;"></h4>
+          <div id="paso1">
+              <h3 style="text-align: center; margin-bottom: 1.8rem; font-size: 0.95rem; color: var(--primary); letter-spacing: 0.5px;">
+                  ¿CÓMO USARÁS LA PLATAFORMA?
+              </h3>
 
-                <div class="form-group">
-                    <label>NOMBRE COMPLETO (REAL)</label>
-                    <input type="text" id="regNombre" placeholder="Dr. Juan Pérez" required>
-                </div>
+              <div class="grid-perfiles">
 
-                <div class="form-group">
-                    <label>ESPECIALIDAD / PROFESIÓN</label>
-                    <select id="regEspecialidad" required>
-                        <optgroup label="MÉDICOS ESPECIALISTAS">
-                            <option value="INTERNISTA">MÉDICO INTERNISTA</option>
-                            <option value="CARDIOLOGO">MÉDICO CARDIÓLOGO</option>
-                            <option value="TRAUMATOLOGO/ORTOPEDISTA">MÉDICO TRAUMATÓLOGO Y ORTOPEDISTA</option>
-                            <option value="GINECOLOGO/OBSTETRA">MÉDICO GINECÓLOGO Y OBSTETRA</option>
-                            <option value="PEDIATRA">MÉDICO PEDIATRA</option>
-                            <option value="ANESTESIOLOGO">MÉDICO ANESTESIÓLOGO</option>
-                            <option value="CIRUJANO_GENERAL">MÉDICO CIRUJANO GENERAL</option>
-                            <option value="NEUROCIRUJANO">MÉDICO NEUROCIRUJANO</option>
-                            <option value="NEUROLOGO">MÉDICO NEURÓLOGO</option>
-                            <option value="MEDICO_RADIOLOGO">MÉDICO RADIÓLOGO</option>
-                            <option value="RADIOLOGO">TECNICO RADIÓLOGO</option>
-                            <option value="NEUMOLOGO">MÉDICO NEUMÓLOGO</option>
-                            <option value="GASTROENTERÓLOGO">MÉDICO GASTROENTERÓLOGO</option>
-                            <option value="URGENCIÓLOGO">MÉDICO URGENCIÓLOGO</option>
-                            <option value="ONCOLOGO">MÉDICO ONCÓLOGO</option>
-                            <option value="DERMATOLOGO">MÉDICO DERMATÓLOGO</option>
-                            <option value="ENDOCRINOLOGO">MÉDICO ENDOCRINÓLOGO</option>
-                            <option value="NEFROLOGO">MÉDICO NEFRÓLOGO</option>
-                            <option value="REUMATOLOGO">MÉDICO REUMATÓLOGO</option>
-                            <option value="OFTALMOLOGO">MÉDICO OFTALMÓLOGO</option>
-                            <option value="OTORRINOLARINGOLOGO">MÉDICO OTORRINOLARINGÓLOGO</option>
-                            <option value="REHABILITADOR">MÉDICO REHABILITADOR / FISIATRA</option>
-                            <option value="GENERAL">MÉDICO GENERAL</option>
-                        </optgroup>
-                        <optgroup label="NUTRICIÓN, ODONTOLOGÍA Y SALUD MENTAL">
-                            <option value="NUTRIOLOGO">NUTRIÓLOGO</option>
-                            <option value="ODONTOLOGO">ODONTÓLOGO</option>
-                            <option value="PSICOLOGO CLÍNICO">PSICÓLOGO CLÍNICO</option>
-                            <option value="PSICOTERAPEUTA">PSICOTERAPEUTA</option>
-                            <option value="PSIQUIATRA">PSIQUIATRA</option>
-                        </optgroup>
-                        <optgroup label="REHABILITACIÓN Y TERAPIA">
-                            <option value="FISIOTERAPEUTA" selected>FISIOTERAPEUTA</option>
-                            <option value="REHABILITADOR_FISICO">REHABILITADOR FÍSICO</option>
-                            <option value="TERAPISTA_OCUPACIONAL">TERAPISTA OCUPACIONAL</option>
-                            <option value="TERAPISTA_LENGUAJE">TERAPISTA DE LENGUAJE</option>
-                            <option value="ESPECIALISTA_PELVICO">ESPECIALISTA EN PISO PÉLVICO</option>
-                            <option value="INHALOTERAPEUTA">INHALOTERAPEUTA</option>
-                            <option value="PODOLOGO">PODÓLOGO</option>
-                        </optgroup>
-                        <optgroup label="ENFERMERÍA">
-                            <option value="LIC_ENFERMERIA">LICENCIADO/A EN ENFERMERÍA</option>
-                            <option value="ENFERMERA_GENERAL">ENFERMERO/A GENERAL</option>
-                            <option value="ENFERMERO_ESPECIALISTA">ENFERMERO ESPECIALISTA</option>
-                            <option value="AUXILIAR_ENFERMERÍA">AUXILIAR DE ENFERMERÍA</option>
-                            <option value="PARAMEDICO">PARAMÉDICO</option>
-                        </optgroup>
-                        <optgroup label="LABORATORIO Y DIAGNÓSTICO">
-                            <option value="QUIMICO_CLINICO">QUÍMICO CLÍNICO / QFB / QBP</option>
-                            <option value="TECNICO_LABORATORISTA">TÉCNICO LABORATORISTA</option>
-                            <option value="JEFE_LABORATORIO">JEFE DE LABORATORIO</option>
-                        </optgroup>
-                    </select>
-                </div>
+                  <!-- BOTÓN DUEÑO CON ANUNCIO DE PLAN COMERCIAL -->
+                  <button class="btn-perfil" onclick="seleccionarPerfil('DUENO')">
+                      <span class="badge-plan badge-pago">⭐ PLAN CLÍNICO</span>
+                      <span style="font-size: 2rem;">🏢</span><br>
+                      <strong style="font-size: 0.9rem; color: var(--text-main);">DUEÑO DE CLÍNICA</strong><br>
+                      <small style="color: #64748b; font-size: 0.75rem; display: block; margin-top: 4px;">MULTISUCURSAL Y EQUIPO.</small>
+                      <span style="display: inline-block; margin-top: 6px; font-size: 0.68rem; font-weight: 700; color: #0f766e; background: #ccfbf1; padding: 2px 8px; border-radius: 6px;">
+                          Suscripción requerida
+                      </span>
+                  </button>
 
-                <div class="form-group" id="grupoClinica">
-                    <label id="labelClinica">NOMBRE DE TU CLÍNICA / CONSULTORIO</label>
-                    <input type="text" id="regNombreClinica" placeholder=" " required>
-                </div>
+                  <!-- BOTÓN INDEPENDIENTE CON ANUNCIO PLAN GRATUITO -->
+                  <button class="btn-perfil" onclick="seleccionarPerfil('INDEPENDIENTE')">
+                      <span class="badge-plan badge-gratis">🎁 PLAN INDIVIDUAL</span>
+                      <span style="font-size: 2rem;">🩺</span><br>
+                      <strong style="font-size: 0.9rem; color: var(--text-main);">INDEPENDIENTE</strong><br>
+                      <small style="color: #64748b; font-size: 0.75rem; display: block; margin-top: 4px;">GESTIÓN PERSONAL.</small>
+                      <span style="display: inline-block; margin-top: 6px; font-size: 0.68rem; font-weight: 700; color: #1e40af; background: #dbeafe; padding: 2px 8px; border-radius: 6px;">
+                          Plan Base Inicial
+                      </span>
+                  </button>
 
-                <div class="form-group">
-                    <label>TELÉFONO CELULAR (10 DÍGITOS)</label>
-                    <input type="tel" id="regTelefono" placeholder="2381234567" required pattern="[0-9]{10}">
-                </div>
+              </div>
+          </div>
 
-                <div class="form-group">
-                    <label>CORREO ELECTRÓNICO</label>
-                    <input type="email" id="regEmail" placeholder="correo@ejemplo.com" required 
-                           autocapitalize="none" autocomplete="email" style="text-transform: lowercase;">
-                </div>
+          <form id="formRegistroNuevo" style="display: none; margin-top: 0.5rem;">
+              <input type="hidden" id="tipoPerfil">
 
-                <div class="form-group">
-                    <label>CONTRASEÑA</label>
-                    <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-                        <input type="password" 
-                               id="regPass" 
-                               placeholder="MÍNIMO 6 CARACTERES" 
-                               required 
-                               autocapitalize="none" 
-                               autocorrect="off" 
-                               style="flex: 1; text-transform: none !important;">
-                        
-                        <button type="button" 
-                                id="btnTogglePass" 
-                                onclick="toggleMostrarContrasena()" 
-                                style="width: 48px; height: 46px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 0;">
-                            👁️
-                        </button>
-                    </div>
-                </div>
+              <!-- TÍTULO DINÁMICO DE BIENVENIDA -->
+              <h4 id="txtBienvenida" style="color: var(--primary); margin-bottom: 0.3rem; text-align: center; font-size: 1rem;"></h4>
+              
+              <!-- BANNER DE AVISO DE PAGO PARA DUEÑOS -->
+              <div id="bannerAvisoPago" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 10px 12px; margin-bottom: 1.25rem; text-align: center;">
+                  <p style="margin: 0; font-size: 0.75rem; color: #166534; font-weight: 600;">
+                      💳 El registro creará tu clínica. Posteriormente podrás activar tu suscripción en la pasarela de pago.
+                  </p>
+              </div>
 
-                <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; margin-top: 1.25rem; margin-bottom: 1.25rem;">
-                    <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px;">
-                        <input type="checkbox" id="checkTerminosLegales" required style="margin-top: 3px; cursor: pointer;">
-                        <label for="checkTerminosLegales" style="font-size: 0.8rem; color: #334155; line-height: 1.4; cursor: pointer; display: inline;">
-                            Acepto los <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Términos y Condiciones</a> y el <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Aviso de Privacidad</a>.
-                        </label>
-                    </div>
-                    <div style="display: flex; align-items: flex-start; gap: 10px;">
-                        <input type="checkbox" id="checkDeslindeMedico" required style="margin-top: 3px; cursor: pointer;">
-                        <label for="checkDeslindeMedico" style="font-size: 0.72rem; color: #dc2626; font-weight: bold; line-height: 1.3; cursor: pointer; display: inline;">
-                            DECLARACIÓN JURADA: MANIFIESTO QUE MIS DATOS SON VERÍDICOS Y RECONOZCO QUE FISIOCID ES UN SOFTWARE DE GESTIÓN, DESLINDANDO A LA PLATAFORMA DE RESPONSABILIDAD LEGAL POR MI PRÁCTICA PROFESIONAL.
-                        </label>
-                    </div>
-                </div>
+              <div class="form-group">
+                  <label>NOMBRE COMPLETO (REAL)</label>
+                  <input type="text" id="regNombre" placeholder="Dr. Juan Pérez" required>
+              </div>
 
-                <button type="submit" style="width: 100%; margin-top: 0.5rem;">CREAR MI CUENTA PROFESIONAL</button>
-                
-                <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">← VOLVER</button>
-            </form>
-        </div>
+              <div class="form-group">
+                  <label>ESPECIALIDAD / PROFESIÓN</label>
+                  <select id="regEspecialidad" required>
+                      <optgroup label="MÉDICOS ESPECIALISTAS">
+                          <option value="INTERNISTA">MÉDICO INTERNISTA</option>
+                          <option value="CARDIOLOGO">MÉDICO CARDIÓLOGO</option>
+                          <option value="TRAUMATOLOGO/ORTOPEDISTA">MÉDICO TRAUMATÓLOGO Y ORTOPEDISTA</option>
+                          <option value="GINECOLOGO/OBSTETRA">MÉDICO GINECÓLOGO Y OBSTETRA</option>
+                          <option value="PEDIATRA">MÉDICO PEDIATRA</option>
+                          <option value="ANESTESIOLOGO">MÉDICO ANESTESIÓLOGO</option>
+                          <option value="CIRUJANO_GENERAL">MÉDICO CIRUJANO GENERAL</option>
+                          <option value="NEUROCIRUJANO">MÉDICO NEUROCIRUJANO</option>
+                          <option value="NEUROLOGO">MÉDICO NEURÓLOGO</option>
+                          <option value="MEDICO_RADIOLOGO">MÉDICO RADIÓLOGO</option>
+                          <option value="RADIOLOGO">TÉCNICO RADIÓLOGO</option>
+                          <option value="NEUMOLOGO">MÉDICO NEUMÓLOGO</option>
+                          <option value="GASTROENTERÓLOGO">MÉDICO GASTROENTERÓLOGO</option>
+                          <option value="URGENCIÓLOGO">MÉDICO URGENCIÓLOGO</option>
+                          <option value="ONCOLOGO">MÉDICO ONCÓLOGO</option>
+                          <option value="DERMATOLOGO">MÉDICO DERMATÓLOGO</option>
+                          <option value="ENDOCRINOLOGO">MÉDICO ENDOCRINÓLOGO</option>
+                          <option value="NEFROLOGO">MÉDICO NEFRÓLOGO</option>
+                          <option value="REUMATOLOGO">MÉDICO REUMATÓLOGO</option>
+                          <option value="OFTALMOLOGO">MÉDICO OFTALMÓLOGO</option>
+                          <option value="OTORRINOLARINGOLOGO">MÉDICO OTORRINOLARINGÓLOGO</option>
+                          <option value="REHABILITADOR">MÉDICO REHABILITADOR / FISIATRA</option>
+                          <option value="GENERAL">MÉDICO GENERAL</option>
+                      </optgroup>
 
-        <p style="text-align: center; margin-top: 1.5rem; font-size: 0.85rem;">
-            ¿Ya tienes cuenta? <a href="login.html" style="color: var(--primary); font-weight: bold; text-decoration: none;">Inicia Sesión aquí</a>
-        </p>
-    </div>
+                      <optgroup label="NUTRICIÓN, ODONTOLOGÍA Y SALUD MENTAL">
+                          <option value="NUTRIOLOGO">NUTRIÓLOGO</option>
+                          <option value="ODONTOLOGO">ODONTÓLOGO</option>
+                          <option value="PSICOLOGO CLÍNICO">PSICÓLOGO CLÍNICO</option>
+                          <option value="PSICOTERAPEUTA">PSICOTERAPEUTA</option>
+                          <option value="PSIQUIATRA">PSIQUIATRA</option>
+                      </optgroup>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="js/supabase-config.js"></script>
-    <script src="js/registro-nuevo.js"></script>
+                      <optgroup label="REHABILITACIÓN Y TERAPIA">
+                          <option value="FISIOTERAPEUTA" selected>FISIOTERAPEUTA</option>
+                          <option value="REHABILITADOR_FISICO">REHABILITADOR FÍSICO</option>
+                          <option value="TERAPISTA_OCUPACIONAL">TERAPISTA OCUPACIONAL</option>
+                          <option value="TERAPISTA_LENGUAJE">TERAPISTA DE LENGUAJE</option>
+                          <option value="ESPECIALISTA_PELVICO">ESPECIALISTA EN PISO PÉLVICO</option>
+                          <option value="INHALOTERAPEUTA">INHALOTERAPEUTA</option>
+                          <option value="PODOLOGO">PODÓLOGO</option>
+                      </optgroup>
 
-    <script>
+                      <optgroup label="ENFERMERÍA">
+                          <option value="LIC_ENFERMERIA">LICENCIADO/A EN ENFERMERÍA</option>
+                          <option value="ENFERMERA_GENERAL">ENFERMERO/A GENERAL</option>
+                          <option value="ENFERMERO_ESPECIALISTA">ENFERMERO ESPECIALISTA</option>
+                          <option value="AUXILIAR_ENFERMERÍA">AUXILIAR DE ENFERMERÍA</option>
+                          <option value="PARAMEDICO">PARAMÉDICO</option>
+                      </optgroup>
 
-        if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
-            .catch(err => console.error('Error al registrar el Service Worker:', err));
-    });
-}
-        function seleccionarPerfil(tipo) {
-            document.getElementById('tipoPerfil').value = tipo;
-            document.getElementById('paso1').style.display = 'none';
-            document.getElementById('formRegistroNuevo').style.display = 'block';
-            
-            const txt = document.getElementById('txtBienvenida');
-            const labelClinica = document.getElementById('labelClinica');
-            const inputClinica = document.getElementById('regNombreClinica');
-            
-            if(tipo === 'DUENO') {
-                txt.innerText = "🏢 REGISTRO PARA DUEÑO DE CLÍNICA";
-                labelClinica.innerText = "NOMBRE DE TU CLÍNICA O EMPRESA";
-                inputClinica.placeholder = "EJ. FISIOCID MATRIZ";
-                inputClinica.readOnly = false;
-                inputClinica.style.backgroundColor = "#ffffff";
-            } else {
-                txt.innerText = "🩺 REGISTRO PARA PROFESIONAL INDEPENDIENTE";
-                labelClinica.innerText = "NOMBRE DE TU CONSULTORIO PERSONAL";
-                inputClinica.readOnly = true;
-                inputClinica.style.backgroundColor = "#f8fafc";
-                inputClinica.placeholder = "SE GENERARÁ AUTOMÁTICAMENTE";
-            }
-        }
+                      <optgroup label="LABORATORIO Y DIAGNÓSTICO">
+                          <option value="QUIMICO_CLINICO">QUÍMICO CLÍNICO / QFB / QBP</option>
+                          <option value="TECNICO_LABORATORISTA">TÉCNICO LABORATORISTA</option>
+                          <option value="JEFE_LABORATORIO">JEFE DE LABORATORIO</option>
+                      </optgroup>
+                  </select>
+              </div>
 
-        function regresarPaso1() {
-            document.getElementById('formRegistroNuevo').style.display = 'none';
-            document.getElementById('paso1').style.display = 'block';
-            document.getElementById('formRegistroNuevo').reset();
-        }
+              <div class="form-group" id="grupoClinica">
+                  <label id="labelClinica">NOMBRE DE TU CLÍNICA / CONSULTORIO</label>
+                  <input type="text" id="regNombreClinica" placeholder=" " required>
+              </div>
 
-        function toggleMostrarContrasena() {
-            const inputPass = document.getElementById('regPass');
-            const btnToggle = document.getElementById('btnTogglePass');
+              <div class="form-group">
+                  <label>TELÉFONO CELULAR (10 DÍGITOS)</label>
+                  <input type="tel" id="regTelefono" placeholder="2381234567" required pattern="[0-9]{10}">
+              </div>
 
-            if (inputPass.type === 'password') {
-                inputPass.type = 'text';
-                btnToggle.innerText = '🙈';
-            } else {
-                inputPass.type = 'password';
-                btnToggle.innerText = '👁️';
-            }
-        }
-    </script>
+              <div class="form-group">
+                  <label>CORREO ELECTRÓNICO</label>
+                  <input type="email" id="regEmail" placeholder="correo@ejemplo.com" required autocapitalize="none" autocomplete="email" style="text-transform: lowercase;">
+              </div>
+
+              <div class="form-group">
+                  <label>CONTRASEÑA</label>
+                  <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                      <input type="password" id="regPass" placeholder="MÍNIMO 6 CARACTERES" required autocapitalize="none" autocorrect="off" style="flex: 1; text-transform: none !important;">
+                      <button type="button" id="btnTogglePass" onclick="toggleMostrarContrasena()" style="width: 48px; height: 46px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 10px; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 0;">
+                          👁️
+                      </button>
+                  </div>
+              </div>
+
+              <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; margin-top: 1.25rem; margin-bottom: 1.25rem;">
+                  <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px;">
+                      <input type="checkbox" id="checkTerminosLegales" required style="margin-top: 3px; cursor: pointer;">
+                      <label for="checkTerminosLegales" style="font-size: 0.8rem; color: #334155; line-height: 1.4; cursor: pointer; display: inline;">
+                          Acepto los <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Términos y Condiciones</a> y el <a href="terminos-y-privacidad.html" target="_blank" style="color: var(--primary); font-weight: bold; text-decoration: none;">Aviso de Privacidad</a>.
+                      </label>
+                  </div>
+
+                  <div style="display: flex; align-items: flex-start; gap: 10px;">
+                      <input type="checkbox" id="checkDeslindeMedico" required style="margin-top: 3px; cursor: pointer;">
+                      <label for="checkDeslindeMedico" style="font-size: 0.72rem; color: #dc2626; font-weight: bold; line-height: 1.3; cursor: pointer; display: inline;">
+                          DECLARACIÓN JURADA: MANIFIESTO QUE MIS DATOS SON VERÍDICOS Y RECONOZCO QUE FISIOCID ES UN SOFTWARE DE GESTIÓN, DESLINDANDO A LA PLATAFORMA DE RESPONSABILIDAD LEGAL POR MI PRÁCTICA PROFESIONAL.
+                      </label>
+                  </div>
+              </div>
+
+              <button type="submit" style="width: 100%; margin-top: 0.5rem;">CREAR MI CUENTA PROFESIONAL</button>
+              
+              <button type="button" onclick="regresarPaso1()" style="width: 100%; margin-top: 10px; background: none; color: #94a3b8; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">← VOLVER</button>
+          </form>
+
+      </div>
+
+      <p style="text-align: center; margin-top: 1.5rem; font-size: 0.85rem;">
+          ¿Ya tienes cuenta? <a href="login.html" style="color: var(--primary); font-weight: bold; text-decoration: none;">Inicia Sesión aquí</a>
+      </p>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/registro-nuevo.js"></script>
+
+  <script>
+      if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+              navigator.serviceWorker.register('/sw.js')
+                  .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
+                  .catch(err => console.error('Error al registrar el Service Worker:', err));
+          });
+      }
+
+      function seleccionarPerfil(tipo) {
+          document.getElementById('tipoPerfil').value = tipo;
+          document.getElementById('paso1').style.display = 'none';
+          document.getElementById('formRegistroNuevo').style.display = 'block';
+          
+          const txt = document.getElementById('txtBienvenida');
+          const labelClinica = document.getElementById('labelClinica');
+          const inputClinica = document.getElementById('regNombreClinica');
+          const bannerPago = document.getElementById('bannerAvisoPago');
+          
+          if(tipo === 'DUENO') {
+              txt.innerText = "🏢 REGISTRO PARA DUEÑO DE CLÍNICA";
+              labelClinica.innerText = "NOMBRE DE TU CLÍNICA O EMPRESA";
+              inputClinica.placeholder = "EJ. FISIOCID MATRIZ";
+              inputClinica.readOnly = false;
+              inputClinica.style.backgroundColor = "#ffffff";
+              
+              // Muestra el banner explicativo del plan comercial
+              if (bannerPago) bannerPago.style.display = "block";
+
+          } else {
+              txt.innerText = "🩺 REGISTRO PARA PROFESIONAL INDEPENDIENTE";
+              labelClinica.innerText = "NOMBRE DE TU CONSULTORIO PERSONAL";
+              inputClinica.readOnly = true;
+              inputClinica.style.backgroundColor = "#f8fafc";
+              inputClinica.placeholder = "SE GENERARÁ AUTOMÁTICAMENTE";
+              
+              // Oculta el aviso de suscripción
+              if (bannerPago) bannerPago.style.display = "none";
+          }
+      }
+
+      function regresarPaso1() {
+          document.getElementById('formRegistroNuevo').style.display = 'none';
+          document.getElementById('paso1').style.display = 'block';
+          document.getElementById('formRegistroNuevo').reset();
+      }
+
+      function toggleMostrarContrasena() {
+          const inputPass = document.getElementById('regPass');
+          const btnToggle = document.getElementById('btnTogglePass');
+
+          if (inputPass.type === 'password') {
+              inputPass.type = 'text';
+              btnToggle.innerText = '🙈';
+          } else {
+              inputPass.type = 'password';
+              btnToggle.innerText = '👁️';
+          }
+      }
+  </script>
 </body>
 </html>

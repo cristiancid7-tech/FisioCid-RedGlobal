@@ -1,139 +1,152 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FisioCid - Gestión de Insumos</title>
-    <link rel="stylesheet" href="estilos.css"> 
-    <style>
-        .bajo-stock { color: white; background-color: #ef4444; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;}
-        
-        /* 🦎 Tabla con bordes redondeados y encabezado camaleónico */
-        .tabla-inventario { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px #eee; }
-        .tabla-inventario th, .tabla-inventario td { border: 1px solid #ddd; padding: 15px; text-align: left; }
-        .tabla-inventario th { background-color: var(--primary, #3b82f6); color: white; }
-    #btnNuevoInsumo:hover {
-    filter: brightness(1.1);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FisioCid - Inventario y Farmacia Clínica</title>
+  <link rel="stylesheet" href="estilos.css"> 
 
-#btnNuevoInsumo:active {
-    transform: translateY(0);
-}
-    </style>
+  <style>
+      .bajo-stock { color: white; background-color: #ef4444; font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;}
+      
+      .tabla-inventario { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px #eee; }
+      .tabla-inventario th, .tabla-inventario td { border: 1px solid #ddd; padding: 12px 15px; text-align: left; }
+      .tabla-inventario th { background-color: var(--primary, #3b82f6); color: white; font-size: 0.85rem; text-transform: uppercase; }
 
-    
+      /* Pestañas de Filtrado */
+      .contenedor-tabs { display: flex; gap: 8px; margin-top: 15px; }
+      .tab-filtro { padding: 8px 16px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; font-weight: bold; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+      .tab-filtro.activa { background: var(--primary, #3b82f6); color: white; border-color: var(--primary, #3b82f6); }
+
+      #btnNuevoInsumo:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+      #btnNuevoInsumo:active { transform: translateY(0); }
+  </style>
 </head>
 <body>
-    
-    <button id="btnCerrarSesion"
 
-    style="background:#fff1f2; color:#be123c; border:none; padding:5px 12px; border-radius:8px; cursor:pointer; font-size: 0.75rem; margin-left: auto; font-weight: bold; width: auto;">
+  <div class="container" style="max-width: 1100px; margin: 0 auto; padding: 20px;">
+      
+      <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 10px;">
+          <div>
+              <h2 style="margin: 0; color: var(--primary);">📦 INVENTARIO & 💊 FARMACIA CLÍNICA</h2>
+              <small style="color: #64748b; font-weight: 600;">Gestión unificada de insumos internos y productos de venta</small>
+          </div>
 
-    Cerrar Sesión 🚪
+          <div style="display: flex; gap: 10px;">
+              <button id="btnNuevoInsumo" style="background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s ease;">
+                  <span>+</span> REGISTRAR PRODUCTO / INSUMO
+              </button>
 
-</button>
-    
+              <button onclick="location.href='dashboard.html'" class="btn-header" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                  ⬅️ VOLVER
+              </button>
+          </div>
+      </header>
 
-    <div class="container">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-            <div>
-                <h2 style="margin: 0; color: var(--primary);">📦 INVENTARIO DE INSUMOS</h2>
-            </div>
-            <div style="display: flex; gap: 20px;">
-                <button id="btnNuevoInsumo" 
-    style="background: var(--primary); 
-           color: white; 
-           border: none; 
-           padding: 10px 20px; 
-           border-radius: 8px; 
-           cursor: pointer; 
-           font-weight: bold; 
-           display: inline-flex; 
-           align-items: center; 
-           justify-content: center; 
-           gap: 8px; 
-           box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
-           transition: all 0.2s ease;">
-    <span>+</span> AGREGAR INSUMO
-</button>
-              <button onclick="location.href='dashboard.html'" class="btn-header" style="background: #f1f5f9; color: #64748b;">
-        ⬅️ VOLVER
-    </button>
-            </div>
-        </header>
+      <!-- Pestañas de navegación -->
+      <div class="contenedor-tabs">
+          <button id="tab-todos" class="tab-filtro activa" onclick="filtrarSeccion('TODOS')">📋 Ver Todos</button>
+          <button id="tab-insumo" class="tab-filtro" onclick="filtrarSeccion('INSUMO')">📦 Solo Insumos de Clínica</button>
+          <button id="tab-farmacia" class="tab-filtro" onclick="filtrarSeccion('FARMACIA')">💊 Solo Farmacia (Venta)</button>
+      </div>
 
-        <div style="overflow-x: auto;">
-            <table class="tabla-inventario">
-                <thead>
-                    <tr>
-                        <th>Insumo</th>
-                        <th>Categoría</th>
-                        <th>Stock Actual</th>
-                        <th>Mínimo</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="listaInventario">
-                    </tbody>
-            </table>
-        </div>
-    </div>
+      <div style="overflow-x: auto;">
+          <table class="tabla-inventario">
+              <thead>
+                  <tr>
+                      <th>Insumo / Producto</th>
+                      <th>Categoría / Tipo</th>
+                      <th style="text-align: center;">Stock Actual</th>
+                      <th style="text-align: center;">Mínimo</th>
+                      <th style="text-align: center;">Acciones</th>
+                  </tr>
+              </thead>
+              <tbody id="listaInventario">
+                  <!-- Se llena dinámicamente -->
+              </tbody>
+          </table>
+      </div>
+  </div>
 
-    <!-- 📦 MODAL RESPONSIVO Y DESPLAZABLE -->
-<div id="modalInsumo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; overflow-y: auto; padding: 20px 10px; box-sizing: border-box;">
-    <div style="background:white; max-width:400px; width: 100%; margin: 20px auto; padding:25px; border-radius:12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;">
-        
-        <h3 style="color: var(--primary); margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">📦 Nuevo Insumo</h3>
-        
-        <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Nombre:</label>
-        <input type="text" id="nombreInsumo" placeholder="Ej. Agujas Punción" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none;">
-        
-        <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Clasificación COFEPRIS:</label>
-        <select id="categoriaInsumo" style="width:100%; margin-bottom:12px; padding:10px; border: 1px solid var(--primary); border-radius: 6px; box-sizing: border-box; outline: none; background: #f8fafc;">
-            <option value="CLASE I">CLASE I: Bajo Riesgo (Gasas, Vendas)</option>
-            <option value="CLASE II">CLASE II: Riesgo Moderado (Agujas, Electrodos)</option>
-            <option value="CLASE III">CLASE III: Alto Riesgo (Equipos Invasivos)</option>
-            <option value="CONSUMIBLES">CONSUMIBLES (Gel, Aceites)</option>
-            <option value="OTROS">OTROS</option>
-        </select>
+  <!-- 📦 MODAL DE REGISTRO UNIFICADO -->
+  <div id="modalInsumo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; overflow-y: auto; padding: 20px 10px; box-sizing: border-box;">
+      <div style="background:white; max-width:440px; width: 100%; margin: 20px auto; padding:25px; border-radius:12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;">
+          
+          <h3 style="color: var(--primary); margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">📦 Nuevo Registro (Insumo / Farmacia)</h3>
 
-        <div style="display:flex; gap:10px;">
-            <div style="flex: 1;">
-                <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Stock Inicial:</label>
-                <input type="number" id="cantidadInsumo" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
-            </div>
-            <div style="flex: 1;">
-                <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Stock Mínimo:</label>
-                <input type="number" id="minimoInsumo" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
-            </div>
-        </div>
+          <form id="formModalInsumo" onsubmit="return false;">
+              <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Tipo de Registro:</label>
+              <select id="tipoRegistro" onchange="evaluarTipoRegistro()" style="width:100%; margin-bottom:12px; padding:10px; border: 1px solid var(--primary); border-radius: 6px; box-sizing: border-box; outline: none; background: #e0e7ff; font-weight: bold; color: #3730a3;">
+                  <option value="INSUMO">📦 INSUMO DE TRATAMIENTO (Uso Interno)</option>
+                  <option value="FARMACIA">💊 PRODUCTO DE FARMACIA (Venta a Pacientes)</option>
+              </select>
 
-        <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Unidad de Medida:</label>
-        <input type="text" id="unidadInsumo" placeholder="Ej. Piezas, ml, botes" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
-        
-        <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Número de Lote (COFEPRIS):</label>
-        <input type="text" id="loteInsumo" placeholder="Ej. LOT2024-001" style="width:100%; margin-bottom:12px; border: 1px dashed var(--primary); box-sizing: border-box; padding: 10px; border-radius: 6px; outline: none; background: #f0f9ff;">
-        
-        <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Precio Costo ($):</label>
-        <input type="number" id="precioInsumo" step="0.01" placeholder="0.00" style="width:100%; margin-bottom:20px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+              <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Nombre del Producto / Insumo:</label>
+              <input type="text" id="nombreInsumo" placeholder="Ej. Gel Voltaren / Agujas Punción 0.25x25" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none;" required>
 
-        <button id="btnGuardarInsumo" style="width:100%; background: var(--primary); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:bold; font-size: 1rem; transition: 0.2s;">Guardar en FisioCid</button>
-        <button onclick="document.getElementById('modalInsumo').style.display='none'" style="width:100%; margin-top:8px; background:none; border:none; color:#64748b; cursor:pointer; font-weight:bold; padding: 10px;">Cancelar</button>
-    </div>
-</div>
+              <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Clasificación COFEPRIS / Categoría:</label>
+              <select id="categoriaInsumo" style="width:100%; margin-bottom:12px; padding:10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none; background: #f8fafc;">
+                  <option value="CLASE I">CLASE I: Bajo Riesgo (Gasas, Vendas, Tapes)</option>
+                  <option value="CLASE II">CLASE II: Riesgo Moderado (Agujas, Electrodos)</option>
+                  <option value="CLASE III">CLASE III: Alto Riesgo (Equipos Invasivos)</option>
+                  <option value="CONSUMIBLES">CONSUMIBLES (Gel, Aceites, Sabanillas)</option>
+                  <option value="MEDICAMENTO ANALGÉSICO">MEDICAMENTO / ANALGÉSICO</option>
+                  <option value="SUPLEMENTO / REHABILITACIÓN">SUPLEMENTO / PROTEÍNA / COLÁGENO</option>
+                  <option value="OTROS">OTROS</option>
+              </select>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="js/supabase-config.js"></script>
-    <script src="js/inventario.js"></script>
-    <script src="js/utils.js"></script>
+              <div style="display:flex; gap:10px;">
+                  <div style="flex: 1;">
+                      <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Stock Inicial:</label>
+                      <input type="number" id="cantidadInsumo" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;" required>
+                  </div>
+                  <div style="flex: 1;">
+                      <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Stock Mínimo:</label>
+                      <input type="number" id="minimoInsumo" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                  </div>
+              </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const colorClinica = localStorage.getItem('clinica_color') || '#2563eb'; 
-            document.documentElement.style.setProperty('--primary', colorClinica);
-        });
-    </script>
+              <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Unidad de Medida:</label>
+              <input type="text" id="unidadInsumo" placeholder="Ej. Piezas, Caja, Frasco, Tube" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+
+              <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Número de Lote (COFEPRIS):</label>
+              <input type="text" id="loteInsumo" placeholder="Ej. LOT2026-001" style="width:100%; margin-bottom:12px; border: 1px dashed var(--primary); box-sizing: border-box; padding: 10px; border-radius: 6px; outline: none; background: #f0f9ff;">
+
+              <div style="display:flex; gap:10px;">
+                  <div style="flex: 1;">
+                      <label style="font-size: 0.85rem; font-weight: bold; color: #475569;">Precio Costo ($):</label>
+                      <input type="number" id="precioInsumo" step="0.01" placeholder="0.00" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                  </div>
+                  
+                  <div id="contenedorPrecioVenta" style="flex: 1; display: none;">
+                      <label style="font-size: 0.85rem; font-weight: bold; color: #059669;">Precio Venta ($):</label>
+                      <input type="number" id="precioVentaInsumo" step="0.01" placeholder="0.00" style="width:100%; margin-bottom:12px; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid #059669; background: #f0fdf4;">
+                  </div>
+              </div>
+
+              <div id="contenedorReceta" style="display: none; margin-bottom: 15px;">
+                  <label style="font-size: 0.85rem; color: #dc2626; font-weight: bold; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input type="checkbox" id="checkReceta"> Requiere Prescripción / Receta Médica
+                  </label>
+              </div>
+
+              <button id="btnGuardarInsumo" style="width:100%; background: var(--primary); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:bold; font-size: 1rem; transition: 0.2s;">Guardar en FisioCid</button>
+              
+              <button onclick="document.getElementById('modalInsumo').style.display='none'" style="width:100%; margin-top:8px; background:none; border:none; color:#64748b; cursor:pointer; font-weight:bold; padding: 10px;">Cancelar</button>
+          </form>
+      </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/inventario.js"></script>
+  <script src="js/utils.js"></script>
+
+  <script>
+      document.addEventListener('DOMContentLoaded', () => {
+          const colorClinica = localStorage.getItem('clinica_color') || '#2563eb'; 
+          document.documentElement.style.setProperty('--primary', colorClinica);
+      });
+  </script>
 </body>
 </html>
