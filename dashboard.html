@@ -405,6 +405,11 @@
                 padding: 0 10px;
             }
         }
+
+/* Oculta sin alterar el diseño original al remover la clase */
+.ocultar-rol {
+    display: none !important;
+}
     </style>
 </head>
 
@@ -432,6 +437,7 @@
         </div>
     </div>
 <!-- SELECTOR DE SEDE Y BOTÓN DE NUEVA SUCURSAL -->
+<!-- SELECTOR DE SEDE Y ÁREA INTERACTIVA DE PLANES -->
 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
   
   <div style="display: flex; align-items: center; gap: 6px; background: #f1f5f9; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
@@ -444,17 +450,28 @@
           <option value="">Cargando sedes...</option>
       </select>
 
-      <!-- Botón (+) Agregar Nueva Sede: Solo visible para DUEÑO, ADMIN o ADMINISTRATIVO -->
+      <!-- Botón (+ Nueva Sede): Solo visible para DUEÑO / ADMIN -->
       <button type="button" id="btnNuevaSede" onclick="abrirModalNuevaSede()" title="Agregar nueva sucursal" 
-              style="background: var(--primary); color: white; border: none; border-radius: 6px; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-left: 4px;">
+              style="background: var(--primary); color: white; border: none; border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-left: 4px;">
           <i class="fas fa-plus"></i>
       </button>
+
+      <!-- Mensaje Promocional Upsell: Solo visible para INDEPENDIENTES / STAFF -->
+      <div id="bannerUpgradeSedes" style="display: none; align-items: center; gap: 6px; margin-left: 4px; padding-left: 6px; border-left: 1px solid #cbd5e1;">
+          <span style="font-size: 0.7rem; font-weight: 600; color: #64748b; white-space: nowrap;">
+              ¿Tienes tu propia clínica?
+          </span>
+          <button type="button" onclick="window.location.href='suscripcion.html'" 
+                  style="background: #0f766e; color: #ffffff; border: none; border-radius: 6px; padding: 3px 8px; font-size: 0.68rem; font-weight: 800; cursor: pointer; transition: all 0.2s ease;">
+              ⚡ Cambiar Plan
+          </button>
+      </div>
 
   </div>
 </div>
 
-<!-- Tarjeta MI EQUIPO: Solo visible para DUEÑO, ADMIN o ADMINISTRATIVO -->
-<div id="btnMiEquipo" class="equipo-container" onclick="window.location.href='gestion-equipo.html'" style="display: none;">
+<!-- Tarjeta MI EQUIPO (Código base original intacto) -->
+<div id="btnMiEquipo" class="equipo-container" onclick="window.location.href='gestion-equipo.html'">
     <div class="equipo-card">
         <div class="equipo-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">

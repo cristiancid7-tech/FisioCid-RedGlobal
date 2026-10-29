@@ -123,8 +123,11 @@ function bloquearDashboardPorFaltaDePago(datosPago) {
 }
 
 async function verificarSesionSegura() {
+    // Ocultar elementos de entrada por seguridad mientras responde la BD
+    evaluarAccesoElementosUI(false);
+
     try {
-        // 1. Verificar sesion activa con Supabase
+        // 1. Verificar sesión activa con Supabase
         const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
         const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
@@ -137,7 +140,7 @@ async function verificarSesionSegura() {
 
         const userId = session.user.id;
 
-        // 2. Consultar el perfil profesional usando la columna 'id'
+        // 2. Consultar únicamente el perfil profesional principal
         const { data: perfil, error: perfilError } = await fisioNet
             .from('perfiles_profesionales')
             .select('id, tipo_perfil')
@@ -153,11 +156,15 @@ async function verificarSesionSegura() {
         if (perfil) {
             tipoPerfil = (perfil.tipo_perfil || '').toUpperCase();
 
-            // Regla A: Si en tipo_perfil dice DUENO o DUEÑO
+            // 👑 REGLA MAESTRA 1: Si es DUENO o DUEÑO -> ACCESO PERMITIDO DIRECTO
             if (tipoPerfil === 'DUENO' || tipoPerfil === 'DUEÑO') {
                 tienePermisoEspecial = true;
             } 
-            // Regla B: Si es STAFF u otro, buscar en colaboradores_clinica usando 'id_profesional' y 'rol_sistema'
+            // ⛔ REGLA MAESTRA 2: Si es INDEPENDIENTE -> DENEGADO DIRECTO
+            else if (tipoPerfil === 'INDEPENDIENTE') {
+                tienePermisoEspecial = false;
+            } 
+            // 👥 REGLA AUXILIAR: Para STAFF u otros, se valida su rol en colaboradores_clinica
             else {
                 const { data: colaborador, error: colabError } = await fisioNet
                     .from('colaboradores_clinica')
@@ -168,22 +175,32 @@ async function verificarSesionSegura() {
 
                 if (!colabError && colaborador) {
                     rolSistema = (colaborador.rol_sistema || '').toUpperCase();
-                    if (rolSistema === 'ADMINISTRADOR' || rolSistema === 'ADMINISTRATIVO') {
+                    if (
+                        rolSistema === 'ADMINISTRADOR' || 
+                        rolSistema === 'ADMINISTRATIVO' || 
+                        rolSistema === 'ADMIN_SISTEMA' ||
+                        rolSistema === 'ADMIN'
+                    ) {
                         tienePermisoEspecial = true;
                     }
                 }
             }
         }
 
-      
+        console.log("🔍 TIPO PERFIL EN PERFILES_PROFESIONALES:", tipoPerfil);
+        console.log("👔 ROL EN COLABORADORES (Si aplico):", rolSistema || "N/A");
+        console.log("🔓 ¿TIENE PERMISO ESPECIAL?:", tienePermisoEspecial);
 
-        // 3. Renderizar o guardar visibilidad de elementos
+        // 3. Aplicar visibilidad en la interfaz
         evaluarAccesoElementosUI(tienePermisoEspecial);
 
     } catch (err) {
         console.error("Error verificando permisos de acceso:", err);
+        evaluarAccesoElementosUI(false);
     }
 }
+
+
 // Ejecutar verificación de inmediato
 verificarSesionSegura();
 
@@ -4039,13 +4056,18 @@ document.getElementById('formNuevaSede')?.addEventListener('submit', async (e) =
 function evaluarAccesoElementosUI(permitido) {
     const btnNuevaSede = document.getElementById('btnNuevaSede');
     const btnMiEquipo = document.getElementById('btnMiEquipo');
+    const bannerUpgrade = document.getElementById('bannerUpgradeSedes');
 
     if (permitido) {
-        if (btnNuevaSede) btnNuevaSede.style.setProperty('display', 'flex', 'important');
-        if (btnMiEquipo) btnMiEquipo.style.setProperty('display', 'block', 'important');
+        // 👑 ES DUEÑO / ADMIN: Se muestran funciones de gestión y se oculta la promoción
+        if (btnNuevaSede) btnNuevaSede.classList.remove('ocultar-rol');
+        if (btnMiEquipo) btnMiEquipo.classList.remove('ocultar-rol');
+        if (bannerUpgrade) bannerUpgrade.style.setProperty('display', 'none', 'important');
     } else {
-        if (btnNuevaSede) btnNuevaSede.style.setProperty('display', 'none', 'important');
-        if (btnMiEquipo) btnMiEquipo.style.setProperty('display', 'none', 'important');
+        // 👤 ES INDEPENDIENTE / STAFF: Se ocultan los módulos de gestión y se activa el llamado a cambiar de plan
+        if (btnNuevaSede) btnNuevaSede.classList.add('ocultar-rol');
+        if (btnMiEquipo) btnMiEquipo.classList.add('ocultar-rol');
+        if (bannerUpgrade) bannerUpgrade.style.setProperty('display', 'flex', 'important');
     }
 }
 window.buscarColegasFisioCid = buscarColegasFisioCid;
