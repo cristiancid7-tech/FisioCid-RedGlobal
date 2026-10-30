@@ -1,6 +1,11 @@
 
-import './agenda.js';
-// dashboard.js - Inicio del archivo
+import { 
+    cargarAgenda, 
+    sincronizarConGoogleCalendar, 
+    actualizarCitaEnGoogle, 
+    cancelarCitaEnGoogle 
+} from './agenda.js';
+
 if (typeof window.sedesDisponibles === 'undefined') {
     window.sedesDisponibles = [];
 }
@@ -3277,116 +3282,31 @@ function renderizarBotonesPorRol() {
     const btnIdentidad = document.getElementById('btnIdentidadVisual');
 
     if (btnEquipo) btnEquipo.style.display = puedeGestionarEquipo ? 'flex' : 'none';
-    if (btnPrecios) btnPrecios.style.display = esAdmin ? 'flex' : 'none';
-    if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'flex' : 'none';
+    if (btnPrecios) btnPrecios.style.display = esAdmin ? 'inline-flex' : 'none';
+    if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'inline-flex' : 'none';
 
-    // Definición de botones con su ruta y si soportan acción rápida (Long-Press)
-    const catalogoBotones = {
-        nuevareceta: { html: `📋 Nueva Receta`, url: 'portal-recetas.html', tieneQuickAction: false },
-        agregarPaciente: { html: `📝 Agregar/Editar Paciente`, url: 'nuevo-paciente.html', tieneQuickAction: false },
-        listaPacientes: { html: `👥 Lista de Pacientes`, url: 'lista-pacientes.html', tieneQuickAction: true },
-        inventario: { html: `📦 Inventario`, url: 'inventario.html', tieneQuickAction: false },
-        nuevoEstudio: { html: `📡 Nuevo Estudio`, url: 'portal-gabinete.html', tieneQuickAction: false },
-        laboratorio: { html: `🧪 Nuevo Laboratorio`, accion: () => lanzarLaboratorioGeneral(), tieneQuickAction: false },
-        finanzas: { html: `📊 Control de Caja`, url: 'finanzas.html', tieneQuickAction: false }
-    };
+    // Generar botones de acciones rápidas
+    let htmlBotones = `
+        <button class="btn-action" onclick="mostrarSeccion('agenda-container')">
+            <i class="fas fa-calendar-alt"></i> Ver Agenda
+        </button>
+        <button class="btn-action" onclick="window.location.href='expedientes.html'">
+            <i class="fas fa-folder-open"></i> Expedientes
+        </button>
+        <button class="btn-action" onclick="lanzarLaboratorioGeneral()">
+            <i class="fas fa-vials"></i> Laboratorio
+        </button>
+    `;
 
-    let listaBotones = [];
-
-    switch(miRol) {
-        case 'ADMIN_SISTEMA':
-            listaBotones = [
-                catalogoBotones.nuevareceta, catalogoBotones.agregarPaciente,
-                catalogoBotones.listaPacientes, catalogoBotones.inventario,
-                catalogoBotones.nuevoEstudio, catalogoBotones.laboratorio,
-                catalogoBotones.finanzas
-            ];
-            break;
-        case 'ADMINISTRATIVO':
-            listaBotones = [
-                catalogoBotones.nuevareceta, catalogoBotones.agregarPaciente, 
-                catalogoBotones.listaPacientes, catalogoBotones.inventario,
-                catalogoBotones.finanzas
-            ];
-            break;
-        case 'STAFF_CLINICO':
-            listaBotones = [
-                catalogoBotones.nuevareceta, catalogoBotones.agregarPaciente, 
-                catalogoBotones.listaPacientes, catalogoBotones.nuevoEstudio, 
-                catalogoBotones.laboratorio
-            ];
-            break;
-        case 'OPERATIVO':
-        default:
-            listaBotones = [catalogoBotones.listaPacientes];
-            break;
+    if (puedeGestionarEquipo) {
+        htmlBotones += `
+            <button class="btn-action" onclick="window.location.href='caja.html'">
+                <i class="fas fa-cash-register"></i> Caja y Finanzas
+            </button>
+        `;
     }
 
-    // Limpiar contenedor
-    contenedor.innerHTML = '';
-
-    // Generación dinámica e inyección de eventos Long-Press
-    listaBotones.forEach((btnConfig, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-action';
-        btn.innerHTML = btnConfig.html;
-        
-        // Retraso escalonado (staggered animation)
-        btn.style.animationDelay = `${index * 0.06}s`;
-
-        // Lógica de detección de clic normal vs mantenido
-        let timerLongPress = null;
-        let esLongPress = false;
-
-        const iniciarConteo = (e) => {
-            esLongPress = false;
-            btn.classList.add('presionando');
-            
-            // Dentro de tu temporizador de Long-Press:
-timerLongPress = setTimeout(() => {
-    esLongPress = true;
-    btn.classList.remove('presionando');
-    if (navigator.vibrate) navigator.vibrate(50);
-    
-    if (btnConfig.tieneQuickAction) {
-        abrirBuscadorExpressPacientes(btn); // <-- Le pasamos 'btn' para saber dónde posicionarse
-    }
-}, 500);
-        };
-
-        const cancelarConteo = () => {
-            btn.classList.remove('presionando');
-            if (timerLongPress) clearTimeout(timerLongPress);
-        };
-
-        const ejecutarClick = (e) => {
-            cancelarConteo();
-            if (esLongPress) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-
-            // Clic normal
-            if (btnConfig.accion) {
-                btnConfig.accion();
-            } else if (btnConfig.url) {
-                window.location.href = btnConfig.url;
-            }
-        };
-
-        // Escuchadores táctiles y de mouse
-        btn.addEventListener('mousedown', iniciarConteo);
-        btn.addEventListener('touchstart', iniciarConteo, { passive: true });
-
-        btn.addEventListener('mouseup', ejecutarClick);
-        btn.addEventListener('touchend', ejecutarClick);
-
-        btn.addEventListener('mouseleave', cancelarConteo);
-        btn.addEventListener('touchmove', cancelarConteo, { passive: true });
-
-        contenedor.appendChild(btn);
-    });
+    contenedor.innerHTML = htmlBotones;
 }
 
 // Función para calcular edad desde fecha de nacimiento

@@ -3,8 +3,8 @@
 // =========================================================================
 let CONFIG_CLINICA = {
     intervalo: 30,
-    horarios: [], // Se llenará dinámicamente desde la DB
-    descanso: [0] // Por defecto domingo (0)
+    horarios: [],
+    descanso: [0]
 };
 
 window.estadoSeleccionado = "";
@@ -13,10 +13,7 @@ window.especialistaSeleccionadoId = null;
 window.fechaSeleccionada = "";
 window.horaSeleccionada = "";
 
-// --- 1. INICIALIZACIÓN AL CARGAR EL DOM ---
 document.addEventListener('DOMContentLoaded', async () => {
-    //console.log("🔥 Inicializando Buscador Híbrido de Citas FisioCid...");
-    
     ['nombre', 'apellidoP', 'apellidoM'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', (e) => {
             let posicionCursor = e.target.selectionStart;
@@ -24,13 +21,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.target.setSelectionRange(posicionCursor, posicionCursor);
         });
     });
-
     configurarEventosFiltros();
 });
 
-// =========================================================================
-// 🔄 MOTOR DE FILTRADO HÍBRIDO EN CASCADA (USANDO VISTA SEGURA)
-// =========================================================================
 function configurarEventosFiltros() {
     const selectEdo = document.getElementById('filtro-estado');
     const selectEsp = document.getElementById('filtro-especialidad');
@@ -46,7 +39,7 @@ function configurarEventosFiltros() {
     selectEdo.addEventListener('change', async () => {
         window.estadoSeleccionado = selectEdo.value;
         ocultarCalendarioYHoras();
-        
+
         selectEsp.innerHTML = '<option value="">-- Selecciona Especialidad --</option>';
         selectUbi.innerHTML = '<option value="">Selecciona primero una especialidad...</option>';
         selectDoc.innerHTML = '<option value="TODOS">Cualquier especialista disponible 👨‍⚕️</option>';
@@ -62,7 +55,6 @@ function configurarEventosFiltros() {
         selectEsp.innerHTML = '<option value="">Buscando especialidades en la región...</option>';
 
         try {
-            // Consultamos directo las especialidades desde la vista filtrando por estado de la clínica
             const { data: directorio, error } = await fisioNet
                 .from('vista_directorio_citas')
                 .select('especialidad')
@@ -88,7 +80,7 @@ function configurarEventosFiltros() {
         }
     });
 
-    // 🟢 ESCUDO 2: Especialidad ➡️ Clínicas / Sucursales
+    // 🟢 ESCUDO 2: Especialidad ➡️ Clínicas
     selectEsp.addEventListener('change', async () => {
         const especialidad = selectEsp.value;
         ocultarCalendarioYHoras();
@@ -116,7 +108,7 @@ function configurarEventosFiltros() {
 
             const clinicasFiltradas = [];
             const mapaId = new Set();
-            
+
             coincidencias?.forEach(item => {
                 if (item.id_clinica && !mapaId.has(item.id_clinica)) {
                     mapaId.add(item.id_clinica);
@@ -170,7 +162,7 @@ function configurarEventosFiltros() {
                     }
                 });
             }
-            
+
             await activarCargaConfiguracionAgenda();
 
         } catch (err) {
@@ -191,13 +183,10 @@ function ocultarCalendarioYHoras() {
     window.horaSeleccionada = "";
 }
 
-// =========================================================================
-// ⚙️ 2. CARGA DE CONFIGURACIÓN HORARIA DESDE LA DB (VISTA DIRECTORIO)
-// =========================================================================
 async function activarCargaConfiguracionAgenda() {
     const selectDocVal = document.getElementById('filtro-especialista').value;
     const selectEspVal = document.getElementById('filtro-especialidad').value;
-    
+
     if (!selectEspVal || !window.clinicaSeleccionadaId) return;
 
     try {
@@ -210,6 +199,7 @@ async function activarCargaConfiguracionAgenda() {
                 .select('*')
                 .eq('id_profesional', selectDocVal)
                 .maybeSingle();
+
             if (error) throw error;
             perfil = data;
         } else {
@@ -228,8 +218,7 @@ async function activarCargaConfiguracionAgenda() {
 
         if (perfil) {
             CONFIG_CLINICA.intervalo = perfil.intervalo_cita || 30;
-            
-            // Lógica flexible por si dias_descanso o horario_atencion vienen en string o JSON
+
             let descansoParseado = [0];
             if (typeof perfil.dias_descanso === 'string') {
                 try { descansoParseado = JSON.parse(perfil.dias_descanso); } catch(e) { descansoParseado = [0]; }
@@ -237,7 +226,7 @@ async function activarCargaConfiguracionAgenda() {
                 descansoParseado = perfil.dias_descanso;
             }
             CONFIG_CLINICA.descanso = descansoParseado;
-            
+
             let horariosParseados = [];
             if (typeof perfil.horario_atencion === 'string') {
                 try { horariosParseados = JSON.parse(perfil.horario_atencion); } catch (e) { horariosParseados = []; }
@@ -249,6 +238,7 @@ async function activarCargaConfiguracionAgenda() {
 
         const step1 = document.getElementById('step1');
         if (step1) step1.style.display = 'block';
+
         generarCalendario();
 
     } catch (err) {
@@ -256,27 +246,23 @@ async function activarCargaConfiguracionAgenda() {
     }
 }
 
-// =========================================================================
-// 📅 3. GENERADOR DE CALENDARIO (VISTA LOCAL 15 DÍAS)
-// =========================================================================
 function generarCalendario() {
     const contenedor = document.getElementById('calendario-dias');
     if (!contenedor) return;
-    contenedor.innerHTML = ''; 
-    
+
+    contenedor.innerHTML = '';
     const hoy = new Date();
-    const MAX_DIAS_VISTA = 15; 
+    const MAX_DIAS_VISTA = 15;
 
     for (let i = 0; i < MAX_DIAS_VISTA; i++) {
         const fecha = new Date();
         fecha.setDate(hoy.getDate() + i);
-        
-        const numeroDiaSemana = fecha.getDay(); 
-        const esCerrado = CONFIG_CLINICA.descanso.some(d => Number(d) === numeroDiaSemana);
 
+        const numeroDiaSemana = fecha.getDay();
+        const esCerrado = CONFIG_CLINICA.descanso.some(d => Number(d) === numeroDiaSemana);
         const nombreDia = fecha.toLocaleDateString('es-MX', { weekday: 'short' }).toUpperCase();
         const numeroDia = fecha.getDate();
-        
+
         const anio = fecha.getFullYear();
         const mes = String(fecha.getMonth() + 1).padStart(2, '0');
         const dia = String(fecha.getDate()).padStart(2, '0');
@@ -285,35 +271,31 @@ function generarCalendario() {
         const btnDia = document.createElement('div');
         btnDia.className = 'dia-item' + (esCerrado ? ' cerrado' : '');
         btnDia.innerHTML = `<span>${nombreDia}</span><strong>${numeroDia}</strong>${esCerrado ? '<small>Cerrado</small>' : ''}`;
-        
+
         if (!esCerrado) {
             btnDia.onclick = () => {
                 document.querySelectorAll('.dia-item').forEach(el => el.classList.remove('activo'));
                 btnDia.classList.add('activo');
                 window.fechaSeleccionada = fechaISO;
-                renderizarHoras(); 
+                renderizarHoras();
             };
 
             if (!window.fechaSeleccionada || window.fechaSeleccionada === "") {
-                 btnDia.classList.add('activo');
-                 window.fechaSeleccionada = fechaISO;
-                 renderizarHoras();
+                btnDia.classList.add('activo');
+                window.fechaSeleccionada = fechaISO;
+                renderizarHoras();
             }
         }
         contenedor.appendChild(btnDia);
     }
 }
 
-// =========================================================================
-// ⏱️ 4. GENERADOR MATEMÁTICO DE SLOTS
-// =========================================================================
 function generarSlots() {
     const slots = [];
     if (!window.fechaSeleccionada) return slots;
 
     const partes = window.fechaSeleccionada.split('-');
     const diaSemana = new Date(partes[0], partes[1] - 1, partes[2]).getDay();
-
     const turnosDelDia = CONFIG_CLINICA.horarios.filter(h => parseInt(h.dia) === diaSemana);
 
     turnosDelDia.forEach(rango => {
@@ -326,10 +308,9 @@ function generarSlots() {
         while (minutosActuales + CONFIG_CLINICA.intervalo <= minutosFin) {
             let h = Math.floor(minutosActuales / 60);
             let m = minutosActuales % 60;
-            
             let hStr = String(h).padStart(2, '0');
             let mStr = String(m).padStart(2, '0');
-            
+
             slots.push(`${hStr}:${mStr}`);
             minutosActuales += CONFIG_CLINICA.intervalo;
         }
@@ -338,9 +319,6 @@ function generarSlots() {
     return slots;
 }
 
-// =========================================================================
-// 🔍 5. CONSULTAR DISPONIBILIDAD REAL Y BLOQUEOS INTEGRADOS
-// =========================================================================
 async function renderizarHoras() {
     const grid = document.getElementById('grid-horas');
     if (!grid) return;
@@ -353,7 +331,6 @@ async function renderizarHoras() {
             return;
         }
 
-        // 1. Citas activas en agenda_maestra
         let queryAgenda = fisioNet
             .from('agenda_maestra')
             .select('hora_inicio_cita, inicio_bloqueo, fin_bloqueo, modalidad, estado, estatus')
@@ -364,7 +341,6 @@ async function renderizarHoras() {
             queryAgenda = queryAgenda.eq('id_profesional', window.especialistaSeleccionadoId);
         }
 
-        // 2. Bloqueos Personales/Vacaciones en bloqueos_agenda
         let queryBloqueos = fisioNet
             .from('bloqueos_agenda')
             .select('fecha_inicio, fecha_fin, tipo_bloqueo')
@@ -375,71 +351,55 @@ async function renderizarHoras() {
             queryBloqueos = queryBloqueos.eq('id_profesional', window.especialistaSeleccionadoId);
         }
 
-        // 3. Solicitudes de web en solicitudes_citas
         let querySolicitudes = fisioNet
             .from('solicitudes_citas')
             .select('hora_cita, estado')
             .eq('fecha_cita', window.fechaSeleccionada)
             .eq('id_clinica_solicitada', window.clinicaSeleccionadaId);
 
-        // Ejecución en paralelo
         const [
             { data: citasAgenda, error: errAgenda },
             { data: bloqueosPersonales, error: errBloqueos },
             { data: solicitudesCitas, error: errSolicitudes }
-        ] = await Promise.all([
-            queryAgenda,
-            queryBloqueos,
-            querySolicitudes
-        ]);
+        ] = await Promise.all([queryAgenda, queryBloqueos, querySolicitudes]);
 
         if (errAgenda) throw errAgenda;
         if (errBloqueos) throw errBloqueos;
         if (errSolicitudes) throw errSolicitudes;
 
-        grid.innerHTML = ''; 
+        grid.innerHTML = '';
 
         slotsDinamicos.forEach(hora => {
             const timestampSlot = new Date(`${window.fechaSeleccionada}T${hora}:00`).getTime();
 
-            // A) Validar Ocupación en Agenda Maestra (Excluyendo Canceladas)
             const estaOcupadoEnAgenda = (citasAgenda || []).some(cita => {
                 const estatusLimpio = String(cita.estatus || '').toUpperCase();
                 const estadoLimpio = String(cita.estado || '').toUpperCase();
-                
-                // Si está cancelada, NO ocupa lugar
-                if (
-                    estatusLimpio.includes('CANCEL') || 
-                    estadoLimpio.includes('CANCEL') || 
-                    estatusLimpio === 'ANULADA'
-                ) {
+
+                if (estatusLimpio.includes('CANCEL') || estadoLimpio.includes('CANCEL') || estatusLimpio === 'ANULADA') {
                     return false;
                 }
 
-                // Bloqueo logístico por servicio a domicilio
                 if (cita.inicio_bloqueo && cita.fin_bloqueo) {
                     const tInicioBloqueo = new Date(`${window.fechaSeleccionada}T${cita.inicio_bloqueo}`).getTime();
                     const tFinBloqueo = new Date(`${window.fechaSeleccionada}T${cita.fin_bloqueo}`).getTime();
                     return timestampSlot >= tInicioBloqueo && timestampSlot < tFinBloqueo;
                 }
-                
-                // Cita normal en consultorio
+
                 const horaLimpiaCita = cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0, 5) : '';
                 return horaLimpiaCita === hora;
             });
 
-            // B) Validar Bloqueos Personales / Vacaciones
             const estaBloqueadoPersonal = (bloqueosPersonales || []).some(b => {
                 const tInicio = new Date(b.fecha_inicio).getTime();
                 const tFin = new Date(b.fecha_fin).getTime();
                 return timestampSlot >= tInicio && timestampSlot < tFin;
             });
 
-            // C) Validar Solicitudes Web Pendientes (Excluyendo rechazadas o canceladas)
             const estaOcupadoEnSolicitudes = (solicitudesCitas || []).some(sol => {
                 const estadoSol = String(sol.estado || '').toUpperCase();
                 if (estadoSol.includes('CANCEL') || estadoSol.includes('RECHAZA') || estadoSol.includes('ATENDIDA')) {
-                    return false; // La solicitud ya no está pendiente -> Libera horario
+                    return false;
                 }
                 const horaSolLimpia = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '';
                 return horaSolLimpia === hora;
@@ -450,7 +410,7 @@ async function renderizarHoras() {
             const btn = document.createElement('button');
             btn.innerText = hora;
             btn.className = noDisponible ? 'hora-btn ocupado' : 'hora-btn disponible';
-            
+
             if (!noDisponible) {
                 btn.onclick = () => seleccionarHora(hora);
             }
@@ -463,9 +423,6 @@ async function renderizarHoras() {
     }
 }
 
-// =========================================================================
-// 🔀 6. NAVEGACIÓN ENTRE PASOS (STEPS)
-// =========================================================================
 function seleccionarHora(hora) {
     window.horaSeleccionada = hora;
     const step1 = document.getElementById('step1');
@@ -481,22 +438,19 @@ function regresarAPaso1() {
     if (step2) step2.style.display = 'none';
 }
 
-// =========================================================================
-// 💾 7. ENVÍO DE SOLICITUD A SUPABASE + REDIRECCIÓN A WHATSAPP (CON MODALIDAD)
-// =========================================================================
 document.getElementById('formRegistro')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('btnConfirmar');
-    
+
     btn.innerText = 'Guardando solicitud... ⏳';
     btn.disabled = true;
-    
+
     const nombre = document.getElementById('nombre').value.trim().toUpperCase();
     const apP = document.getElementById('apellidoP').value.trim().toUpperCase();
     const apM = document.getElementById('apellidoM').value.trim().toUpperCase();
     const tel = document.getElementById('telefono').value.trim();
     const email = document.getElementById('email').value.trim().toLowerCase();
-    
+
     let curpInput = document.getElementById('curp')?.value.trim().toUpperCase() || "";
 
     if (curpInput !== "") {
@@ -508,34 +462,32 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
             return;
         }
     }
-    
+
     const curpFinal = curpInput !== "" ? curpInput : null;
     const especialidadNombre = document.getElementById('filtro-especialidad').value;
     const modalidadSeleccionada = document.getElementById('filtro-modalidad')?.value || 'CONSULTORIO';
 
     try {
-        // 1. Guardar la solicitud en Supabase registrando la modalidad
         const { error } = await fisioNet
             .from('solicitudes_citas')
             .insert([{
-                nombre: nombre,      
-                apellido_p: apP,     
-                apellido_m: apM,     
+                nombre: nombre,
+                apellido_p: apP,
+                apellido_m: apM,
                 telefono: tel,
-                email: email,        
-                curp: curpFinal,     
-                fecha_cita: window.fechaSeleccionada, 
-                hora_cita: window.horaSeleccionada,   
+                email: email,
+                curp: curpFinal,
+                fecha_cita: window.fechaSeleccionada,
+                hora_cita: window.horaSeleccionada,
                 estado: 'PENDIENTE',
                 id_clinica_solicitada: window.clinicaSeleccionadaId,
                 id_profesional_solicitado: window.especialistaSeleccionadoId,
                 especialidad_solicitada: especialidadNombre,
-                modalidad: modalidadSeleccionada // 👈 Se guarda CONSULTORIO o DOMICILIO
+                modalidad: modalidadSeleccionada
             }]);
 
         if (error) throw error;
 
-        // 2. Traer información de la clínica para obtener el teléfono oficial
         const { data: clinicaInfo } = await fisioNet
             .from('clinicas')
             .select('nombre_clinica, telefono_contacto')
@@ -546,10 +498,8 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
 
         const [anio, mes, dia] = window.fechaSeleccionada.split('-');
         const fechaLegible = `${dia}/${mes}/${anio}`;
-
         const textoModalidad = modalidadSeleccionada === 'DOMICILIO' ? '🏡 Servicio a Domicilio' : '🏥 En Consultorio';
 
-        // 3. Crear mensaje formateado enriquecido con modalidad para WhatsApp
         const textoMensaje = `*¡HOLA FISIOCID! AGENDÉ UNA NUEVA CITA* 📅\n\n` +
             `👤 *Paciente:* ${nombre} ${apP} ${apM}\n` +
             `📱 *Teléfono:* ${tel}\n` +
@@ -564,7 +514,6 @@ document.getElementById('formRegistro')?.addEventListener('submit', async (e) =>
 
         btn.innerText = 'Abriendo WhatsApp... 📲';
 
-        // 4. Redirigir
         setTimeout(() => {
             window.location.href = urlWhatsApp;
         }, 800);
