@@ -95,37 +95,83 @@ export async function verificarEstadoGoogle() {
 // agenda.js
 export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
-        // 1. Obtener o refrescar el token de acceso de Google
+        // 1. Obtener token de Google de la sesión o localStorage
         let googleAccessToken = localStorage.getItem('google_access_token');
-
-        // Si usas Supabase OAuth para Google, asegúrate de recuperar el provider_token actualizado
         const { data: { session } } = await fisioNet.auth.getSession();
+
         if (session && session.provider_token) {
             googleAccessToken = session.provider_token;
             localStorage.setItem('google_access_token', googleAccessToken);
         }
 
         if (!googleAccessToken) {
-            console.warn("⚠️ No hay token de Google disponible. Omitiendo sync con Google Calendar.");
+            console.warn("⚠️ No hay token de Google disponible. Omitiendo sync.");
             return;
         }
 
-        // 2. Armar el evento de Google Calendar
+        // 2. Obtener intervalo_cita de la base de datos si no viene en citaObj
+        let duracionCita = citaObj.intervalo_cita;
+
+        if (!duracionCita) {
+            const { data: perfil } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('intervalo_cita')
+                .eq('id', citaObj.id_profesional)
+                .maybeSingle();
+
+            duracionCita = perfil?.intervalo_cita || 30;
+        }
+
+        // 3. Formatear la hora de inicio base (HH:MM:00)
+        const horaInicioLimpia = citaObj.hora_inicio_cita.length === 5 
+            ? `${citaObj.hora_inicio_cita}:00` 
+            : citaObj.hora_inicio_cita;
+
+        const fechaHoraBase = new Date(`${citaObj.fecha}T${horaInicioLimpia}`);
+
+        // 4. Calcular tiempos considerando traslado si es a domicilio
+        const esDomicilio = (citaObj.modalidad === 'DOMICILIO');
+        const minTraslado = esDomicilio ? 30 : 0;
+
+        // Hora de inicio en Google (30 min antes si es a domicilio)
+        const fechaHoraInicioGoogle = new Date(fechaHoraBase.getTime() - (minTraslado * 60 * 1000));
+
+        // Hora de fin en Google (duración de la cita + 30 min después si es a domicilio)
+        const fechaHoraFinGoogle = new Date(fechaHoraBase.getTime() + ((duracionCita + minTraslado) * 60 * 1000));
+
+        // Formateadores a ISO local
+        const formatearISO = (fechaObj) => {
+            const a = fechaObj.getFullYear();
+            const m = String(fechaObj.getMonth() + 1).padStart(2, '0');
+            const d = String(fechaObj.getDate()).padStart(2, '0');
+            const h = String(fechaObj.getHours()).padStart(2, '0');
+            const min = String(fechaObj.getMinutes()).padStart(2, '0');
+            return `${a}-${m}-${d}T${h}:${min}:00`;
+        };
+
+        const startStr = formatearISO(fechaHoraInicioGoogle);
+        const endStr = formatearISO(fechaHoraFinGoogle);
+
+        // 5. Armar el payload del evento
+        const descripcionServicio = esDomicilio 
+            ? `🏡 SERVICIO A DOMICILIO (Incluye 30 min previos y posteriores de traslado)\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`
+            : `🏥 CONSULTA EN CLINICA\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`;
+
         const evento = {
             summary: `${esExpress ? '⚡ [EXPRÉS] ' : ''}Cita: ${nombrePaciente}`,
-            description: `Modalidad: ${citaObj.modalidad || 'Consulta'} - Gestionado desde FisioCid`,
+            description: descripcionServicio,
+            transparency: 'opaque', // Bloquea el espacio como OCUPADO
             start: {
-                dateTime: `${citaObj.fecha}T${citaObj.hora_inicio_cita}:00`,
+                dateTime: startStr,
                 timeZone: 'America/Mexico_City'
             },
             end: {
-                // Cálculo de fin de cita por defecto +30 min
-                dateTime: `${citaObj.fecha}T${citaObj.hora_inicio_cita}:00`, 
+                dateTime: endStr,
                 timeZone: 'America/Mexico_City'
             }
         };
 
-        // 3. Petición POST a Google Calendar API
+        // 6. Enviar a Google Calendar
         const respuesta = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
             headers: {
@@ -135,24 +181,17 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
             body: JSON.stringify(evento)
         });
 
-        if (respuesta.status === 401) {
-            console.warn("🔒 El token de Google ha expirado. Se requiere iniciar sesión con Google nuevamente.");
-            // Opcional: Notificar al usuario o renovar sesión con OAuth
-            return;
-        }
-
         if (!respuesta.ok) {
             const errData = await respuesta.json();
             throw new Error(errData.error?.message || 'Error al crear evento en Google Calendar');
         }
 
         const data = await respuesta.json();
-        console.log("✅ Evento sincronizado en Google Calendar:", data.id);
+        console.log("✅ Evento sincronizado dinámicamente en Google Calendar:", data.id);
         return data;
 
     } catch (err) {
         console.error("❌ Error al sincronizar con Google Calendar:", err);
-        // Retornamos sin romper la ejecución de la UI en FisioCid App
     }
 }
 
