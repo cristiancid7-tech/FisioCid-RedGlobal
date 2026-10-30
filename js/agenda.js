@@ -191,7 +191,7 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         }
 
         const data = await respuesta.json();
-        console.log(`✅ Evento ${eventIdExistente ? 'actualizado' : 'creado'} en Google Calendar con ID:`, data.id);
+        //console.log(`✅ Evento ${eventIdExistente ? 'actualizado' : 'creado'} en Google Calendar con ID:`, data.id);
 
         // 6. Guardar la referencia del google_event_id en la base de datos
         if (citaObj.id_cita && !eventIdExistente) {

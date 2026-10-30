@@ -193,9 +193,9 @@ async function verificarSesionSegura() {
             }
         }
 
-        console.log("🔍 TIPO PERFIL EN PERFILES_PROFESIONALES:", tipoPerfil);
-        console.log("👔 ROL EN COLABORADORES (Si aplico):", rolSistema || "N/A");
-        console.log("🔓 ¿TIENE PERMISO ESPECIAL?:", tienePermisoEspecial);
+      //  console.log("🔍 TIPO PERFIL EN PERFILES_PROFESIONALES:", tipoPerfil);
+       // console.log("👔 ROL EN COLABORADORES (Si aplico):", rolSistema || "N/A");
+       // console.log("🔓 ¿TIENE PERMISO ESPECIAL?:", tienePermisoEspecial);
 
         // 3. Aplicar visibilidad en la interfaz
         evaluarAccesoElementosUI(tienePermisoEspecial);
@@ -2170,19 +2170,21 @@ async function actualizarPrecioVisual() {
         }
     }
 
-    let precioBaseFinal = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
+    // 🔄 Evaluamos correctamente si la opción elegida es a Domicilio
+    const esDomicilio = modalidad.toUpperCase().includes('DOMICILIO');
+    const precioBase = esDomicilio ? costoDomicilio : costoConsultorio;
 
-    let porcentajeDescuento = 0;
+    let porcentaje = 0;
     if (selector && selector.selectedIndex >= 0) {
         const opcionSeleccionada = selector.options[selector.selectedIndex];
         if (opcionSeleccionada && opcionSeleccionada.dataset.descuento) {
-            porcentajeDescuento = parseFloat(opcionSeleccionada.dataset.descuento) || 0;
+            porcentaje = parseFloat(opcionSeleccionada.dataset.descuento) || 0;
         }
     }
 
-   // ✅ Código correcto:
-const descuentoCalculado = (precioBase * porcentaje) / 100;
-const precioFinal = precioBase - descuentoCalculado;
+    // ✅ Cálculo con nombres de variables unificados
+    const descuentoCalculado = (precioBase * porcentaje) / 100;
+    const precioFinal = precioBase - descuentoCalculado;
 
     if (textoMonto) textoMonto.innerText = `$${precioFinal.toFixed(2)}`;
     if (vistaPrevia) vistaPrevia.style.display = 'block';
@@ -3704,7 +3706,7 @@ function iniciarCanalSalaEspera() {
                 table: 'solicitudes_citas'
             },
             (payload) => {
-                console.log("🔔 Cambio detectado en solicitudes:", payload);
+               // console.log("🔔 Cambio detectado en solicitudes:", payload);
                 // Recarga la sala de espera automáticamente para cualquier cambio en pendientes
                 if (typeof cargarSalaEspera === 'function') {
                     cargarSalaEspera();
