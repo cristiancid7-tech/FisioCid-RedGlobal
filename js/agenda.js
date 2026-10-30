@@ -110,17 +110,24 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         }
 
         // 2. Obtener intervalo_cita de la base de datos si no viene en citaObj
-        let duracionCita = citaObj.intervalo_cita;
+let duracionCita = citaObj.intervalo_cita;
 
-        if (!duracionCita) {
-            const { data: perfil } = await fisioNet
-                .from('perfiles_profesionales')
-                .select('intervalo_cita')
-                .eq('id', citaObj.id_profesional)
-                .maybeSingle();
+if (!duracionCita) {
+    // Si no viene citaObj.id_profesional, intentamos obtener el ID del usuario en sesión
+    const idProfesionalBuscar = citaObj.id_profesional || session?.user?.id;
 
-            duracionCita = perfil?.intervalo_cita || 30;
-        }
+    if (idProfesionalBuscar) {
+        const { data: perfil } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('intervalo_cita')
+            .eq('id', idProfesionalBuscar)
+            .maybeSingle();
+
+        duracionCita = perfil?.intervalo_cita || 30;
+    } else {
+        duracionCita = 30; // Fallback por defecto si no hay ID
+    }
+}
 
         // 3. Formatear la hora de inicio base (HH:MM:00)
         const horaInicioLimpia = citaObj.hora_inicio_cita.length === 5 
