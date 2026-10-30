@@ -491,6 +491,58 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
     renderizarCitas(agendaCompleta, modo);
 }
 
+export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
+    try {
+        const estatusLimpio = (nuevoEstatus || '').toUpperCase();
+        
+        // 🚨 SI SE SELECCIONA CANCELADO / CANCELADA
+        if (estatusLimpio.includes('CANCELAD')) {
+            const nombrePaciente = citaObj?.pacientes_maestros?.nombre || 'este paciente';
+            
+            // Ventana de confirmación para el usuario
+            const confirmacion = confirm(`⚠️ Se cambiará el estado a CANCELADO y se eliminará la cita de Google Calendar para ${nombrePaciente}.\n\n¿Estás seguro de que deseas eliminarla?`);
+
+            if (!confirmacion) {
+                // Si el usuario presiona "Cancelar", recargamos la vista para revertir el selector
+                if (typeof cargarAgenda === 'function') await cargarAgenda();
+                return false;
+            }
+
+            // Si el usuario aceptó, eliminamos el evento de Google Calendar
+            const eventId = citaObj?.google_event_id;
+            if (eventId) {
+                await eliminarEventoGoogleCalendar(eventId);
+            }
+        }
+
+        // 🔄 Actualizamos el estado en la base de datos (agenda_maestra o solicitudes_citas)
+        if (citaObj?.es_prospecto) {
+            await fisioNet
+                .from('solicitudes_citas')
+                .update({ estado: 'CANCELADO', google_event_id: null })
+                .eq('id', idCita);
+        } else {
+            await fisioNet
+                .from('agenda_maestra')
+                .update({ estatus: nuevoEstatus, google_event_id: null })
+                .eq('id_cita', idCita);
+        }
+
+        console.log(`✅ Estado de cita ${idCita} actualizado a: ${nuevoEstatus}`);
+
+        // Refrescar paneles visuales
+        if (typeof cargarAgenda === 'function') await cargarAgenda();
+        return true;
+
+    } catch (err) {
+        console.error("❌ Error al procesar cambio de estatus:", err);
+        alert("Ocurrió un error al intentar cambiar el estado de la cita.");
+    }
+}
+
+// Exponer globalmente
+window.manejarCambioEstatusCita = manejarCambioEstatusCita;
+
 // Inicialización de escuchas de Google al cargar
 window.addEventListener('DOMContentLoaded', () => {
     verificarEstadoGoogle();

@@ -7,6 +7,9 @@ import {
     reconectarGoogleCalendar
 } from './agenda.js';   
 
+// Agrega esta línea justo después de tus imports:
+let sedesDisponibles = window.sedesDisponibles || [];
+
 if (typeof window.sedesDisponibles === 'undefined') {
     window.sedesDisponibles = [];
 }
@@ -598,7 +601,6 @@ export function renderizarCitas(citas, modo) {
         lista.appendChild(contenedorDia);
     }
 }
-
 window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) => {
     if (!idCita || idCita === 'undefined') return;
 
@@ -636,7 +638,7 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                 </div>
             `;
 
-            // 2. Lógica interna idéntica a tu función de disponibilidad real
+            // 2. Consulta de disponibilidad real
             document.getElementById('btnConsultarDispoModal').onclick = async () => {
                 const fechaElegida = document.getElementById('inputNuevaFechaCita').value;
                 const contenedor = document.getElementById('contenedorHorariosLibresModal');
@@ -704,7 +706,6 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                         btnHora.innerText = hora;
                         btnHora.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
                         
-                        // Al hacer clic en la pastilla de hora, guardamos de inmediato en Supabase
                         btnHora.onclick = async () => {
                             modalReagendar.remove();
 
@@ -719,8 +720,9 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                                     .eq('id_cita', idCita);
                                 if (error) throw error;
 
-                                if (typeof actualizarEventoGoogleCalendar === 'function') {
-                                    await actualizarEventoGoogleCalendar(idCita, fechaElegida, hora, "Paciente FisioCid");
+                                // 🟢 CORREGIDO: Se homologó el nombre a actualizarCitaEnGoogle
+                                if (typeof actualizarCitaEnGoogle === 'function') {
+                                    await actualizarCitaEnGoogle(idCita, fechaElegida, hora, "Paciente FisioCid");
                                 }
                             }
 
@@ -742,7 +744,7 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
             };
 
         } else {
-            // Cambio de estatus normal (Completado, Cancelado, etc.)
+            // 1. Actualizamos en Supabase
             if (esProspecto) {
                 const { error } = await fisioNet.from('solicitudes_citas')
                     .update({ estado: nuevoEstatus })
@@ -755,12 +757,24 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                 if (error) throw error;
             }
 
+            // 2. Si el estatus es CANCELADO, eliminar/cancelar en Google Calendar
+            if (nuevoEstatus === 'CANCELADO' && !esProspecto) {
+                if (typeof cancelarCitaEnGoogle === 'function') {
+                    try {
+                        await cancelarCitaEnGoogle(idCita);
+                        console.log("✅ Evento cancelado/eliminado de Google Calendar");
+                    } catch (errGoogle) {
+                        console.warn("⚠️ No se pudo eliminar de Google Calendar:", errGoogle);
+                    }
+                }
+            }
+
+            // 3. Recargamos la vista de la agenda
             const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
             if (typeof cargarAgenda === 'function') {
                 await cargarAgenda(modoActual);
             }
         }
-
     } catch (err) {
         console.error("Error al cambiar estatus de cita:", err);
         alert("No se pudo cambiar el estatus: " + err.message);
@@ -2941,6 +2955,7 @@ function cerrarModalColega() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+     verificarYPedirNotificaciones();
    
 const { data: { session } } = await fisioNet.auth.getSession();
     const idUsuarioActivo = session?.user?.id || localStorage.getItem('id_usuario_activo');
@@ -3732,28 +3747,29 @@ window.abrirFiltroLimpieza = async (idSolicitud) => {
 };
 
 window.confirmarLimpiezaYProcesar = async () => {
-    const id = document.getElementById('limpiezaIdSolicitud').value;
-    const nom = document.getElementById('limpiezaNombre').value.trim().toUpperCase();
-    const pat = document.getElementById('limpiezaPaterno').value.trim().toUpperCase();
-    const mat = document.getElementById('limpiezaMaterno').value.trim().toUpperCase();
+    try {
+        const id = document.getElementById('limpiezaIdSolicitud').value;
+        const nom = document.getElementById('limpiezaNombre').value.trim().toUpperCase();
+        const pat = document.getElementById('limpiezaPaterno').value.trim().toUpperCase();
+        const mat = document.getElementById('limpiezaMaterno').value.trim().toUpperCase();
 
-    if(!nom || !pat) {
-        alert("⚠️ El Nombre y Apellido Paterno son obligatorios para el expediente real.");
-        return;
+        if(!nom || !pat) {
+            alert("⚠️ El Nombre y Apellido Paterno son obligatorios para el expediente real.");
+            return;
+        }
+
+        await fisioNet.from('solicitudes_citas').update({
+            nombre: nom,
+            apellido_p: pat,
+            apellido_m: mat
+        }).eq('id', id);
+
+        document.getElementById('modalLimpieza').style.display = 'none';
+        procesarSolicitud(id, 'APROBAR');
+    } catch (e) {
+        console.error("Error en limpieza:", e);
+        alert("Ocurrió un error al procesar la limpieza.");
     }
-
-    // 1. Actualizamos el registro temporal con los datos YA LIMPIOS
-    await fisioNet.from('solicitudes_citas').update({
-        nombre: nom,
-        apellido_p: pat,
-        apellido_m: mat
-    }).eq('id', id);
-
-    document.getElementById('modalLimpieza').style.display = 'none';
-
-    // 2. ¡LA MAGIA! Ahora mandamos llamar a tu función original. 
-    // Como los datos ya están limpios, tu buscador de duplicados funcionará perfecto.
-    procesarSolicitud(id, 'APROBAR');
 };
 
 window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
@@ -3774,10 +3790,7 @@ window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
 
 
 
-// Ejecutar cuando cargue el dashboard
-document.addEventListener('DOMContentLoaded', () => {
-    verificarYPedirNotificaciones();
-});
+
 
 async function verificarYPedirNotificaciones() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -4091,5 +4104,13 @@ function evaluarAccesoElementosUI(permitido) {
         if (bannerUpgrade) bannerUpgrade.style.setProperty('display', 'flex', 'important');
     }
 }
+window.abrirModalNuevaSede = abrirModalNuevaSede;
+window.cerrarModalNuevaSede = cerrarModalNuevaSede;
+window.lanzarLaboratorioGeneral = lanzarLaboratorioGeneral;
 window.buscarColegasFisioCid = buscarColegasFisioCid;
 window.verDetalleColega = verDetalleColega;
+window.abrirConfiguracionAlianza = abrirConfiguracionAlianza;
+window.guardarCambiosAlianza = guardarCambiosAlianza;
+window.abrirBuscadorExpressPacientes = abrirBuscadorExpressPacientes;
+window.cerrarBuscadorExpress = cerrarBuscadorExpress;
+window.atenderSolicitudDesdeDashboard = atenderSolicitudDesdeDashboard;
