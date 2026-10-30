@@ -531,7 +531,7 @@ export function renderizarCitas(citas, modo) {
                             <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
                                 ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
                             </span>
-                            <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${cita.es_prospecto ? true : false})" style="...">
+                           <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${Boolean(cita.es_prospecto)})" style="...">
     <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
     <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
     <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
@@ -601,8 +601,13 @@ export function renderizarCitas(citas, modo) {
         lista.appendChild(contenedorDia);
     }
 }
+
+
 window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) => {
     if (!idCita || idCita === 'undefined') return;
+
+    // 🟢 FORZAR A BOOLEANO REAL
+    const esProspectoBool = esProspecto === true || esProspecto === 'true';
 
     try {
         if (nuevoEstatus === 'REAGENDADO') {
@@ -745,7 +750,7 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
 
         } else {
             // 1. Actualizamos en Supabase
-            if (esProspecto) {
+            if (esProspectoBool) {
                 const { error } = await fisioNet.from('solicitudes_citas')
                     .update({ estado: nuevoEstatus })
                     .eq('id', idCita);
@@ -757,8 +762,8 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                 if (error) throw error;
             }
 
-            // 2. Si el estatus es CANCELADO, eliminar/cancelar en Google Calendar
-            if (nuevoEstatus === 'CANCELADO' && !esProspecto) {
+            // 2. 🟢 ELIMINAR/CANCELAR EN GOOGLE CALENDAR
+            if (nuevoEstatus === 'CANCELADO' && !esProspectoBool) {
                 if (typeof cancelarCitaEnGoogle === 'function') {
                     try {
                         await cancelarCitaEnGoogle(idCita);
@@ -766,6 +771,8 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                     } catch (errGoogle) {
                         console.warn("⚠️ No se pudo eliminar de Google Calendar:", errGoogle);
                     }
+                } else {
+                    console.error("❌ La función cancelarCitaEnGoogle no está disponible.");
                 }
             }
 
