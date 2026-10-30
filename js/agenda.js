@@ -94,11 +94,14 @@ export async function verificarEstadoGoogle() {
 
 export const sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
     try {
-        const { data: { session } } = await fisioNet.auth.getSession();
+        // 1. Obtener la sesión activa para extraer el provider_token de Google
+        const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
+        
         let token = session?.provider_token || localStorage.getItem('google_provider_token');
 
         if (!token) {
-            console.warn("⚠️ No hay token de Google Calendar activo.");
+            console.warn("⚠️ No hay token de Google Calendar activo. Requiere vincular la cuenta.");
+            alert("Para sincronizar eventos en Google Calendar, por favor vuelve a vincular tu cuenta con el botón de Google Calendar.");
             return null;
         }
 
@@ -129,7 +132,7 @@ export const sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolic
             }
         };
 
-        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+        let response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -137,6 +140,17 @@ export const sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolic
             },
             body: JSON.stringify(eventoGoogle)
         });
+
+        // 2. Si responde 401, el token de Google caducó
+        if (response.status === 401) {
+            console.warn("🔑 El token de Google ha caducado (401 Unauthorized). Redirigiendo a revincular...");
+            localStorage.removeItem('google_provider_token');
+            alert("La sesión con Google Calendar caducó. Por favor vuelve a hacer clic en 'Calendar Vinculado' para reactivar el permiso.");
+            
+            // Volvemos a invocar la vinculación
+            await vincularGoogleCalendar();
+            return null;
+        }
 
         if (!response.ok) {
             const errData = await response.json();
