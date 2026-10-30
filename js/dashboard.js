@@ -3,8 +3,9 @@ import {
     cargarAgenda, 
     sincronizarConGoogleCalendar, 
     actualizarCitaEnGoogle, 
-    cancelarCitaEnGoogle 
-} from './agenda.js';
+    cancelarCitaEnGoogle,
+    reconectarGoogleCalendar
+} from './agenda.js';   
 
 if (typeof window.sedesDisponibles === 'undefined') {
     window.sedesDisponibles = [];
@@ -3273,40 +3274,89 @@ function renderizarBotonesPorRol() {
     const contenedor = document.getElementById('contenedorAccionesRapidas');
     if (!contenedor) return;
 
-    const miRol = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase(); 
-    const esAdmin = (miRol === 'ADMIN_SISTEMA');
-    const puedeGestionarEquipo = (miRol === 'ADMIN_SISTEMA' || miRol === 'ADMINISTRATIVO');
+    // 1. Recuperamos el rol operativo de la sesión
+    const miRol = localStorage.getItem('rol_actual') || 'STAFF_CLINICO'; 
+    const esAdmin = (miRol === 'ADMIN_SISTEMA' || miRol === 'DUEÑO');
     
+    // Control de permisos para equipo
+    const puedeGestionarEquipo = (esAdmin || miRol === 'ADMINISTRATIVO');
+    
+    // ==========================================
+    // CONTROL DEL NAVBAR SUPERIOR
+    // ==========================================
     const btnEquipo = document.getElementById('btnMiEquipo');
     const btnPrecios = document.getElementById('btnAbrirConfig');
     const btnIdentidad = document.getElementById('btnIdentidadVisual');
 
     if (btnEquipo) btnEquipo.style.display = puedeGestionarEquipo ? 'flex' : 'none';
-    if (btnPrecios) btnPrecios.style.display = esAdmin ? 'inline-flex' : 'none';
-    if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'inline-flex' : 'none';
+    if (btnPrecios) btnPrecios.style.display = esAdmin ? 'flex' : 'none';
+    if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'flex' : 'none';
 
-    // Generar botones de acciones rápidas
-    let htmlBotones = `
-        <button class="btn-action" onclick="mostrarSeccion('agenda-container')">
-            <i class="fas fa-calendar-alt"></i> Ver Agenda
-        </button>
-        <button class="btn-action" onclick="window.location.href='expedientes.html'">
-            <i class="fas fa-folder-open"></i> Expedientes
-        </button>
-        <button class="btn-action" onclick="lanzarLaboratorioGeneral()">
-            <i class="fas fa-vials"></i> Laboratorio
-        </button>
-    `;
+    // ==========================================
+    // 2. CATÁLOGO MAESTRO DE BOTONES
+    // ==========================================
+    const catalogoBotones = {
+        recetas:         `<button class="btn-action"  onclick="window.location.href='portal-recetas.html'">📋 Crear Receta</button>`,
+        agregarPaciente: `<button class="btn-action" onclick="window.location.href='nuevo-paciente.html'">📝 Agregar Paciente</button>`,
+        listaPacientes:  `<button class="btn-action" onclick="window.location.href='lista-pacientes.html'">👥 Lista de Pacientes</button>`,
+        inventario:      `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
+        nuevoEstudio:    `<button class="btn-action" onclick="window.location.href='portal-gabinete.html'">📡 Nuevo Estudio</button>`,
+        laboratorio:     `<button class="btn-action" onclick="lanzarLaboratorioGeneral()">🧪 Nuevo Laboratorio</button>`,
+        finanzas:        `<button class="btn-action" onclick="window.location.href='finanzas.html'">📊 Control de Caja</button>`
+    };
 
-    if (puedeGestionarEquipo) {
-        htmlBotones += `
-            <button class="btn-action" onclick="window.location.href='caja.html'">
-                <i class="fas fa-cash-register"></i> Caja y Finanzas
-            </button>
-        `;
+    // ==========================================
+    // 3. ASIGNACIÓN EN CALIENTE CON BOTÓN DE RECETAS
+    // ==========================================
+    let botonesAJS = [];
+
+    switch(miRol) {
+        case 'ADMIN_SISTEMA':
+        case 'DUEÑO':
+            botonesAJS = [
+                catalogoBotones.recetas,
+                catalogoBotones.agregarPaciente,
+                catalogoBotones.listaPacientes,
+                catalogoBotones.inventario,
+                catalogoBotones.nuevoEstudio,
+                catalogoBotones.laboratorio,
+                catalogoBotones.finanzas
+            ];
+            break;
+
+        case 'ADMINISTRATIVO':
+            botonesAJS = [
+                catalogoBotones.recetas,
+                catalogoBotones.agregarPaciente, 
+                catalogoBotones.listaPacientes, 
+                catalogoBotones.finanzas
+            ];
+            break;
+
+        case 'STAFF_CLINICO':
+            botonesAJS = [
+                catalogoBotones.recetas,
+                catalogoBotones.listaPacientes, 
+                catalogoBotones.nuevoEstudio, 
+                catalogoBotones.laboratorio
+            ];
+            break;
+
+        case 'OPERATIVO':
+            botonesAJS = [
+                catalogoBotones.recetas
+            ]; 
+            break;
+
+        default:
+            botonesAJS = [
+                catalogoBotones.recetas,
+                catalogoBotones.listaPacientes
+            ];
+            break;
     }
 
-    contenedor.innerHTML = htmlBotones;
+    contenedor.innerHTML = botonesAJS.join('');
 }
 
 // Función para calcular edad desde fecha de nacimiento

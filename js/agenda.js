@@ -92,96 +92,69 @@ export async function verificarEstadoGoogle() {
 // 🔄 OPERACIONES GOOGLE CALENDAR (CREAR, EDITAR, ELIMINAR)
 // ============================================================================
 
-export const sincronizarConGoogleCalendar = async (cita, nombrePaciente, esSolicitud = false) => {
+// agenda.js
+export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
-        // 1. Obtener la sesión activa para extraer el provider_token de Google
-        const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
-        
-        let token = session?.provider_token || localStorage.getItem('google_provider_token');
+        // 1. Obtener o refrescar el token de acceso de Google
+        let googleAccessToken = localStorage.getItem('google_access_token');
 
-        if (!token) {
-            console.warn("⚠️ No hay token de Google Calendar activo. Requiere vincular la cuenta.");
-            alert("Para sincronizar eventos en Google Calendar, por favor vuelve a vincular tu cuenta con el botón de Google Calendar.");
-            return null;
+        // Si usas Supabase OAuth para Google, asegúrate de recuperar el provider_token actualizado
+        const { data: { session } } = await fisioNet.auth.getSession();
+        if (session && session.provider_token) {
+            googleAccessToken = session.provider_token;
+            localStorage.setItem('google_access_token', googleAccessToken);
         }
 
-        let horaInicio = cita.hora_inicio_cita || cita.hora_cita || "00:00:00";
-        if (horaInicio.length === 5) horaInicio += ":00";
+        if (!googleAccessToken) {
+            console.warn("⚠️ No hay token de Google disponible. Omitiendo sync con Google Calendar.");
+            return;
+        }
 
-        const fechaStr = cita.fecha || cita.fecha_cita;
-        const fechaHoraInicioStr = `${fechaStr}T${horaInicio}`;
-
-        const fechaFinObj = new Date(`${fechaStr}T${horaInicio}`);
-        fechaFinObj.setMinutes(fechaFinObj.getMinutes() + 30);
-
-        const hFin = String(fechaFinObj.getHours()).padStart(2, '0');
-        const mFin = String(fechaFinObj.getMinutes()).padStart(2, '0');
-        const fechaHoraFinStr = `${fechaStr}T${hFin}:${mFin}:00`;
-
-        const eventoGoogle = {
-            summary: `🩺 Cita FisioCid: ${nombrePaciente}`,
-            description: `Modalidad: ${cita.modalidad || 'CONSULTORIO'}\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`,
-            start: { dateTime: fechaHoraInicioStr, timeZone: 'America/Mexico_City' },
-            end: { dateTime: fechaHoraFinStr, timeZone: 'America/Mexico_City' },
-            reminders: {
-                useDefault: false,
-                overrides: [
-                    { method: 'popup', minutes: 30 },
-                    { method: 'popup', minutes: 10 }
-                ]
+        // 2. Armar el evento de Google Calendar
+        const evento = {
+            summary: `${esExpress ? '⚡ [EXPRÉS] ' : ''}Cita: ${nombrePaciente}`,
+            description: `Modalidad: ${citaObj.modalidad || 'Consulta'} - Gestionado desde FisioCid`,
+            start: {
+                dateTime: `${citaObj.fecha}T${citaObj.hora_inicio_cita}:00`,
+                timeZone: 'America/Mexico_City'
+            },
+            end: {
+                // Cálculo de fin de cita por defecto +30 min
+                dateTime: `${citaObj.fecha}T${citaObj.hora_inicio_cita}:00`, 
+                timeZone: 'America/Mexico_City'
             }
         };
 
-        let response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+        // 3. Petición POST a Google Calendar API
+        const respuesta = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${googleAccessToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(eventoGoogle)
+            body: JSON.stringify(evento)
         });
 
-        // 2. Si responde 401, el token de Google caducó
-        if (response.status === 401) {
-            console.warn("🔑 El token de Google ha caducado (401 Unauthorized). Redirigiendo a revincular...");
-            localStorage.removeItem('google_provider_token');
-            alert("La sesión con Google Calendar caducó. Por favor vuelve a hacer clic en 'Calendar Vinculado' para reactivar el permiso.");
-            
-            // Volvemos a invocar la vinculación
-            await vincularGoogleCalendar();
-            return null;
+        if (respuesta.status === 401) {
+            console.warn("🔒 El token de Google ha expirado. Se requiere iniciar sesión con Google nuevamente.");
+            // Opcional: Notificar al usuario o renovar sesión con OAuth
+            return;
         }
 
-        if (!response.ok) {
-            const errData = await response.json();
-            console.error("❌ Error al sincronizar con Google Calendar:", errData);
-            return null;
+        if (!respuesta.ok) {
+            const errData = await respuesta.json();
+            throw new Error(errData.error?.message || 'Error al crear evento en Google Calendar');
         }
 
-        const dataGoogle = await response.json();
+        const data = await respuesta.json();
+        console.log("✅ Evento sincronizado en Google Calendar:", data.id);
+        return data;
 
-        if (dataGoogle.id) {
-            const idRegistro = cita.id_cita || cita.id;
-            const tablaDestino = esSolicitud ? 'solicitudes_citas' : 'agenda_maestra';
-            const columnaId = esSolicitud ? 'id' : 'id_cita';
-
-            const { error: errorUpdate } = await fisioNet
-                .from(tablaDestino)
-                .update({ google_event_id: dataGoogle.id })
-                .eq(columnaId, idRegistro);
-
-            if (errorUpdate) {
-                console.error("❌ Error al guardar google_event_id en BD:", errorUpdate.message);
-            } else {
-                console.log("✨ Cita sincronizada y google_event_id almacenado. ID:", dataGoogle.id);
-            }
-            return dataGoogle.id;
-        }
-    } catch (error) {
-        console.error("❌ Error de red con Google Calendar:", error);
-        return null;
+    } catch (err) {
+        console.error("❌ Error al sincronizar con Google Calendar:", err);
+        // Retornamos sin romper la ejecución de la UI en FisioCid App
     }
-};
+}
 
 export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHoraInicio, nombrePaciente, modalidad = 'CONSULTORIO') => {
     try {
@@ -254,6 +227,21 @@ export const cancelarCitaEnGoogle = async (googleEventId) => {
     }
 };
 
+// agenda.js
+export async function reconectarGoogleCalendar() {
+    const { error } = await fisioNet.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            scopes: 'https://www.googleapis.com/auth/calendar.events',
+            redirectTo: window.location.href,
+            queryParams: {
+                access_type: 'offline',
+                prompt: 'consent'
+            }
+        }
+    });
+    if (error) console.error("Error al reconectar Google:", error);
+}
 // ==========================================
 // 📅 GESTIÓN DE AGENDA MAESTRA
 // ==========================================
@@ -408,3 +396,4 @@ window.sincronizarConGoogleCalendar = sincronizarConGoogleCalendar;
 window.actualizarCitaEnGoogle = actualizarCitaEnGoogle;
 window.cancelarCitaEnGoogle = cancelarCitaEnGoogle;
 window.cargarAgenda = cargarAgenda;
+window.reconectarGoogleCalendar = reconectarGoogleCalendar;
