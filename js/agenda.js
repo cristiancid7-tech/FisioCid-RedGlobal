@@ -72,8 +72,14 @@ export async function verificarEstadoGoogle() {
     const btnTexto = document.getElementById('textoVinculacion');
     const btnVincular = document.getElementById('btnVincularGoogle');
 
-    // 🟢 Extraer provider_token directamente del hash de la URL si acaba de redirigir
     let tokenGoogle = session?.provider_token;
+
+    // 🟢 Si tenemos el refresh_token de Google en la sesión inicial, lo respaldamos en la BD
+    if (session?.provider_refresh_token && session?.user?.id) {
+        await fisioNet.from('perfiles_profesionales')
+            .update({ google_refresh_token: session.provider_refresh_token })
+            .eq('id', session.user.id);
+    }
 
     if (!tokenGoogle && window.location.hash) {
         const params = new URLSearchParams(window.location.hash.replace('#', '?'));
@@ -243,29 +249,40 @@ export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHor
 };
 
 async function obtenerAccessTokenValido(forzarRefresh = false) {
-    // 1. Si forzamos refresh (por un 401 previo), le pedimos a Supabase renovar la sesión
     if (forzarRefresh) {
-        console.log("🔄 Renovando sesión OAuth de Supabase en segundo plano...");
+        console.log("🔄 Renovando sesión OAuth...");
         try {
             const { data, error } = await fisioNet.auth.refreshSession();
             if (!error && data?.session?.provider_token) {
                 const nuevoToken = data.session.provider_token;
                 localStorage.setItem('google_access_token', nuevoToken);
                 return nuevoToken;
+            } else {
+                console.warn("⚠️ Reautenticando con Google en segundo plano...");
+                localStorage.removeItem('google_access_token');
+                
+                // Actualizar botón
+                const btnTexto = document.getElementById('textoVinculacion');
+                const btnVincular = document.getElementById('btnVincularGoogle');
+                if (btnTexto) btnTexto.innerText = "Reconectar Calendar ⚠️";
+                if (btnVincular) {
+                    btnVincular.style.borderColor = "#ea580c";
+                    btnVincular.style.background = "#fff7ed";
+                }
+                return null;
             }
         } catch (e) {
-            console.warn("⚠️ No se pudo refrescar la sesión automáticamente:", e);
+            console.warn("⚠️ No se pudo refrescar automáticamente:", e);
+            return null;
         }
     }
 
-    // 2. Probar obtener token de la sesión actual de Supabase
     const { data: { session } } = await fisioNet.auth.getSession();
     if (session?.provider_token) {
         localStorage.setItem('google_access_token', session.provider_token);
         return session.provider_token;
     }
 
-    // 3. Fallback a LocalStorage
     return localStorage.getItem('google_access_token');
 }
 
@@ -548,30 +565,28 @@ async function fetchGoogleCalendar(url, opciones = {}) {
     let token = await obtenerAccessTokenValido(false);
 
     if (!token) {
-        console.warn("⚠️ No se encontró token de Google disponible.");
+        console.warn("⚠️ Sin token activo de Google Calendar. Redirigiendo a reconexión...");
+        await reconectarGoogleCalendar();
         return null;
     }
 
-    // Inyectar o actualizar el Header de Autorización
     opciones.headers = {
         ...(opciones.headers || {}),
         'Authorization': `Bearer ${token}`
     };
 
-    // Intento 1
     let respuesta = await fetch(url, opciones);
 
-    // 🚨 Si responde 401 (Token expirado), renovamos en silencio y reintentamos
     if (respuesta.status === 401) {
-        console.warn("⚠️ Token de Google expirado (401). Reintentando con auto-refresh...");
+        console.warn("⚠️ Token de Google expirado (401). Renovando...");
         const nuevoToken = await obtenerAccessTokenValido(true);
 
         if (nuevoToken) {
             opciones.headers['Authorization'] = `Bearer ${nuevoToken}`;
-            // Intento 2 (con nuevo token)
             respuesta = await fetch(url, opciones);
         } else {
-            console.error("❌ No se pudo renovar el token de Google. Se requiere reautenticación manual.");
+            console.warn("⚠️ Sesión expirada. Redirigiendo a vinculación...");
+            await reconectarGoogleCalendar();
         }
     }
 
