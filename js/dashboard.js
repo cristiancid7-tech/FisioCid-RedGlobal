@@ -560,7 +560,7 @@ export function renderizarCitas(citas, modo) {
                 : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: var(--primary); color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">Abrir Expediente →</button>`;
 
             const selectorEstatus = `
-                <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value)" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
+                <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${cita.es_prospecto ? true : false})" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
                     <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
                     <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
                     <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
