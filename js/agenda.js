@@ -73,11 +73,11 @@ export async function verificarEstadoGoogle() {
     const btnVincular = document.getElementById('btnVincularGoogle');
 
     if (session && session.provider_token) {
-        localStorage.setItem('google_provider_token', session.provider_token);
+        localStorage.setItem('google_access_token', session.provider_token);
         await suscribirWebhookGoogle(session.provider_token);
     }
 
-    const tokenActivo = session?.provider_token || localStorage.getItem('google_provider_token');
+    const tokenActivo = session?.provider_token || localStorage.getItem('google_access_token');
 
     if (tokenActivo) {
         if (btnTexto) btnTexto.innerText = "Calendar Vinculado ✅";
@@ -89,31 +89,68 @@ export async function verificarEstadoGoogle() {
 }
 
 // ============================================================================
-// 🔄 OPERACIONES GOOGLE CALENDAR (CREAR, EDITAR, ELIMINAR)
+// 🔄 MOTOR CENTRALIZADO Y OPERACIONES GOOGLE CALENDAR (AUTO-REFRESH 401)
 // ============================================================================
 
-// agenda.js
+async function obtenerAccessTokenValido(forzarRefresh = false) {
+    if (forzarRefresh) {
+        console.log("🔄 Renovando sesión OAuth de Supabase en segundo plano...");
+        try {
+            const { data, error } = await fisioNet.auth.refreshSession();
+            if (!error && data?.session?.provider_token) {
+                const nuevoToken = data.session.provider_token;
+                localStorage.setItem('google_access_token', nuevoToken);
+                return nuevoToken;
+            }
+        } catch (e) {
+            console.warn("⚠️ No se pudo refrescar la sesión automáticamente:", e);
+        }
+    }
+
+    const { data: { session } } = await fisioNet.auth.getSession();
+    if (session?.provider_token) {
+        localStorage.setItem('google_access_token', session.provider_token);
+        return session.provider_token;
+    }
+
+    return localStorage.getItem('google_access_token');
+}
+
+async function fetchGoogleCalendar(url, opciones = {}) {
+    let token = await obtenerAccessTokenValido(false);
+
+    if (!token) {
+        console.warn("⚠️ No hay token de Google activo.");
+        return null;
+    }
+
+    opciones.headers = {
+        ...(opciones.headers || {}),
+        'Authorization': `Bearer ${token}`
+    };
+
+    let respuesta = await fetch(url, opciones);
+
+    if (respuesta.status === 401) {
+        console.warn("⚠️ Token de Google expirado (401). Reintentando con auto-refresh...");
+        const nuevoToken = await obtenerAccessTokenValido(true);
+
+        if (nuevoToken) {
+            opciones.headers['Authorization'] = `Bearer ${nuevoToken}`;
+            respuesta = await fetch(url, opciones);
+        } else {
+            console.error("❌ No se pudo renovar el token de Google.");
+        }
+    }
+
+    return respuesta;
+}
+
 export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
-        // 1. Obtener sesión y token actualizado
-        const { data: { session }, error: sessionErr } = await fisioNet.auth.getSession();
-        let googleAccessToken = session?.provider_token || localStorage.getItem('google_access_token');
+        const { data: { session } } = await fisioNet.auth.getSession();
 
-        if (session?.provider_token) {
-            localStorage.setItem('google_access_token', session.provider_token);
-        }
-
-        if (!googleAccessToken) {
-            console.warn("⚠️ No hay token de Google activo. Reautenticando...");
-            if (typeof reconectarGoogleCalendar === 'function') {
-                await reconectarGoogleCalendar();
-            } else {
-                alert("Tu sesión de Google Calendar ha expirado. Por favor, vuelve a conectar tu cuenta.");
-            }
-            return;
-        }
-
-        // 2. Obtener intervalo_cita de forma segura y castear a número
+        // 1. Obtener intervalo_cita de forma segura
         let duracionCita = Number(citaObj.intervalo_cita);
 
         if (!duracionCita || isNaN(duracionCita)) {
@@ -131,14 +168,13 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
             }
         }
 
-        // 3. Preparar horas y tiempos
+        // 2. Preparar horas y tiempos
         const horaInicioLimpia = (citaObj.hora_inicio_cita || '09:00').substring(0, 5);
         const [anio, mes, dia] = citaObj.fecha.split('-').map(Number);
         const [hora, min] = horaInicioLimpia.split(':').map(Number);
 
         const fechaHoraBase = new Date(anio, mes - 1, dia, hora, min, 0);
 
-        // Traslados si es a domicilio (búsqueda flexible)
         const modalidadTexto = (citaObj.modalidad || '').toString().toUpperCase();
         const esDomicilio = modalidadTexto.includes('DOMICILIO');
         const minTraslado = esDomicilio ? 30 : 0;
@@ -146,7 +182,6 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         const fechaHoraInicioGoogle = new Date(fechaHoraBase.getTime() - (minTraslado * 60 * 1000));
         const fechaHoraFinGoogle = new Date(fechaHoraBase.getTime() + ((duracionCita + minTraslado) * 60 * 1000));
 
-        // ISO string local
         const aISO = (d) => {
             const pad = (n) => String(n).padStart(2, '0');
             return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -155,7 +190,7 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         const startStr = aISO(fechaHoraInicioGoogle);
         const endStr = aISO(fechaHoraFinGoogle);
 
-        // 4. Payload del evento
+        // 3. Payload del evento
         const evento = {
             summary: `${esExpress ? '⚡ [EXPRÉS] ' : ''}${esDomicilio ? '🚗 [DOMICILIO] ' : ''}Cita: ${nombrePaciente}`,
             description: esDomicilio 
@@ -172,7 +207,7 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
             }
         };
 
-        // 5. Configurar Endpoint HTTP y control de duplicados
+        // 4. Configurar Endpoint HTTP
         const eventIdExistente = citaObj.google_event_id;
         const urlEndpoint = eventIdExistente 
             ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventIdExistente}`
@@ -180,35 +215,22 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         
         const metodoHTTP = eventIdExistente ? 'PATCH' : 'POST';
 
-        // Petición HTTP a Google Calendar
-        let respuesta = await fetch(urlEndpoint, {
+        // 5. Petición HTTP con Auto-Refresh
+        let respuesta = await fetchGoogleCalendar(urlEndpoint, {
             method: metodoHTTP,
-            headers: {
-                'Authorization': `Bearer ${googleAccessToken}`,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(evento)
         });
 
-        // 🚨 SI DA ERROR 401 (UNAUTHORIZED), EL TOKEN EXPIRÓ
-        if (respuesta.status === 401) {
-            console.warn("⚠️ Token de Google expirado (401). Renovando sesión...");
-            localStorage.removeItem('google_access_token');
-            if (typeof reconectarGoogleCalendar === 'function') {
-                await reconectarGoogleCalendar();
-            }
-            return;
-        }
-
-        if (!respuesta.ok) {
-            const errData = await respuesta.json();
+        if (!respuesta || !respuesta.ok) {
+            const errData = respuesta ? await respuesta.json() : "Sin respuesta";
             console.error("❌ Error en petición a Google Calendar:", errData);
             return;
         }
 
         const data = await respuesta.json();
 
-        // 6. Guardar la referencia del google_event_id en la base de datos
+        // 6. Guardar la referencia del google_event_id
         if (citaObj.id_cita && !eventIdExistente) {
             await fisioNet.from('agenda_maestra')
                 .update({ google_event_id: data.id })
@@ -225,14 +247,10 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         console.error("❌ Error al sincronizar con Google Calendar:", err);
     }
 }
+
 export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHoraInicio, nombrePaciente, modalidad = 'CONSULTORIO') => {
     try {
         if (!googleEventId) return;
-
-        const { data: { session } } = await fisioNet.auth.getSession();
-        let token = session?.provider_token || localStorage.getItem('google_provider_token');
-
-        if (!token) return;
 
         let horaInicio = nuevaHoraInicio.length === 5 ? `${nuevaHoraInicio}:00` : nuevaHoraInicio;
         const fechaHoraInicioStr = `${nuevaFecha}T${horaInicio}`;
@@ -251,18 +269,16 @@ export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHor
             end: { dateTime: fechaHoraFinStr, timeZone: 'America/Mexico_City' }
         };
 
-        const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`, {
+        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`;
+        const response = await fetchGoogleCalendar(url, {
             method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(eventoPatch)
         });
 
-        if (response.ok) {
+        if (response && response.ok) {
             console.log("🔄 Cita actualizada en Google Calendar.");
-        } else {
+        } else if (response) {
             console.error("❌ Error al actualizar en Google Calendar:", await response.json());
         }
     } catch (error) {
@@ -270,62 +286,33 @@ export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHor
     }
 };
 
-export const cancelarCitaEnGoogle = async (googleEventId) => {
+export async function cancelarCitaEnGoogle(idCita) {
     try {
-        if (!googleEventId) return;
+        const eventId = localStorage.getItem(`gcal_event_${idCita}`);
+        if (!eventId) return;
 
-        const { data: { session } } = await fisioNet.auth.getSession();
-        let token = session?.provider_token || localStorage.getItem('google_provider_token');
+        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`;
+        const res = await fetchGoogleCalendar(url, { method: 'DELETE' });
 
-        if (!token) return;
-
-        const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (response.ok || response.status === 410) {
-            console.log("🗑️ Cita eliminada de Google Calendar.");
-        } else {
-            console.error("❌ Error al eliminar evento en Google Calendar:", await response.json());
+        if (res && (res.ok || res.status === 204)) {
+            console.log("✅ Cita eliminada de Google Calendar en segundo plano.");
+            localStorage.removeItem(`gcal_event_${idCita}`);
         }
     } catch (error) {
-        console.error("❌ Error de red al intentar eliminar evento de Google:", error);
+        console.error("Error al cancelar cita en Google Calendar:", error);
     }
-};
+}
 
 export async function eliminarEventoGoogleCalendar(googleEventId) {
     try {
         if (!googleEventId) return;
 
-        let googleAccessToken = localStorage.getItem('google_access_token');
-        const { data: { session } } = await fisioNet.auth.getSession();
+        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`;
+        const respuesta = await fetchGoogleCalendar(url, { method: 'DELETE' });
 
-        if (session && session.provider_token) {
-            googleAccessToken = session.provider_token;
-        }
-
-        if (!googleAccessToken) {
-            console.warn("⚠️ No hay token activo para eliminar en Google Calendar.");
-            return;
-        }
-
-        const respuesta = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`,
-            {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${googleAccessToken}`
-                }
-            }
-        );
-
-        // HTTP 204 (No Content) o 410 (Gone/Ya borrado) confirman éxito
-        if (respuesta.ok || respuesta.status === 410) { 
+        if (respuesta && (respuesta.ok || respuesta.status === 410 || respuesta.status === 204)) {
             console.log("🗑️ Evento eliminado exitosamente de Google Calendar.");
-        } else {
+        } else if (respuesta) {
             const errData = await respuesta.json();
             console.error("❌ Error al eliminar evento de Google Calendar:", errData);
         }
@@ -334,7 +321,6 @@ export async function eliminarEventoGoogleCalendar(googleEventId) {
     }
 }
 
-// agenda.js
 export async function reconectarGoogleCalendar() {
     const { error } = await fisioNet.auth.signInWithOAuth({
         provider: 'google',
@@ -349,6 +335,7 @@ export async function reconectarGoogleCalendar() {
     });
     if (error) console.error("Error al reconectar Google:", error);
 }
+
 // ==========================================
 // 📅 GESTIÓN DE AGENDA MAESTRA
 // ==========================================
@@ -379,7 +366,6 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
 
     if (!user) return;
 
-    // --- 1. CONSULTA CITAS OFICIALES ---
     let queryCitas = fisioNet
         .from('agenda_maestra')
         .select(`
@@ -396,7 +382,6 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         .eq('id_profesional', user.id)
         .eq('id_clinica', clinicaId);
 
-    // --- 2. CONSULTA SOLICITUDES EN SALA ---
     let querySol = fisioNet
         .from('solicitudes_citas')
         .select('*')
@@ -404,7 +389,6 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         .eq('id_clinica_solicitada', clinicaId)
         .eq('id_profesional_solicitado', user.id);
 
-    // --- 3. FILTROS DE FECHA ---
     if (modo === 'dia') {
         queryCitas = queryCitas.eq('fecha', fechaInput);
         querySol = querySol.eq('fecha_cita', fechaInput);
@@ -494,28 +478,22 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
 export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
     try {
         const estatusLimpio = (nuevoEstatus || '').toUpperCase();
-        
-        // 🚨 SI SE SELECCIONA CANCELADO / CANCELADA
+
         if (estatusLimpio.includes('CANCELAD')) {
             const nombrePaciente = citaObj?.pacientes_maestros?.nombre || 'este paciente';
-            
-            // Ventana de confirmación para el usuario
             const confirmacion = confirm(`⚠️ Se cambiará el estado a CANCELADO y se eliminará la cita de Google Calendar para ${nombrePaciente}.\n\n¿Estás seguro de que deseas eliminarla?`);
 
             if (!confirmacion) {
-                // Si el usuario presiona "Cancelar", recargamos la vista para revertir el selector
                 if (typeof cargarAgenda === 'function') await cargarAgenda();
                 return false;
             }
 
-            // Si el usuario aceptó, eliminamos el evento de Google Calendar
             const eventId = citaObj?.google_event_id;
             if (eventId) {
                 await eliminarEventoGoogleCalendar(eventId);
             }
         }
 
-        // 🔄 Actualizamos el estado en la base de datos (agenda_maestra o solicitudes_citas)
         if (citaObj?.es_prospecto) {
             await fisioNet
                 .from('solicitudes_citas')
@@ -530,7 +508,6 @@ export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
 
         console.log(`✅ Estado de cita ${idCita} actualizado a: ${nuevoEstatus}`);
 
-        // Refrescar paneles visuales
         if (typeof cargarAgenda === 'function') await cargarAgenda();
         return true;
 
@@ -540,15 +517,8 @@ export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
     }
 }
 
-// Exponer globalmente
-window.manejarCambioEstatusCita = manejarCambioEstatusCita;
-
-// Inicialización de escuchas de Google al cargar
-window.addEventListener('DOMContentLoaded', () => {
-    verificarEstadoGoogle();
-});
-
 // Exposición global
+window.manejarCambioEstatusCita = manejarCambioEstatusCita;
 window.actualizarAgenda = cargarAgenda;
 window.vincularGoogleCalendar = vincularGoogleCalendar;
 window.sincronizarConGoogleCalendar = sincronizarConGoogleCalendar;
@@ -556,3 +526,7 @@ window.actualizarCitaEnGoogle = actualizarCitaEnGoogle;
 window.cancelarCitaEnGoogle = cancelarCitaEnGoogle;
 window.cargarAgenda = cargarAgenda;
 window.reconectarGoogleCalendar = reconectarGoogleCalendar;
+
+window.addEventListener('DOMContentLoaded', () => {
+    verificarEstadoGoogle();
+});
