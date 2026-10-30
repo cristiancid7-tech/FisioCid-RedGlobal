@@ -95,7 +95,7 @@ export async function verificarEstadoGoogle() {
 // agenda.js
 export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
-        // 1. Obtener token de Google de la sesión o localStorage
+        // 1. Obtener token de Google
         let googleAccessToken = localStorage.getItem('google_access_token');
         const { data: { session } } = await fisioNet.auth.getSession();
 
@@ -109,65 +109,54 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
             return;
         }
 
-        // 2. Obtener intervalo_cita de la base de datos si no viene en citaObj
-let duracionCita = citaObj.intervalo_cita;
+        // 2. Obtener intervalo_cita de forma segura y castear a número
+        let duracionCita = Number(citaObj.intervalo_cita);
 
-if (!duracionCita) {
-    // Si no viene citaObj.id_profesional, intentamos obtener el ID del usuario en sesión
-    const idProfesionalBuscar = citaObj.id_profesional || session?.user?.id;
+        if (!duracionCita || isNaN(duracionCita)) {
+            const idProfesionalBuscar = citaObj.id_profesional || session?.user?.id;
+            if (idProfesionalBuscar) {
+                const { data: perfil } = await fisioNet
+                    .from('perfiles_profesionales')
+                    .select('intervalo_cita')
+                    .eq('id', idProfesionalBuscar)
+                    .maybeSingle();
 
-    if (idProfesionalBuscar) {
-        const { data: perfil } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('intervalo_cita')
-            .eq('id', idProfesionalBuscar)
-            .maybeSingle();
+                duracionCita = Number(perfil?.intervalo_cita) || 30;
+            } else {
+                duracionCita = 30;
+            }
+        }
 
-        duracionCita = perfil?.intervalo_cita || 30;
-    } else {
-        duracionCita = 30; // Fallback por defecto si no hay ID
-    }
-}
+        // 3. Preparar horas y tiempos
+        const horaInicioLimpia = (citaObj.hora_inicio_cita || '09:00').substring(0, 5);
+        const [anio, mes, dia] = citaObj.fecha.split('-').map(Number);
+        const [hora, min] = horaInicioLimpia.split(':').map(Number);
 
-        // 3. Formatear la hora de inicio base (HH:MM:00)
-        const horaInicioLimpia = citaObj.hora_inicio_cita.length === 5 
-            ? `${citaObj.hora_inicio_cita}:00` 
-            : citaObj.hora_inicio_cita;
+        const fechaHoraBase = new Date(anio, mes - 1, dia, hora, min, 0);
 
-        const fechaHoraBase = new Date(`${citaObj.fecha}T${horaInicioLimpia}`);
-
-        // 4. Calcular tiempos considerando traslado si es a domicilio
+        // Traslados si es a domicilio
         const esDomicilio = (citaObj.modalidad === 'DOMICILIO');
         const minTraslado = esDomicilio ? 30 : 0;
 
-        // Hora de inicio en Google (30 min antes si es a domicilio)
         const fechaHoraInicioGoogle = new Date(fechaHoraBase.getTime() - (minTraslado * 60 * 1000));
-
-        // Hora de fin en Google (duración de la cita + 30 min después si es a domicilio)
         const fechaHoraFinGoogle = new Date(fechaHoraBase.getTime() + ((duracionCita + minTraslado) * 60 * 1000));
 
-        // Formateadores a ISO local
-        const formatearISO = (fechaObj) => {
-            const a = fechaObj.getFullYear();
-            const m = String(fechaObj.getMonth() + 1).padStart(2, '0');
-            const d = String(fechaObj.getDate()).padStart(2, '0');
-            const h = String(fechaObj.getHours()).padStart(2, '0');
-            const min = String(fechaObj.getMinutes()).padStart(2, '0');
-            return `${a}-${m}-${d}T${h}:${min}:00`;
+        // ISO string local sin offset 'hardcodeado'
+        const aISO = (d) => {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
         };
 
-        const startStr = formatearISO(fechaHoraInicioGoogle);
-        const endStr = formatearISO(fechaHoraFinGoogle);
+        const startStr = aISO(fechaHoraInicioGoogle);
+        const endStr = aISO(fechaHoraFinGoogle);
 
-        // 5. Armar el payload del evento
-        const descripcionServicio = esDomicilio 
-            ? `🏡 SERVICIO A DOMICILIO (Incluye 30 min previos y posteriores de traslado)\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`
-            : `🏥 CONSULTA EN CLINICA\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`;
-
+        // 4. Payload del evento
         const evento = {
-            summary: `${esExpress ? '⚡ [EXPRÉS] ' : ''}Cita: ${nombrePaciente}`,
-            description: descripcionServicio,
-            transparency: 'opaque', // Bloquea el espacio como OCUPADO
+            summary: `${esExpress ? '⚡ [EXPRÉS] ' : ''}${esDomicilio ? '🚗 [DOMICILIO] ' : ''}Cita: ${nombrePaciente}`,
+            description: esDomicilio 
+                ? `🏡 SERVICIO A DOMICILIO (Incluye 30 min de traslado antes y después)\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`
+                : `🏥 CONSULTA EN CLÍNICA\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`,
+            transparency: 'opaque',
             start: {
                 dateTime: startStr,
                 timeZone: 'America/Mexico_City'
@@ -178,9 +167,16 @@ if (!duracionCita) {
             }
         };
 
-        // 6. Enviar a Google Calendar
-        const respuesta = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-            method: 'POST',
+        // 5. CONTROL ANTI-DUPLICADOS (PATCH si ya existe, POST si es nueva)
+        const eventIdExistente = citaObj.google_event_id;
+        const urlEndpoint = eventIdExistente 
+            ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventIdExistente}`
+            : `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
+        
+        const metodoHTTP = eventIdExistente ? 'PATCH' : 'POST';
+
+        const respuesta = await fetch(urlEndpoint, {
+            method: metodoHTTP,
             headers: {
                 'Authorization': `Bearer ${googleAccessToken}`,
                 'Content-Type': 'application/json'
@@ -190,18 +186,30 @@ if (!duracionCita) {
 
         if (!respuesta.ok) {
             const errData = await respuesta.json();
-            throw new Error(errData.error?.message || 'Error al crear evento en Google Calendar');
+            console.error("❌ Error en petición a Google Calendar:", errData);
+            return;
         }
 
         const data = await respuesta.json();
-        console.log("✅ Evento sincronizado dinámicamente en Google Calendar:", data.id);
+        console.log(`✅ Evento ${eventIdExistente ? 'actualizado' : 'creado'} en Google Calendar con ID:`, data.id);
+
+        // 6. Guardar la referencia del google_event_id en la base de datos
+        if (citaObj.id_cita && !eventIdExistente) {
+            await fisioNet.from('agenda_maestra')
+                .update({ google_event_id: data.id })
+                .eq('id_cita', citaObj.id_cita);
+        } else if (citaObj.id && citaObj.es_prospecto && !eventIdExistente) {
+            await fisioNet.from('solicitudes_citas')
+                .update({ google_event_id: data.id })
+                .eq('id', citaObj.id);
+        }
+
         return data;
 
     } catch (err) {
         console.error("❌ Error al sincronizar con Google Calendar:", err);
     }
 }
-
 export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHoraInicio, nombrePaciente, modalidad = 'CONSULTORIO') => {
     try {
         if (!googleEventId) return;
