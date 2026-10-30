@@ -74,11 +74,15 @@ export async function verificarEstadoGoogle() {
 
     let tokenGoogle = session?.provider_token;
 
-    // 🟢 Si tenemos el refresh_token de Google en la sesión inicial, lo respaldamos en la BD
+    // Guardado seguro con control de error si la columna no existe
     if (session?.provider_refresh_token && session?.user?.id) {
-        await fisioNet.from('perfiles_profesionales')
-            .update({ google_refresh_token: session.provider_refresh_token })
-            .eq('id', session.user.id);
+        try {
+            await fisioNet.from('perfiles_profesionales')
+                .update({ google_refresh_token: session.provider_refresh_token })
+                .eq('id', session.user.id);
+        } catch (errDb) {
+            console.warn("⚠️ Omitiendo guardado de google_refresh_token en BD:", errDb);
+        }
     }
 
     if (!tokenGoogle && window.location.hash) {
@@ -608,12 +612,27 @@ window.addEventListener('DOMContentLoaded', () => {
     verificarEstadoGoogle();
 
     // Escuchar el evento de Supabase para cuando complete el inicio de sesión OAuth
-    if (typeof fisioNet !== 'undefined') {
-        fisioNet.auth.onAuthStateChange((event, session) => {
-            if (session?.provider_token) {
-                localStorage.setItem('google_access_token', session.provider_token);
-                verificarEstadoGoogle();
+    // Agregar a tu inicializador en agenda.js
+if (typeof fisioNet !== 'undefined') {
+    const clinicaId = localStorage.getItem('id_clinica_activa');
+
+    fisioNet
+        .channel('cambios-agenda-realtime')
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // UPDATE, DELETE, INSERT
+                schema: 'public',
+                table: 'agenda_maestra',
+                filter: `id_clinica=eq.${clinicaId}`
+            },
+            (payload) => {
+                console.log("⚡ Cambio detectado desde Google/BD, recargando agenda...");
+                if (typeof cargarAgenda === 'function') {
+                    cargarAgenda();
+                }
             }
-        });
-    }
+        )
+        .subscribe();
+}
 });

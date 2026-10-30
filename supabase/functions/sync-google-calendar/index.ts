@@ -11,7 +11,7 @@ serve(async (req) => {
     const channelId = req.headers.get("x-goog-channel-id");
     const resourceState = req.headers.get("x-goog-resource-state");
 
-    // Si es una confirmación de sincronización (Sync handshake de Google)
+    // Si es una confirmación de sincronización (Sync handshake)
     if (resourceState === "sync") {
       return new Response("Sync OK", { status: 200 });
     }
@@ -32,8 +32,71 @@ serve(async (req) => {
       return new Response("Canal no encontrado", { status: 200 });
     }
 
-    // 3. Notificación procesada exitosamente
-    console.log(`📅 Cambio detectado en Google Calendar para la clínica ${watchData.id_clinica}`);
+    // 3. Obtener el refresh token o access token del profesional para consultar Google Calendar
+    const { data: perfil } = await supabase
+      .from("perfiles_profesionales")
+      .select("google_refresh_token")
+      .eq("id", watchData.id_profesional)
+      .maybeSingle();
+
+    // 4. Si tenemos acceso, consultamos los últimos eventos modificados o eliminados
+    // Consultamos los eventos modificados en los últimos 5 minutos
+    const haceCincoMinutos = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    
+    // Si guardaste el refresh_token, solicitamos un access_token fresco
+    if (perfil?.google_refresh_token) {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: Deno.env.get("GOOGLE_CLIENT_ID") || "",
+          client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET") || "",
+          refresh_token: perfil.google_refresh_token,
+          grant_type: "refresh_token",
+        }),
+      });
+
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        const accessToken = tokenData.access_token;
+
+        // Pedimos los eventos incluyendo los borrados (showDeleted=true)
+        const eventsRes = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events?updatedMin=${encodeURIComponent(
+            haceCincoMinutos
+          )}&showDeleted=true`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json();
+          const items = eventsData.items || [];
+
+          for (const item of items) {
+            // 🚨 SI EL EVENTO FUE BORRADO EN GOOGLE CALENDAR
+            if (item.status === "cancelled") {
+              console.log(`🗑️ Evento de Google ${item.id} fue eliminado. Actualizando BD...`);
+
+              // Actualizamos en agenda_maestra
+              await supabase
+                .from("agenda_maestra")
+                .update({ estatus: "CANCELADO", google_event_id: null })
+                .eq("google_event_id", item.id);
+
+              // Actualizamos en solicitudes_citas
+              await supabase
+                .from("solicitudes_citas")
+                .update({ estado: "CANCELADO", google_event_id: null })
+                .eq("google_event_id", item.id);
+            }
+          }
+        }
+      }
+    }
+
+    console.log(`📅 Cambio procesado para la clínica ${watchData.id_clinica}`);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
