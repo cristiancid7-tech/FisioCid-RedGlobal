@@ -1362,7 +1362,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
         const telefonoInput = document.getElementById('telefonoExpress')?.value.trim() || '';
         
-        const modalidad = document.getElementById('modalidadCita').value;
+        const modalidad = document.getElementById('modalidadCita').value; // 'CONSULTORIO' o 'DOMICILIO'
         const horaElegida = document.getElementById('horaCita').value;
         const fechaElegida = document.getElementById('fechaCita').value;
 
@@ -1386,7 +1386,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         // 🕒 Validar horario laborable (MULTI-TURNO)
         if (colab.horario_atencion) {
             const horarios = typeof colab.horario_atencion === 'string' 
-                ? JSON.parse(colab.horario_atencion) 
+                ? JSON.parse(colab.horario_atencion)
                 : colab.horario_atencion;
                 
             const intervalo = parseInt(colab.intervalo_cita) || 30; 
@@ -1397,7 +1397,7 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
 
             if (!turnosHoy || turnosHoy.length === 0) {
                 alert(`❌ DÍA NO LABORABLE: No tienes configurado horario de trabajo para este día en esta sede.`);
-                return; 
+                return;
             }
 
             const [hE, mE] = horaElegida.split(':').map(Number);
@@ -1447,14 +1447,14 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         const costoDomicilio = colab.costo_domicilio_base !== null ? Number(colab.costo_domicilio_base) : 1200;
         const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
         
-        // 🔄 CORREGIDO: Multiplicación de porcentaje
+        // 🔄 CORREGIDO: Descuento en porcentaje sobre precio base
         const descuentoCalculado = (precioBase * porcentaje) / 100;
         const precioFinal = precioBase - descuentoCalculado;
 
-        // Función auxiliar para llamar al Sync en cualquier entorno (Módulo o Global)
+        // Función auxiliar para sincronización con Google Calendar
         const ejecutarSyncCalendar = async (citaObj, nombrePaciente, esExpress = false) => {
             const funcionSync = typeof sincronizarConGoogleCalendar === 'function' 
-                ? sincronizarConGoogleCalendar 
+                ? sincronizarConGoogleCalendar
                 : (typeof window.sincronizarConGoogleCalendar === 'function' ? window.sincronizarConGoogleCalendar : null);
 
             if (funcionSync) {
@@ -1477,10 +1477,10 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             }
 
             const resultado = typeof procesarNombreMexicano === 'function' 
-                ? procesarNombreMexicano(nombreInput) 
+                ? procesarNombreMexicano(nombreInput)
                 : { nombre: nombreInput, paterno: '', materno: '' }; 
 
-            const { error: errSol } = await fisioNet.from('solicitudes_citas').insert({
+            const payloadSolicitud = {
                 nombre: resultado.nombre,
                 apellido_p: resultado.paterno,
                 apellido_m: resultado.materno,
@@ -1490,7 +1490,18 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
                 estado: 'CONFIRMADO',
                 id_clinica_solicitada: clinicaId,
                 id_profesional_solicitado: user.id
-            });
+            };
+
+            // Pasamos modalidad si agregas la columna a la tabla solicitudes_citas
+            if (modalidad) {
+                payloadSolicitud.modalidad = modalidad;
+            }
+
+            const { data: solData, error: errSol } = await fisioNet
+                .from('solicitudes_citas')
+                .insert(payloadSolicitud)
+                .select()
+                .single();
 
             if (errSol) {
                 alert("Error al enviar a Sala de Espera: " + errSol.message);
@@ -1498,18 +1509,20 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             }
 
             try {
-                const citaExpressDisfrazada = {
+                const citaExpressSync = {
+                    id: solData?.id,
+                    es_prospecto: true,
                     fecha: fechaElegida,
                     hora_inicio_cita: horaElegida,
-                    modalidad: 'SALA DE ESPERA (EXPRÉS)'
+                    modalidad: modalidad, // Pasa 'DOMICILIO' o 'CONSULTORIO'
+                    intervalo_cita: colab.intervalo_cita || 30
                 };
                 const nombreCompletoExpress = `${resultado.nombre} ${resultado.paterno} ${resultado.materno || ''}`.trim();
-                await ejecutarSyncCalendar(citaExpressDisfrazada, nombreCompletoExpress, true);
+                await ejecutarSyncCalendar(citaExpressSync, nombreCompletoExpress, true);
             } catch (syncErr) {
                 console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
             }
 
-            // --- RECARGAR SALA DE ESPERA (FUERA DEL TRY/CATCH) ---
             if (typeof cargarSalaEspera === 'function') {
                 await cargarSalaEspera();
             }
@@ -1542,14 +1555,15 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
             try {
                 let nombrePacienteSync = nombreInput.trim();
                 if (datosCita?.pacientes_maestros?.nombre) {
-                    nombrePacienteSync = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno} ${datosCita.pacientes_maestros.apellido_materno || ''}`.trim();
+                    nombrePacienteSync = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno || ''} ${datosCita.pacientes_maestros.apellido_materno || ''}`.trim();
                 }
 
                 const citaParaSync = {
                     ...datosCita,
                     fecha: fechaElegida,
                     hora_inicio_cita: horaElegida,
-                    modalidad: modalidad
+                    modalidad: modalidad,
+                    intervalo_cita: colab.intervalo_cita || 30
                 };
 
                 await ejecutarSyncCalendar(citaParaSync, nombrePacienteSync, false);
@@ -1565,7 +1579,8 @@ document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) =
         if (modalCita) modalCita.style.display = 'none';
 
         document.getElementById('formNuevaCita').reset();
-        document.getElementById('idPacienteSeleccionado').value = '';
+        const inputIdPac = document.getElementById('idPacienteSeleccionado');
+        if (inputIdPac) inputIdPac.value = '';
         
         // Actualización de Paneles
         if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
@@ -2165,8 +2180,9 @@ async function actualizarPrecioVisual() {
         }
     }
 
-    const descuentoCalculado = (precioBaseFinal * porcentajeDescuento) / 100;
-    const precioFinal = Math.max(0, precioBaseFinal - descuentoCalculado);
+   // ✅ Código correcto:
+const descuentoCalculado = (precioBase * porcentaje) / 100;
+const precioFinal = precioBase - descuentoCalculado;
 
     if (textoMonto) textoMonto.innerText = `$${precioFinal.toFixed(2)}`;
     if (vistaPrevia) vistaPrevia.style.display = 'block';

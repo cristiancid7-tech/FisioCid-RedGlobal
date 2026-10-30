@@ -281,6 +281,44 @@ export const cancelarCitaEnGoogle = async (googleEventId) => {
     }
 };
 
+export async function eliminarEventoGoogleCalendar(googleEventId) {
+    try {
+        if (!googleEventId) return;
+
+        let googleAccessToken = localStorage.getItem('google_access_token');
+        const { data: { session } } = await fisioNet.auth.getSession();
+
+        if (session && session.provider_token) {
+            googleAccessToken = session.provider_token;
+        }
+
+        if (!googleAccessToken) {
+            console.warn("⚠️ No hay token activo para eliminar en Google Calendar.");
+            return;
+        }
+
+        const respuesta = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${googleAccessToken}`
+                }
+            }
+        );
+
+        // HTTP 204 (No Content) o 410 (Gone/Ya borrado) confirman éxito
+        if (respuesta.ok || respuesta.status === 410) { 
+            console.log("🗑️ Evento eliminado exitosamente de Google Calendar.");
+        } else {
+            const errData = await respuesta.json();
+            console.error("❌ Error al eliminar evento de Google Calendar:", errData);
+        }
+    } catch (err) {
+        console.error("❌ Error en petición DELETE a Google Calendar:", err);
+    }
+}
+
 // agenda.js
 export async function reconectarGoogleCalendar() {
     const { error } = await fisioNet.auth.signInWithOAuth({
