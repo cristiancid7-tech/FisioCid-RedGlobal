@@ -95,17 +95,17 @@ export async function verificarEstadoGoogle() {
 // agenda.js
 export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
-        // 1. Obtener token de Google
-        let googleAccessToken = localStorage.getItem('google_access_token');
-        const { data: { session } } = await fisioNet.auth.getSession();
+      // 1. Obtener sesión y token actualizado
+        const { data: { session }, error: sessionErr } = await fisioNet.auth.getSession();
+        let googleAccessToken = session?.provider_token || localStorage.getItem('google_access_token');
 
-        if (session && session.provider_token) {
-            googleAccessToken = session.provider_token;
-            localStorage.setItem('google_access_token', googleAccessToken);
+        if (session?.provider_token) {
+            localStorage.setItem('google_access_token', session.provider_token);
         }
 
         if (!googleAccessToken) {
-            console.warn("⚠️ No hay token de Google disponible. Omitiendo sync.");
+            console.warn("⚠️ No hay token de Google activo. Reautenticando...");
+            alert("Tu sesión de Google Calendar ha expirado. Por favor, vuelve a conectar tu cuenta.");
             return;
         }
 
@@ -167,15 +167,8 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
             }
         };
 
-        // 5. CONTROL ANTI-DUPLICADOS (PATCH si ya existe, POST si es nueva)
-        const eventIdExistente = citaObj.google_event_id;
-        const urlEndpoint = eventIdExistente 
-            ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventIdExistente}`
-            : `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
-        
-        const metodoHTTP = eventIdExistente ? 'PATCH' : 'POST';
-
-        const respuesta = await fetch(urlEndpoint, {
+       // 5. Enviar petición HTTP a Google
+        let respuesta = await fetch(urlEndpoint, {
             method: metodoHTTP,
             headers: {
                 'Authorization': `Bearer ${googleAccessToken}`,
@@ -184,6 +177,22 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
             body: JSON.stringify(evento)
         });
 
+        // 🚨 SI DA ERROR 401 (UNAUTHORIZED), EL TOKEN EXPIRÓ
+        if (respuesta.status === 401) {
+            console.warn("⚠️ Token de Google expirado (401). Intentando reautenticar...");
+            localStorage.removeItem('google_access_token');
+            
+            // Re-vincular con Google mediante Supabase Auth
+            await fisioNet.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    scopes: 'https://www.googleapis.com/auth/calendar.events',
+                    redirectTo: window.location.href
+                }
+            });
+            return;
+        }
+
         if (!respuesta.ok) {
             const errData = await respuesta.json();
             console.error("❌ Error en petición a Google Calendar:", errData);
@@ -191,8 +200,6 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         }
 
         const data = await respuesta.json();
-        //console.log(`✅ Evento ${eventIdExistente ? 'actualizado' : 'creado'} en Google Calendar con ID:`, data.id);
-
         // 6. Guardar la referencia del google_event_id en la base de datos
         if (citaObj.id_cita && !eventIdExistente) {
             await fisioNet.from('agenda_maestra')
