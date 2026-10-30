@@ -72,12 +72,22 @@ export async function verificarEstadoGoogle() {
     const btnTexto = document.getElementById('textoVinculacion');
     const btnVincular = document.getElementById('btnVincularGoogle');
 
-    if (session && session.provider_token) {
-        localStorage.setItem('google_provider_token', session.provider_token);
-        await suscribirWebhookGoogle(session.provider_token);
+    // 🟢 Extraer provider_token directamente del hash de la URL si acaba de redirigir
+    let tokenGoogle = session?.provider_token;
+
+    if (!tokenGoogle && window.location.hash) {
+        const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+        tokenGoogle = params.get('provider_token') || params.get('access_token');
     }
 
-    const tokenActivo = session?.provider_token || localStorage.getItem('google_provider_token');
+    if (tokenGoogle) {
+        localStorage.setItem('google_access_token', tokenGoogle);
+        if (session?.provider_token) {
+            await suscribirWebhookGoogle(session.provider_token);
+        }
+    }
+
+    const tokenActivo = tokenGoogle || localStorage.getItem('google_access_token');
 
     if (tokenActivo) {
         if (btnTexto) btnTexto.innerText = "Calendar Vinculado ✅";
@@ -569,7 +579,7 @@ async function fetchGoogleCalendar(url, opciones = {}) {
 }
 
 
-// Exposición global
+window.manejarCambioEstatusCita = manejarCambioEstatusCita;
 window.actualizarAgenda = cargarAgenda;
 window.vincularGoogleCalendar = vincularGoogleCalendar;
 window.sincronizarConGoogleCalendar = sincronizarConGoogleCalendar;
@@ -577,3 +587,18 @@ window.actualizarCitaEnGoogle = actualizarCitaEnGoogle;
 window.cancelarCitaEnGoogle = cancelarCitaEnGoogle;
 window.cargarAgenda = cargarAgenda;
 window.reconectarGoogleCalendar = reconectarGoogleCalendar;
+
+window.addEventListener('DOMContentLoaded', () => {
+    // Verificación inicial
+    verificarEstadoGoogle();
+
+    // Escuchar el evento de Supabase para cuando complete el inicio de sesión OAuth
+    if (typeof fisioNet !== 'undefined') {
+        fisioNet.auth.onAuthStateChange((event, session) => {
+            if (session?.provider_token) {
+                localStorage.setItem('google_access_token', session.provider_token);
+                verificarEstadoGoogle();
+            }
+        });
+    }
+});
