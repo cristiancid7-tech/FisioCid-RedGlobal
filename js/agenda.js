@@ -197,16 +197,18 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
 
         const data = await respuesta.json();
 
-        // 6. Guardar la referencia del google_event_id
-        if (citaObj.id_cita && !eventIdExistente) {
-            await fisioNet.from('agenda_maestra')
-                .update({ google_event_id: data.id })
-                .eq('id_cita', citaObj.id_cita);
-        } else if (citaObj.id && citaObj.es_prospecto && !eventIdExistente) {
-            await fisioNet.from('solicitudes_citas')
-                .update({ google_event_id: data.id })
-                .eq('id', citaObj.id);
-        }
+       // Seccion 6 de sincronizarConGoogleCalendar
+if (citaObj.id_cita && !citaObj.es_prospecto && !eventIdExistente) {
+    // Cita oficial en agenda_maestra
+    await fisioNet.from('agenda_maestra')
+        .update({ google_event_id: data.id })
+        .eq('id_cita', citaObj.id_cita);
+} else if (citaObj.id_cita && citaObj.es_prospecto && !eventIdExistente) {
+    // Cita de prospecto en solicitudes_citas
+    await fisioNet.from('solicitudes_citas')
+        .update({ google_event_id: data.id })
+        .eq('id', citaObj.id_cita);
+}
 
         return data;
 
@@ -560,10 +562,7 @@ export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
 // Exponer globalmente
 window.manejarCambioEstatusCita = manejarCambioEstatusCita;
 
-// Inicialización de escuchas de Google al cargar
-window.addEventListener('DOMContentLoaded', () => {
-    verificarEstadoGoogle();
-});
+
 
 async function fetchGoogleCalendar(url, opciones = {}) {
     let token = await obtenerAccessTokenValido(false);
@@ -608,31 +607,40 @@ window.cargarAgenda = cargarAgenda;
 window.reconectarGoogleCalendar = reconectarGoogleCalendar;
 
 window.addEventListener('DOMContentLoaded', () => {
-    // Verificación inicial
     verificarEstadoGoogle();
 
-    // Escuchar el evento de Supabase para cuando complete el inicio de sesión OAuth
-    // Agregar a tu inicializador en agenda.js
-if (typeof fisioNet !== 'undefined') {
-    const clinicaId = localStorage.getItem('id_clinica_activa');
+    if (typeof fisioNet !== 'undefined') {
+        const clinicaId = localStorage.getItem('id_clinica_activa');
 
-    fisioNet
-        .channel('cambios-agenda-realtime')
-        .on(
-            'postgres_changes',
-            {
-                event: '*', // UPDATE, DELETE, INSERT
-                schema: 'public',
-                table: 'agenda_maestra',
-                filter: `id_clinica=eq.${clinicaId}`
-            },
-            (payload) => {
-                console.log("⚡ Cambio detectado desde Google/BD, recargando agenda...");
-                if (typeof cargarAgenda === 'function') {
-                    cargarAgenda();
+        // Canal unificado para actualizar la agenda en tiempo real
+        fisioNet
+            .channel('cambios-agenda-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'agenda_maestra',
+                    filter: `id_clinica=eq.${clinicaId}`
+                },
+                () => {
+                    console.log("⚡ Cambio detectado en agenda_maestra, recargando...");
+                    if (typeof cargarAgenda === 'function') cargarAgenda();
                 }
-            }
-        )
-        .subscribe();
-}
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'solicitudes_citas',
+                    filter: `id_clinica_solicitada=eq.${clinicaId}`
+                },
+                () => {
+                    console.log("⚡ Cambio detectado en solicitudes_citas, recargando...");
+                    if (typeof cargarAgenda === 'function') cargarAgenda();
+                }
+            )
+            .subscribe();
+    }
 });
