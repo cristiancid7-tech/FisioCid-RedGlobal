@@ -28,65 +28,66 @@ export async function vincularGoogleCalendar() {
 }
 
 export async function suscribirWebhookGoogle(token) {
-  try {
-    const { data: { user } } = await fisioNet.auth.getUser();
-    const clinicaId = localStorage.getItem('id_clinica_activa');
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const clinicaId = localStorage.getItem('id_clinica_activa');
 
-    if (!user || !clinicaId) return;
+        if (!user || !clinicaId || !token) return;
 
-    // 1. Generar un Channel ID 100% único usando timestamp
-    const channelId = `fisiocid-channel-${user.id}-${Date.now()}`;
-    const webhookUrl = `https://wboknacojtrfehlwswhh.supabase.co/functions/v1/sync-google-calendar`;
+        // 1. Generar un Channel ID 100% único usando timestamp
+        const channelId = `fisiocid-channel-${user.id}-${Date.now()}`;
+        const webhookUrl = `https://wboknacojtrfehlwswhh.supabase.co/functions/v1/sync-google-calendar`;
 
-    console.log("📡 Solicitando nuevo canal a Google API:", channelId);
+        console.log("📡 Solicitando nuevo canal a Google API:", channelId);
 
-    // 2. Registrar el Webhook directo en Google Calendar API
-    const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/watch', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        id: channelId,
-        type: 'web_hook',
-        address: webhookUrl
-      })
-    });
-
-    if (response.ok) {
-      const watchResult = await response.json();
-
-      // 3. Eliminar canales antiguos en la base de datos para este profesional y clínica
-      await fisioNet
-        .from('google_calendar_watch')
-        .delete()
-        .eq('id_profesional', user.id)
-        .eq('id_clinica', clinicaId);
-
-      // 4. Insertar el nuevo canal activo y limpio
-      const { error: errInsert } = await fisioNet
-        .from('google_calendar_watch')
-        .insert({
-          id_profesional: user.id,
-          id_clinica: clinicaId,
-          channel_id: watchResult.id,
-          resource_id: watchResult.resourceId,
-          expiration: parseInt(watchResult.expiration)
+        // 2. Registrar el Webhook directo en Google Calendar API
+        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/watch', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: channelId,
+                type: 'web_hook',
+                address: webhookUrl
+            })
         });
 
-      if (errInsert) {
-        console.error("❌ Error guardando el canal en Supabase:", errInsert);
-      } else {
-        console.log("⚡ Webhook de tiempo real de Google Calendar registrado y guardado exitosamente.");
-      }
-    } else {
-      const errGoogle = await response.json();
-      console.warn("⚠️ Google rechazo la creación del Webhook:", errGoogle);
+        if (response.ok) {
+            const watchResult = await response.json();
+
+            // 3. Eliminar canales antiguos en la base de datos para este profesional y clínica
+            await fisioNet
+                .from('google_calendar_watch')
+                .delete()
+                .eq('id_profesional', user.id)
+                .eq('id_clinica', clinicaId);
+
+            // 4. Insertar el nuevo canal activo y limpio
+            const { error: errInsert } = await fisioNet
+                .from('google_calendar_watch')
+                .insert({
+                    id_profesional: user.id,
+                    id_clinica: clinicaId,
+                    channel_id: watchResult.id,
+                    resource_id: watchResult.resourceId,
+                    expiration: parseInt(watchResult.expiration)
+                });
+
+            if (errInsert) {
+                console.error("❌ Error guardando el canal en Supabase:", errInsert);
+            } else {
+                console.log("⚡ Webhook de tiempo real de Google Calendar registrado y guardado exitosamente.");
+            }
+
+        } else {
+            const errGoogle = await response.json();
+            console.warn("⚠️ Google rechazó la creación del Webhook:", errGoogle);
+        }
+    } catch (err) {
+        console.warn("⚠️ No se pudo registrar la suscripción del Webhook de Google:", err);
     }
-  } catch (err) {
-    console.warn("⚠️ No se pudo registrar la suscripción del Webhook de Google:", err);
-  }
 }
 
 export async function verificarEstadoGoogle() {
@@ -96,7 +97,18 @@ export async function verificarEstadoGoogle() {
 
     let tokenGoogle = session?.provider_token;
 
-    // Guardado seguro del refresh token en la base de datos
+    // 1. Si viene en el HASH de la URL tras la redirección de Google OAuth
+    if (!tokenGoogle && window.location.hash) {
+        const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+        tokenGoogle = params.get('provider_token') || params.get('access_token');
+    }
+
+    // 2. Fallback a localStorage si ya se había autenticado antes
+    if (!tokenGoogle) {
+        tokenGoogle = localStorage.getItem('google_access_token');
+    }
+
+    // 3. Guardado seguro del refresh token en la base de datos
     if (session?.provider_refresh_token && session?.user?.id) {
         try {
             await fisioNet.from('perfiles_profesionales')
@@ -107,21 +119,13 @@ export async function verificarEstadoGoogle() {
         }
     }
 
-    if (!tokenGoogle && window.location.hash) {
-        const params = new URLSearchParams(window.location.hash.replace('#', '?'));
-        tokenGoogle = params.get('provider_token') || params.get('access_token');
-    }
-
+    // 4. Si contamos con un token válido, suscribir Webhook y pintar botón en verde
     if (tokenGoogle) {
         localStorage.setItem('google_access_token', tokenGoogle);
-        if (session?.provider_token) {
-            await suscribirWebhookGoogle(session.provider_token);
-        }
-    }
 
-    const tokenActivo = tokenGoogle || localStorage.getItem('google_access_token');
+        // Invocar suscripción al Webhook pasando el token activo
+        await suscribirWebhookGoogle(tokenGoogle);
 
-    if (tokenActivo) {
         if (btnTexto) btnTexto.innerText = "Calendar Vinculado ✅";
         if (btnVincular) {
             btnVincular.style.borderColor = "#34A853";
@@ -137,7 +141,7 @@ export async function verificarEstadoGoogle() {
 export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
-        
+
         if (!citaObj.id_profesional && session?.user?.id) {
             citaObj.id_profesional = session.user.id;
         }
@@ -211,7 +215,6 @@ async function obtenerAccessTokenValido(forzarRefresh = false) {
             const { data: { user } } = await fisioNet.auth.getUser();
             if (!user) return null;
 
-            // Consultar el refresh token guardado en BD
             const { data: perfil } = await fisioNet
                 .from('perfiles_profesionales')
                 .select('google_refresh_token')
@@ -223,7 +226,6 @@ async function obtenerAccessTokenValido(forzarRefresh = false) {
                 return null;
             }
 
-            // Invocar Edge Function o endpoint de refresh token
             const res = await fetch("https://oauth2.googleapis.com/token", {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -250,7 +252,6 @@ async function obtenerAccessTokenValido(forzarRefresh = false) {
         }
     }
 
-    // Hash URL fallback
     if (window.location.hash) {
         const params = new URLSearchParams(window.location.hash.replace('#', '?'));
         const tokenHash = params.get('provider_token') || params.get('access_token');
@@ -373,6 +374,7 @@ async function fetchGoogleCalendar(url, opciones = {}) {
 
 function marcarBotonReconexion() {
     localStorage.removeItem('google_access_token');
+
     const btnTexto = document.getElementById('textoVinculacion');
     const btnVincular = document.getElementById('btnVincularGoogle');
     if (btnTexto) btnTexto.innerText = "Reconectar Calendar ⚠️";
@@ -428,9 +430,7 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
         `)
         .eq('id_profesional', user.id)
         .eq('id_clinica', clinicaId)
-        .neq('estatus', 'CANCELADO')
-        ;
-        
+        .neq('estatus', 'CANCELADO');
 
     // --- 2. CONSULTA SOLICITUDES EN SALA ---
     let querySol = fisioNet
@@ -530,7 +530,7 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
 export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
     try {
         const estatusLimpio = (nuevoEstatus || '').toUpperCase();
-        
+
         if (estatusLimpio.includes('CANCELAD')) {
             const nombrePaciente = citaObj?.pacientes_maestros?.nombre || 'este paciente';
             const confirmacion = confirm(`⚠️ Se cambiará el estado a CANCELADO y se eliminará la cita de Google Calendar para ${nombrePaciente}.\n\n¿Estás seguro de que deseas eliminarla?`);
@@ -560,6 +560,7 @@ export async function manejarCambioEstatusCita(idCita, nuevoEstatus, citaObj) {
 
         console.log(`✅ Estado de cita ${idCita} actualizado a: ${nuevoEstatus}`);
         if (typeof cargarAgenda === 'function') await cargarAgenda();
+
         return true;
 
     } catch (err) {
