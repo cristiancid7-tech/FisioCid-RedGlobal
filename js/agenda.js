@@ -28,66 +28,86 @@ export async function vincularGoogleCalendar() {
 }
 
 export async function suscribirWebhookGoogle(token) {
-    try {
-        const { data: { user } } = await fisioNet.auth.getUser();
-        const clinicaId = localStorage.getItem('id_clinica_activa');
+  try {
+    const { data: { user } } = await fisioNet.auth.getUser();
+    const clinicaId = localStorage.getItem('id_clinica_activa');
 
-        if (!user || !clinicaId || !token) return;
+    if (!user || !clinicaId || !token) return;
 
-        // 1. Generar un Channel ID 100% único usando timestamp
-        const channelId = `fisiocid-channel-${user.id}-${Date.now()}`;
-        const webhookUrl = `https://wboknacojtrfehlwswhh.supabase.co/functions/v1/sync-google-calendar`;
+    // 1. CONSULTAR SI YA EXISTE UN CANAL PREVIO
+    const { data: canalPrevio } = await fisioNet
+      .from('google_calendar_watch')
+      .select('*')
+      .eq('id_profesional', user.id)
+      .eq('id_clinica', clinicaId)
+      .maybeSingle();
 
-        console.log("📡 Solicitando nuevo canal a Google API:", channelId);
+    // 2. SI EXISTE, CANCELAR EL CANAL VIEJO EN GOOGLE API
+    if (canalPrevio?.channel_id && canalPrevio?.resource_id) {
+      try {
+        await fetch('https://www.googleapis.com/calendar/v3/channels/stop', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id: canalPrevio.channel_id,
+            resourceId: canalPrevio.resource_id
+          })
+        });
+        console.log("🛑 Canal anterior destruido exitosamente en Google.");
+      } catch (errStop) {
+        console.warn("⚠️ No se pudo detener el canal anterior en Google:", errStop);
+      }
 
-        // 2. Registrar el Webhook directo en Google Calendar API
-        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/watch', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                id: channelId,
-                type: 'web_hook',
-                address: webhookUrl
-            })
+      // Eliminar el registro viejo de Supabase
+      await fisioNet
+        .from('google_calendar_watch')
+        .delete()
+        .eq('id', canalPrevio.id);
+    }
+
+    // 3. GENERAR UN NUEVO CANAL ÚNICO
+    const channelId = `fisiocid-channel-${user.id}-${Date.now()}`;
+    const webhookUrl = `https://wboknacojtrfehlwswhh.supabase.co/functions/v1/sync-google-calendar`;
+
+    console.log("📡 Registrando nuevo canal único:", channelId);
+
+    const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/watch', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: channelId,
+        type: 'web_hook',
+        address: webhookUrl
+      })
+    });
+
+    if (response.ok) {
+      const watchResult = await response.json();
+
+      // 4. GUARDAR ÚNICO REGISTRO EN SUPABASE
+      const { error: errInsert } = await fisioNet
+        .from('google_calendar_watch')
+        .insert({
+          id_profesional: user.id,
+          id_clinica: clinicaId,
+          channel_id: watchResult.id,
+          resource_id: watchResult.resourceId,
+          expiration: parseInt(watchResult.expiration)
         });
 
-        if (response.ok) {
-            const watchResult = await response.json();
-
-            // 3. Eliminar canales antiguos en la base de datos para este profesional y clínica
-            await fisioNet
-                .from('google_calendar_watch')
-                .delete()
-                .eq('id_profesional', user.id)
-                .eq('id_clinica', clinicaId);
-
-            // 4. Insertar el nuevo canal activo y limpio
-            const { error: errInsert } = await fisioNet
-                .from('google_calendar_watch')
-                .insert({
-                    id_profesional: user.id,
-                    id_clinica: clinicaId,
-                    channel_id: watchResult.id,
-                    resource_id: watchResult.resourceId,
-                    expiration: parseInt(watchResult.expiration)
-                });
-
-            if (errInsert) {
-                console.error("❌ Error guardando el canal en Supabase:", errInsert);
-            } else {
-                console.log("⚡ Webhook de tiempo real de Google Calendar registrado y guardado exitosamente.");
-            }
-
-        } else {
-            const errGoogle = await response.json();
-            console.warn("⚠️ Google rechazó la creación del Webhook:", errGoogle);
-        }
-    } catch (err) {
-        console.warn("⚠️ No se pudo registrar la suscripción del Webhook de Google:", err);
+      if (!errInsert) {
+        console.log("⚡ Webhook activo y sincronizado sin superposiciones.");
+      }
     }
+  } catch (err) {
+    console.warn("⚠️ Error en suscripción de Webhook:", err);
+  }
 }
 
 export async function verificarEstadoGoogle() {
