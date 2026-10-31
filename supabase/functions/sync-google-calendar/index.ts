@@ -32,18 +32,16 @@ serve(async (req) => {
       return new Response("Canal no encontrado", { status: 200 });
     }
 
-    // 3. Obtener el refresh token o access token del profesional para consultar Google Calendar
+    // 3. Obtener el refresh token del profesional
     const { data: perfil } = await supabase
       .from("perfiles_profesionales")
       .select("google_refresh_token")
       .eq("id", watchData.id_profesional)
       .maybeSingle();
 
-    // 4. Si tenemos acceso, consultamos los últimos eventos modificados o eliminados
-    // Consultamos los eventos modificados en los últimos 5 minutos
-    const haceCincoMinutos = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    
-    // Si guardaste el refresh_token, solicitamos un access_token fresco
+    // 4. Si tenemos acceso, consultamos los eventos modificados en los últimos 30 minutos
+    const haceTreintaMinutos = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
     if (perfil?.google_refresh_token) {
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
@@ -60,10 +58,10 @@ serve(async (req) => {
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
 
-        // Pedimos los eventos incluyendo los borrados (showDeleted=true)
+        // Pedimos eventos recientes incluyendo eliminados
         const eventsRes = await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/primary/events?updatedMin=${encodeURIComponent(
-            haceCincoMinutos
+            haceTreintaMinutos
           )}&showDeleted=true`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
@@ -79,21 +77,31 @@ serve(async (req) => {
             if (item.status === "cancelled") {
               console.log(`🗑️ Evento de Google ${item.id} fue eliminado. Actualizando BD...`);
 
-              // Actualizamos en agenda_maestra
-              await supabase
+              // 1. Actualizamos agenda_maestra
+              const { error: errMaestra } = await supabase
                 .from("agenda_maestra")
                 .update({ estatus: "CANCELADO", google_event_id: null })
                 .eq("google_event_id", item.id);
 
-              // Actualizamos en solicitudes_citas
-              await supabase
+              if (errMaestra) console.error("Error al actualizar agenda_maestra:", errMaestra);
+
+              // 2. Actualizamos solicitudes_citas
+              const { error: errSol } = await supabase
                 .from("solicitudes_citas")
                 .update({ estado: "CANCELADO", google_event_id: null })
                 .eq("google_event_id", item.id);
+
+              if (errSol) console.error("Error al actualizar solicitudes_citas:", errSol);
             }
           }
+        } else {
+          console.error("❌ Error al consultar eventos a Google API:", await eventsRes.text());
         }
+      } else {
+        console.error("❌ Error renovando token con Google:", await tokenRes.text());
       }
+    } else {
+      console.warn(`⚠️ El profesional ${watchData.id_profesional} no tiene google_refresh_token guardado.`);
     }
 
     console.log(`📅 Cambio procesado para la clínica ${watchData.id_clinica}`);
