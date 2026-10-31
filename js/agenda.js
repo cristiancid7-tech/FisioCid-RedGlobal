@@ -116,14 +116,12 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
         
-        // Asegurar id_profesional en la estructura
         if (!citaObj.id_profesional && session?.user?.id) {
             citaObj.id_profesional = session.user.id;
         }
 
-        console.log("⚡ Enviando sincronización a Edge Function de Supabase...");
+        console.log("⚡ Sincronizando con Google Calendar mediante servidor...");
 
-        // Llamada transparente al servidor
         const response = await fetch("https://wboknacojtrfehlwswhh.supabase.co/functions/v1/agendar-cita", {
             method: "POST",
             headers: {
@@ -136,10 +134,10 @@ export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esEx
         const result = await response.json();
 
         if (result.success) {
-            console.log("✅ Sincronizado automáticamente con Google Calendar en el servidor.");
+            console.log("✅ Evento sincronizado en Google Calendar desde la Edge Function.");
             return result;
         } else {
-            console.warn("⚠️ No se pudo sincronizar en segundo plano:", result);
+            console.warn("⚠️ No se pudo sincronizar en Google Calendar:", result);
             return null;
         }
     } catch (err) {
