@@ -405,7 +405,10 @@ export async function cargarAgenda(modo = 'semana', botonPresionado = null) {
             pacientes_maestros (id, nombre, apellido_paterno, apellido_materno, curp)
         `)
         .eq('id_profesional', user.id)
-        .eq('id_clinica', clinicaId);
+        .eq('id_clinica', clinicaId)
+        .neq('estatus', 'CANCELADO')
+        ;
+        
 
     // --- 2. CONSULTA SOLICITUDES EN SALA ---
     let querySol = fisioNet
