@@ -115,104 +115,35 @@ export async function verificarEstadoGoogle() {
 export async function sincronizarConGoogleCalendar(citaObj, nombrePaciente, esExpress = false) {
     try {
         const { data: { session } } = await fisioNet.auth.getSession();
-
-        // 1. Obtener intervalo_cita de forma segura
-        let duracionCita = Number(citaObj.intervalo_cita);
-
-        if (!duracionCita || isNaN(duracionCita)) {
-            const idProfesionalBuscar = citaObj.id_profesional || session?.user?.id;
-            if (idProfesionalBuscar) {
-                const { data: perfil } = await fisioNet
-                    .from('perfiles_profesionales')
-                    .select('intervalo_cita')
-                    .eq('id', idProfesionalBuscar)
-                    .maybeSingle();
-
-                duracionCita = Number(perfil?.intervalo_cita) || 30;
-            } else {
-                duracionCita = 30;
-            }
+        
+        // Asegurar id_profesional en la estructura
+        if (!citaObj.id_profesional && session?.user?.id) {
+            citaObj.id_profesional = session.user.id;
         }
 
-        // 2. Preparar horas y tiempos
-        const horaInicioLimpia = (citaObj.hora_inicio_cita || '09:00').substring(0, 5);
-        const [anio, mes, dia] = citaObj.fecha.split('-').map(Number);
-        const [hora, min] = horaInicioLimpia.split(':').map(Number);
+        console.log("⚡ Enviando sincronización a Edge Function de Supabase...");
 
-        const fechaHoraBase = new Date(anio, mes - 1, dia, hora, min, 0);
-
-        const modalidadTexto = (citaObj.modalidad || '').toString().toUpperCase();
-        const esDomicilio = modalidadTexto.includes('DOMICILIO');
-        const minTraslado = esDomicilio ? 30 : 0;
-
-        const fechaHoraInicioGoogle = new Date(fechaHoraBase.getTime() - (minTraslado * 60 * 1000));
-        const fechaHoraFinGoogle = new Date(fechaHoraBase.getTime() + ((duracionCita + minTraslado) * 60 * 1000));
-
-        const aISO = (d) => {
-            const pad = (n) => String(n).padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-        };
-
-        const startStr = aISO(fechaHoraInicioGoogle);
-        const endStr = aISO(fechaHoraFinGoogle);
-
-        // 3. Payload del evento
-        const evento = {
-            summary: `${esExpress ? '⚡ [EXPRÉS] ' : ''}${esDomicilio ? '🚗 [DOMICILIO] ' : ''}Cita: ${nombrePaciente}`,
-            description: esDomicilio 
-                ? `🏡 SERVICIO A DOMICILIO (Incluye 30 min de traslado antes y después)\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`
-                : `🏥 CONSULTA EN CLÍNICA\nPaciente: ${nombrePaciente}\nGestionado desde FisioCid App.`,
-            transparency: 'opaque',
-            start: {
-                dateTime: startStr,
-                timeZone: 'America/Mexico_City'
+        // Llamada transparente al servidor
+        const response = await fetch("https://wboknacojtrfehlwswhh.supabase.co/functions/v1/agendar-cita", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${session?.access_token}`
             },
-            end: {
-                dateTime: endStr,
-                timeZone: 'America/Mexico_City'
-            }
-        };
-
-        // 4. Configurar Endpoint HTTP
-        const eventIdExistente = citaObj.google_event_id;
-        const urlEndpoint = eventIdExistente 
-            ? `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventIdExistente}`
-            : `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
-        
-        const metodoHTTP = eventIdExistente ? 'PATCH' : 'POST';
-
-        // 5. Petición HTTP con Auto-Refresh
-        let respuesta = await fetchGoogleCalendar(urlEndpoint, {
-            method: metodoHTTP,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(evento)
+            body: JSON.stringify({ citaObj, nombrePaciente, esExpress })
         });
 
-        if (!respuesta || !respuesta.ok) {
-            console.warn("⚠️ La cita se agendó en FisioCid pero no se pudo sincronizar inmediatamente con Google Calendar.");
+        const result = await response.json();
+
+        if (result.success) {
+            console.log("✅ Sincronizado automáticamente con Google Calendar en el servidor.");
+            return result;
+        } else {
+            console.warn("⚠️ No se pudo sincronizar en segundo plano:", result);
             return null;
         }
-
-        const data = await respuesta.json();
-
-        // 6. Guardar la referencia del google_event_id (CORREGIDO)
-        const targetId = citaObj.id_cita || citaObj.id;
-        if (targetId && !eventIdExistente) {
-            if (citaObj.es_prospecto) {
-                await fisioNet.from('solicitudes_citas')
-                    .update({ google_event_id: data.id })
-                    .eq('id', targetId);
-            } else {
-                await fisioNet.from('agenda_maestra')
-                    .update({ google_event_id: data.id })
-                    .eq('id_cita', targetId);
-            }
-        }
-
-        return data;
-
     } catch (err) {
-        console.error("❌ Error al sincronizar con Google Calendar:", err);
+        console.error("❌ Error llamando a Edge Function agendar-cita:", err);
     }
 }
 
@@ -255,25 +186,51 @@ export const actualizarCitaEnGoogle = async (googleEventId, nuevaFecha, nuevaHor
 
 async function obtenerAccessTokenValido(forzarRefresh = false) {
     if (forzarRefresh) {
-        console.log("🔄 Renovando sesión OAuth...");
+        console.log("🔄 Renovando token a través de backend...");
         try {
-            const { data, error } = await fisioNet.auth.refreshSession();
-            if (!error && data?.session?.provider_token) {
-                const nuevoToken = data.session.provider_token;
+            const { data: { user } } = await fisioNet.auth.getUser();
+            if (!user) return null;
+
+            // Consultar el refresh token guardado en BD
+            const { data: perfil } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('google_refresh_token')
+                .eq('id', user.id)
+                .single();
+
+            if (!perfil?.google_refresh_token) {
+                marcarBotonReconexion();
+                return null;
+            }
+
+            // Invocar Edge Function o endpoint de refresh token
+            const res = await fetch("https://oauth2.googleapis.com/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    client_id: "707370691590-ol8ia8cola1u9kg3k7qd1il848bljbh2.apps.googleusercontent.com",
+                    refresh_token: perfil.google_refresh_token,
+                    grant_type: "refresh_token"
+                })
+            });
+
+            if (res.ok) {
+                const tokenData = await res.json();
+                const nuevoToken = tokenData.access_token;
                 localStorage.setItem('google_access_token', nuevoToken);
                 return nuevoToken;
             } else {
-                console.warn("⚠️ No se pudo renovar token de Google automáticamente.");
                 marcarBotonReconexion();
                 return null;
             }
         } catch (e) {
-            console.warn("⚠️ No se pudo refrescar automáticamente:", e);
+            console.warn("⚠️ Error renovando token:", e);
+            marcarBotonReconexion();
             return null;
         }
     }
 
-    // Extraer del Hash de la URL si acabamos de volver de Google
+    // Hash URL fallback
     if (window.location.hash) {
         const params = new URLSearchParams(window.location.hash.replace('#', '?'));
         const tokenHash = params.get('provider_token') || params.get('access_token');
