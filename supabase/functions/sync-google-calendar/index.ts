@@ -39,7 +39,6 @@ serve(async (req) => {
       .eq("id", watchData.id_profesional)
       .maybeSingle();
 
-    // 4. Si tenemos acceso, consultamos los eventos modificados en los últimos 30 minutos
     const haceTreintaMinutos = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
     if (perfil?.google_refresh_token) {
@@ -73,26 +72,91 @@ serve(async (req) => {
           const items = eventsData.items || [];
 
           for (const item of items) {
-            // 🚨 SI EL EVENTO FUE BORRADO EN GOOGLE CALENDAR
+            // 🚨 CASO 1: EVENTO CANCELADO/ELIMINADO EN GOOGLE CALENDAR
             if (item.status === "cancelled") {
               console.log(`🗑️ Evento de Google ${item.id} fue eliminado. Actualizando BD...`);
 
-              // 1. Actualizamos agenda_maestra
-              const { error: errMaestra } = await supabase
+              await supabase
                 .from("agenda_maestra")
                 .update({ estatus: "CANCELADO", google_event_id: null })
                 .eq("google_event_id", item.id);
 
-              if (errMaestra) console.error("Error al actualizar agenda_maestra:", errMaestra);
-
-              // 2. Actualizamos solicitudes_citas
-              const { error: errSol } = await supabase
+              await supabase
                 .from("solicitudes_citas")
                 .update({ estado: "CANCELADO", google_event_id: null })
                 .eq("google_event_id", item.id);
-
-              if (errSol) console.error("Error al actualizar solicitudes_citas:", errSol);
             }
+
+            // 🟢 CASO 2: EVENTO CREADO O MODIFICADO DESDE EL CELULAR/WEB DE GOOGLE
+    else if (item.status === "confirmed") {
+        // 🛑 IGNORAR si el evento fue creado por la propia app (evita bucle infinito)
+        if (item.description && item.description.includes("Gestionado desde FisioCid App")) {
+          continue;
+        }
+
+        const fechaInicioRaw = item.start?.dateTime || item.start?.date;
+        if (!fechaInicioRaw) continue;
+
+        // 🇲🇽 Obtener fecha y hora exacta en zona horaria America/Mexico_City (Formato ISO de 24 hrs)
+        const dateObj = new Date(fechaInicioRaw);
+        
+        // Convertir fecha a YYYY-MM-DD en hora de México
+        const fechaMx = dateObj.toLocaleDateString("sv-SE", { timeZone: "America/Mexico_City" }); // "sv-SE" garantiza YYYY-MM-DD
+        
+        // Convertir hora a HH:mm:ss de 24 horas en hora de México
+        const horaMx = dateObj.toLocaleTimeString("es-MX", { 
+          timeZone: "America/Mexico_City", 
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        });
+
+        // 1. Verificar si ya existe en agenda_maestra por su google_event_id
+        const { data: citaExistente } = await supabase
+          .from("agenda_maestra")
+          .select("id_cita, fecha, hora_inicio_cita")
+          .eq("google_event_id", item.id)
+          .maybeSingle();
+
+        if (citaExistente) {
+          if (citaExistente.fecha !== fechaMx || citaExistente.hora_inicio_cita !== horaMx) {
+            console.log(`🔄 Actualizando cita ${citaExistente.id_cita} a ${fechaMx} ${horaMx}`);
+            await supabase
+              .from("agenda_maestra")
+              .update({ fecha: fechaMx, hora_inicio_cita: horaMx })
+              .eq("id_cita", citaExistente.id_cita);
+          }
+        } else {
+          // 2. Verificar en solicitudes_citas
+          const { data: solExistente } = await supabase
+            .from("solicitudes_citas")
+            .select("id")
+            .eq("google_event_id", item.id)
+            .maybeSingle();
+
+          if (!solExistente) {
+            console.log(`✨ Insertando cita creada desde celular: ${item.summary} | Fecha: ${fechaMx} | Hora: ${horaMx}`);
+            
+            const { error: errInsert } = await supabase.from("agenda_maestra").insert({
+              id_profesional: watchData.id_profesional,
+              id_clinica: watchData.id_clinica,
+              fecha: fechaMx,
+              hora_inicio_cita: horaMx,
+              modalidad: "CONSULTORIO",
+              estatus: "PENDIENTE",
+              notas_logistica: `Evento desde celular: ${item.summary || 'Sin título'}`,
+              google_event_id: item.id
+            });
+
+            if (errInsert) {
+              console.error("❌ Error al insertar en agenda_maestra:", errInsert);
+            } else {
+              console.log("✅ Cita insertada exitosamente en agenda_maestra");
+            }
+          }
+        }
+      }
           }
         } else {
           console.error("❌ Error al consultar eventos a Google API:", await eventsRes.text());
@@ -115,3 +179,4 @@ serve(async (req) => {
     return new Response("Internal Error", { status: 500 });
   }
 });
+
