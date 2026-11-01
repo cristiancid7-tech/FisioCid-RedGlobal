@@ -8,7 +8,62 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* Botones compactos tipo píldora para sub-escalas odontológicas */
+#modalOdontoFullscreen .btn-opcion-subescala {
+    width: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    white-space: nowrap !important;
+    font-size: 0.72rem !important;
+    padding: 3px 12px !important;
+    line-height: 1.2 !important;
+    transition: all 0.15s ease-in-out;
+}
 
+#modalOdontoFullscreen .btn-opcion-subescala:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+/* Botones de pincel compactos en horizontal */
+#modalOdontoFullscreen .paleta-color {
+    width: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;
+    box-shadow: none;
+    transition: all 0.2s ease;
+}
+
+#modalOdontoFullscreen .paleta-color:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+}
+/* 🚀 FORZADO PANTALLA COMPLETA Y DISTRIBUCIÓN DE ODONTOGRAMA */
+#modalOdontoFullscreen .modal-dialog {
+    max-width: 100vw !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+}
+
+#modalOdontoFullscreen .modal-content {
+    height: 100vh !important;
+    border-radius: 0 !important;
+}
+
+#modalOdontoFullscreen .arcada-container {
+    display: flex !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 4px !important;
+}
+
+#modalOdontoFullscreen .tarjeta-pieza-dental {
+    flex: 1 1 auto !important;
+    max-width: 55px !important;
+    min-width: 32px !important;
+}
 /* Fuerza el tamaño sin importar qué diga el navegador */
     #modalHistorialGabinete .modal-dialog {
         max-width: 100vw !important;
@@ -581,29 +636,104 @@ html, body {
                     </div>
                 </div>
 
-                <!-- 🦷 Odontograma Interactivo -->
-                <div id="contenedor-odontograma-modulo" class="card border-0 shadow-sm p-3 mb-3" style="display: none; background: #0f172a; color: white; border-radius: 12px;">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold mb-0" style="color: #38bdf8;">🦷 ODONTOGRAMA INTERACTIVO Y PERIODONCIA</h6>
-                        <div class="form-check form-switch me-2">
-                            <input class="form-check-input" type="checkbox" id="chkModoDenticion" checked onchange="window.PeriodontoFisioCid.toggleArcada(this)">
-                            <label class="form-check-label small text-slate-300" for="chkModoDenticion">Dentición Permanente (Adulto)</label>
-                        </div>
+<!-- 🪟 MODAL DENTAL FULLSCREEN PRO -->
+<div class="modal fade modal-fullscreen" id="modalOdontoFullscreen" tabindex="-1" aria-hidden="true" style="z-index: 10050;">
+    <div class="modal-dialog modal-fullscreen w-100 mw-100 h-100 m-0 p-0">
+        <div class="modal-content border-0 w-100 h-100" style="background: #0b1329; min-height: 100vh;">
+            
+            <!-- Encabezado -->
+            <div class="modal-header border-bottom border-secondary px-4 py-3" style="background: #0f172a; color: white;">
+                <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="tituloEscalaOdonto" style="color: #38bdf8; font-size: 1.1rem;">
+                    🛠️ ASISTENTE DE EXPLORACIÓN | ODONTOLOGÍA, PERIODONCIA Y ENDODONCIA
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <!-- Cuerpo -->
+            <div class="modal-body p-4 w-100" id="cuerpoEscalaOdonto" style="background: #0b1329; overflow-y: auto;">
+                
+                <div id="contenedor-odontograma-modulo" class="w-100">
+                    
+                 <!-- 1. BARRA SUPERIOR DE MÓDULOS DE EVALUACIÓN RÁPIDA -->
+<div class="row g-2 mb-3">
+    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-info" onclick="PeriodontoFisioCid.abrirEscalaModulo('MALLAMPATI')">👅 MALLAMPATI</button></div>
+    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-info" onclick="PeriodontoFisioCid.abrirEscalaModulo('KENNEDY')">👄 KENNEDY</button></div>
+    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-success" onclick="PeriodontoFisioCid.abrirEscalaModulo('PERIO')">🩸 PERIO</button></div>
+    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-warning" onclick="PeriodontoFisioCid.abrirEscalaModulo('OCLUSION')">😬 OCLUSIÓN</button></div>
+    
+    <div class="col-md-4" id="btn-modulo-geria"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-warning" onclick="PeriodontoFisioCid.abrirEscalaModulo('GERIATRIA')">👴 GERIATRÍA</button></div>
+    <div class="col-md-4" id="btn-modulo-pedia" style="display: none !important;"><button type="button" class="btn btn-danger w-100 fw-bold" style="background: #ec4899; border: none;" onclick="PeriodontoFisioCid.abrirEscalaModulo('PEDIA')">👶 PEDIA</button></div>
+    
+    <div class="col-md-4"><button type="button" class="btn btn-info w-100 fw-bold text-white" style="background: #06b6d4; border: none;" onclick="PeriodontoFisioCid.abrirEscalaModulo('ENDO')">🦷 ENDO</button></div>
+    <div class="col-md-4"><button type="button" class="btn btn-danger w-100 fw-bold" style="background: #b91c1c; border: none;" onclick="PeriodontoFisioCid.abrirEscalaModulo('CIRUGIA')">🔪 CIRUGÍA</button></div>
+</div>
+
+                  <!-- 2. PALETA DE PINCELES (BOTONES COMPACTOS EN FILA) Y SWITCH -->
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 p-3 rounded-3" style="background: #1e293b; border: 1px solid #334155;">
+    
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="text-white fw-bold me-2 small" style="font-size: 0.75rem;">PINCEL:</span>
+        
+        <button type="button" class="btn btn-sm btn-outline-light paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#f8fafc', this, 'sano')">
+            ⚪ SANO
+        </button>
+        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #ec4899; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#ec4899', this, 'p_nueva')">
+            🌸 P. NUEVA
+        </button>
+        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #a855f7; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#a855f7', this, 'p_vieja')">
+            🟣 P. VIEJA
+        </button>
+        <button type="button" class="btn btn-sm btn-danger paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#ef4444', this, 'caries')">
+            🔴 CARIES
+        </button>
+        <button type="button" class="btn btn-sm btn-primary paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#3b82f6', this, 'tratado')">
+            🔵 TRATADO
+        </button>
+        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #dc2626; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#dc2626', this, 'extraer')">
+            ❌ EXTRAER
+        </button>
+        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #64748b; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#64748b', this, 'ausente')">
+            ⚪ AUSENTE
+        </button>
+    </div>
+    
+    <div class="form-check form-switch text-white mt-2 mt-md-0">
+        <input class="form-check-input" type="checkbox" id="switchArcada" checked onchange="PeriodontoFisioCid.toggleArcada(this)" style="cursor: pointer;">
+        <label class="form-check-input-label fw-bold small ms-1" id="labelDenticion" for="switchArcada" style="font-size: 0.75rem; cursor: pointer;">
+            DENTICIÓN PERMANENTE (ADULTO)
+        </label>
+    </div>
+
+</div>
+
+                    <!-- 3. ARCADAS DENTALES -->
+                    <div class="d-flex flex-column gap-3 align-items-center w-100">
+                        <div id="arcada-superior" class="arcada-container w-100"></div>
+                        <div id="temporales-superior" class="arcada-container w-100" style="display: none !important;"></div>
+                        <div id="temporales-inferior" class="arcada-container w-100" style="display: none !important;"></div>
+                        <div id="arcada-inferior" class="arcada-container w-100"></div>
                     </div>
-                    <div class="d-flex flex-wrap gap-2 mb-3 p-2 rounded" style="background: rgba(255,255,255,0.05);">
-                        <button type="button" class="btn btn-sm paleta-color btn-outline-light" onclick="window.PeriodontoFisioCid.setBrush('#f8fafc', this, 'sano')">⚪ Sano</button>
-                        <button type="button" class="btn btn-sm paleta-color btn-danger" onclick="window.PeriodontoFisioCid.setBrush('#ef4444', this, 'caries')">🔴 Caries</button>
-                        <button type="button" class="btn btn-sm paleta-color btn-primary" onclick="window.PeriodontoFisioCid.setBrush('#3b82f6', this, 'obturado')">🔵 Obturado</button>
-                        <button type="button" class="btn btn-sm paleta-color" style="background: #f472b6; color: white;" onclick="window.PeriodontoFisioCid.setBrush('#f472b6', this, 'placa')">🌸 Placa (O'Leary)</button>
-                        <button type="button" class="btn btn-sm paleta-color btn-dark border-secondary" onclick="window.PeriodontoFisioCid.setBrush('#000000', this, 'extraer')">❌ Ausente / Extraer</button>
-                        <button type="button" class="btn btn-sm paleta-color btn-warning" onclick="window.PeriodontoFisioCid.setBrush('#eab308', this, 'corona')">👑 Corona / Sellador</button>
-                    </div>
-                    <div id="arcada-superior" class="arcada-container"></div>
-                    <div id="temporales-superior" class="arcada-container" style="display:none !important;"></div>
-                    <div id="arcada-inferior" class="arcada-container"></div>
-                    <div id="temporales-inferior" class="arcada-container" style="display:none !important;"></div>
-                    <div id="texto-resumen-dinamico" class="mt-2"></div>
+
+                    <!-- 4. CAJA DE FEEDBACK INTERACTIVO DE RAÍCES (NUEVA) -->
+                    <div id="detalle-raiz-activa" class="mt-3"></div>
+
+                    <!-- 5. RESUMEN DINÁMICO -->
+                    <div id="texto-resumen-dinamico" class="mt-3 text-white"></div>
                 </div>
+
+            </div>
+            
+            <!-- Pie de Modal -->
+            <div class="modal-footer border-top border-secondary px-4 py-3" style="background: #0f172a;">
+                <div id="resultadoVivoOdonto" class="me-auto fw-bold text-primary"></div>
+                <button type="button" class="btn btn-success fw-bold px-4 rounded-pill" onclick="if(window.FisioCidEngine) window.FisioCidEngine.finalizarEscala()">
+                    ✅ FINALIZAR Y GUARDAR EN EXPEDIENTE
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
 
               
 
@@ -759,21 +889,27 @@ html, body {
         </small>
     </div>
 </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="js/supabase-config.js"></script>
-  <script type="module" src="js/utils.js"></script>
-    <script src="js/valoraciones.js"></script>
-    <script src="js/diccionario-sintomas.js"></script>
-    <script src="js/protocolos.js"></script>
-    <script src="js/FisioCidEngine.js"></script>
-    <script src="js/modalEngine.js"></script>
-    <script src="js/motivospredictivos.js"></script>
-    <script src="js/herramientasVisuales.js"></script>
-    <script src="js/pdf-generator.js"></script>
-    <script src="js/historia.js"></script>
-    
+   
+
+    <!-- Carga de Scripts en Orden Correcto -->
+<script src="js/supabase-config.js"></script>
+<script type="module" src="js/utils.js"></script>
+<script src="js/valoraciones.js"></script>
+<script src="js/diccionario-sintomas.js"></script>
+<script src="js/protocolos.js"></script>
+
+<!-- 🧠 ASEGÚRATE DE INCLUIR ESTE SCRIPT (O EL NOMBRE REAL DE TU ARCHIVO DE ODONTOLOGÍA) -->
+<script src="js/PeriodontoFisioCid.js"></script>
+
+<script src="js/FisioCidEngine.js"></script>
+<script src="js/modalEngine.js"></script>
+<script src="js/motivospredictivos.js"></script>
+<script src="js/pdf-generator.js"></script>
+<script src="js/historia.js"></script>
 
     <script>
         async function sincronizarColor() {
@@ -806,7 +942,7 @@ html, body {
         const modal = document.getElementById('modalHistorialGabinete');
         if (modal) {
             document.body.appendChild(modal); 
-            console.log("✅ FisioCid: Modal teletransportado al <body> para libertad total.");
+           // console.log("✅ FisioCid: Modal teletransportado al <body> para libertad total.");
         }
     });
 

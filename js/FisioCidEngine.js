@@ -1,12 +1,19 @@
+// ============================================================================
+// 🧠 FisioCidEngine.js - Motor Orquestador de Inteligencia y Diagnóstico
+// ============================================================================
+
 let timeoutRenderId = null;
+
 const FisioCidEngine = {
+
     datosTemporales: [],
     diagnosticosActivos: [],
     valorDolorEVA: 0,
     escalaActiva: null,
+    dienteActivoEnEscala: null,
     ultimoResultadoEscala: null,
 
-    // 🚩 LIMPIEZA DE TEXTO (Esencial para matches)
+    // 🚩 LIMPIEZA DE TEXTO (Esencial para matches de coincidencia)
     limpiarTexto: function(t) {
         if (!t) return "";
         return t.toLowerCase()
@@ -16,7 +23,7 @@ const FisioCidEngine = {
             .trim();
     },
 
-    // 🧠 ANALIZADOR OMNISCIENTE (Busca en TODAS las especialidades)
+    // 🧠 ANALIZADOR OMNISCIENTE (Recorre todas las especialidades)
     analizarPatrones: function(datos) {
         const biblioteca = window.BIBLIOTECA_PROTOCOLOS;
         if (!biblioteca) return "<div class='text-muted p-3'>Biblioteca no cargada.</div>";
@@ -25,8 +32,9 @@ const FisioCidEngine = {
         let htmlSugerencias = "";
         const datosLimpios = datos.map(d => this.limpiarTexto(d));
 
-        // 🔥 RECORREMOS TODAS LAS RAMAS (fisioterapia, nutricion, etc.)
         Object.keys(biblioteca).forEach(rama => {
+            if (!Array.isArray(biblioteca[rama])) return;
+
             biblioteca[rama].forEach(protocolo => {
                 if (!protocolo.diferenciales) return;
 
@@ -36,18 +44,16 @@ const FisioCidEngine = {
 
                     diag.criteriosPesados.forEach(c => {
                         const criterioLimpio = this.limpiarTexto(c.id);
-                        const existeMatch = datosLimpios.some(hallazgo => 
+                        const existeMatch = datosLimpios.some(hallazgo =>
                             hallazgo.includes(criterioLimpio) || criterioLimpio.includes(hallazgo)
                         );
-                        
                         if (existeMatch) puntos += c.puntos;
                     });
 
-                    // Si supera el umbral, lo pintamos
                     if (puntos >= (diag.umbral || 4)) {
                         this.diagnosticosActivos.push({ ...diag, puntosActuales: puntos });
                         const colorBarra = diag.color || "#38bdf8";
-                        
+
                         htmlSugerencias += `
                             <div style="border-left: 5px solid ${colorBarra}; background: rgba(255,255,255,0.05); padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -74,7 +80,7 @@ const FisioCidEngine = {
     // 🌡️ GESTIÓN DE DOLOR (EVA)
     registrarEVA_Directo: function(valor) {
         this.valorDolorEVA = parseInt(valor);
-        const btnAsistente = document.querySelector('.btn-asistente-exploracion'); 
+        const btnAsistente = document.querySelector('.btn-asistente-exploracion');
         if (btnAsistente) {
             const listo = this.valorDolorEVA > 0;
             btnAsistente.disabled = !listo;
@@ -83,362 +89,205 @@ const FisioCidEngine = {
         }
     },
 
-
-
-
-lanzarCuestionario: function(id, dienteId = null) {
-    //console.log(`🚀 [FisioCid]: Intentando abrir escala: ${id}`);
-
-    // ==========================================
-    // 🦷 CASO 1: PERIODONTOGRAMA (DIBUJAR DIENTES EN EL PANEL)
-    // ==========================================
-    if (id === 'PERIODONTOGRAMA') {
-        if (timeoutRenderId) clearTimeout(timeoutRenderId);
-
-        let intentos = 0;
-        const intentarRender = () => {
-            // 🧹 PURGA AUTOMÁTICA DE FANTASMAS EN EL DOM
-            // Si existen modales viejos o duplicados en el fondo, los borramos para dejar solo el activo
-            ['arcada-superior', 'arcada-inferior', 'temporales-superior', 'temporales-inferior'].forEach(idEl => {
-                const nodos = document.querySelectorAll(`#${idEl}`);
-                if (nodos.length > 1) {
-                    for (let i = 0; i < nodos.length - 1; i++) {
-                        nodos[i].remove(); // Elimina los contenedores ocultos del fondo
-                    }
-                }
-            });
-
-            const sup = document.getElementById('arcada-superior');
-            const inf = document.getElementById('arcada-inferior');
-
-            if (sup && inf && window.PeriodontoFisioCid) {
-                //console.log("🦷 [FisioCidEngine]: Contenedor activo detectado en DOM. Renderizando arcadas...");
-
-                sup.innerHTML = '';
-                inf.innerHTML = '';
-
-                // Dientes Adultos (Permanentes)
-                window.PeriodontoFisioCid.renderizarArcada('arcada-superior', [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28]);
-                window.PeriodontoFisioCid.renderizarArcada('arcada-inferior', [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]);
-
-                // Dientes Temporales (Niños - Solo si existen en el HTML)
-                const tempSup = document.getElementById('temporales-superior');
-                const tempInf = document.getElementById('temporales-inferior');
-
-                if (tempSup) {
-                    tempSup.innerHTML = '';
-                    window.PeriodontoFisioCid.renderizarArcada('temporales-superior', [55, 54, 53, 52, 51, 61, 62, 63, 64, 65]);
-                }
-                if (tempInf) {
-                    tempInf.innerHTML = '';
-                    window.PeriodontoFisioCid.renderizarArcada('temporales-inferior', [85, 84, 83, 82, 81, 71, 72, 73, 74, 75]);
-                }
-
-                // Sincronizar estado Adulto / Niño
-                const switchEl = document.getElementById('switchAdultoNiño') || document.getElementById('chkModoDenticion');
-                if (switchEl) window.PeriodontoFisioCid.toggleArcada(switchEl);
-
-            } else if (intentos < 15) {
-                intentos++;
-                timeoutRenderId = setTimeout(intentarRender, 100);
+    // 🎯 LANZADOR UNIVERSAL DE CUESTIONARIOS Y MODALES
+    lanzarCuestionario: function(id, dienteId = null) {
+        if (id === 'PERIODONTOGRAMA' || id === 'ODONTOGRAMA') {
+            if (window.PeriodontoFisioCid && typeof window.PeriodontoFisioCid.iniciarArcadas === 'function') {
+                window.PeriodontoFisioCid.iniciarArcadas();
             } else {
-                console.warn("⚠️ [FisioCidEngine]: No se encontraron los contenedores de las arcadas en el DOM.");
+                console.warn("⚠️ [FisioCidEngine]: El módulo PeriodontoFisioCid no está disponible.");
             }
-        };
+            return;
+        }
 
-        intentarRender();
-        return; // ⛔ Detenemos aquí para que NO abra el modal flotante de preguntas
-    }
+        const banco = window.BANCO_ESCALAS;
+        if (!banco || !banco[id]) {
+            console.warn(`⚠️ [FisioCidEngine]: No existe la escala "${id}" en BANCO_ESCALAS.`);
+            return;
+        }
 
-    // ==========================================
-    // 📝 CASO 2: CUESTIONARIOS FLOTANTES (MALLAMPATI, KENNEDY, ENDO, ETC.)
-    // ==========================================
-    const banco = window.BANCO_ESCALAS;
-    if (!banco || !banco[id]) {
-        console.warn(`⚠️ [FisioCid]: No existe la escala "${id}" en BANCO_ESCALAS`);
-        return;
-    }
+        const escala = banco[id];
+        this.escalaActiva = id; 
+        this.dienteActivoEnEscala = dienteId;
 
-    const escala = banco[id];
-    this.escalaActiva = id; 
-    this.dienteActivoEnEscala = dienteId;
+        const titulo = document.getElementById('tituloEscala');
+        const contenedor = document.getElementById('cuerpoEscala');
+        const modalEl = document.getElementById('modalEscalaDinamica');
 
-    const titulo = document.getElementById('tituloEscala');
-    const contenedor = document.getElementById('cuerpoEscala');
-    const modalEl = document.getElementById('modalEscalaDinamica');
+        if (!titulo || !contenedor || !modalEl) {
+            console.error("❌ [FisioCidEngine]: Faltan elementos DOM del modal de escala dinámica.");
+            return;
+        }
 
-    if (!titulo || !contenedor || !modalEl) {
-        console.error("❌ [FisioCid]: No se encontraron los IDs necesarios en el HTML para el modal.");
-        return;
-    }
+        titulo.innerText = escala.nombre.toUpperCase();
 
-    titulo.innerText = escala.nombre.toUpperCase();
-    let html = "";
-    
-    if (escala.preguntas && Array.isArray(escala.preguntas)) {
-        escala.preguntas.forEach((p, i) => {
-            html += `
-                <div class="mb-4 p-3 border rounded bg-white shadow-sm">
-                    <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
-                        ${i + 1}. ${p.t.toUpperCase()}
-                    </label>
-                    <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.calcularEscalaDinamica()">
-                        <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
-                        ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
-                    </select>
-                </div>`;
-        });
-    }
-    contenedor.innerHTML = html;
-
-    modalEl.removeAttribute('aria-hidden'); 
-    modalEl.style.zIndex = "10050";
-
-    let instanciaModal = bootstrap.Modal.getInstance(modalEl);
-    if (!instanciaModal) {
-        instanciaModal = new bootstrap.Modal(modalEl, { 
-            backdrop: 'static', 
-            keyboard: true 
-        });
-    }
-    
-    instanciaModal.show();
-},
-
-// UBICACIÓN: FisioCidEngine.js
-integrarExpedienteDental: async function() {
-    const { maestro, nota } = window.PeriodontoFisioCid.obtenerMapaParaGuardar();
-    const idPaciente = this.pacienteActual.id; 
-
-    try {
-        // 1. Actualizamos el "ADN" permanente en pacientes_maestros
-        // Aquí usamos la columna que creaste: estado_dental_base
-        const { error: errMaestro } = await supabase
-            .from('pacientes_maestros')
-            .update({ estado_dental_base: maestro })
-            .eq('id', idPaciente);
-
-        if (errMaestro) throw errMaestro;
-
-        // 2. Guardamos la evolución en historial_clinico
-        const analisis = window.PeriodontoFisioCid.obtenerAnalisisOleary();
-        
-        // Creamos un objeto que combine el texto y los datos visuales
-        const hallazgoCompleto = JSON.stringify({
-            texto: analisis.g,
-            capa_efimera: nota // Guardamos el rosa/morado del día
-        });
-
-        const { error: errHistorial } = await supabase
-            .from('historial_clinico')
-            .insert({
-                id_paciente: idPaciente,
-                id_profesional: this.usuarioSesion.id, // Tu ID de profesional
-                fecha_nota: new Date().toISOString(),
-                hallazgos_dentales: hallazgoCompleto, // Columna correcta
-                especialidad_nota: 'ODONTOLOGÍA',
-                motivo_consulta: 'Evaluación de Higiene y Periodonto'
+        let html = "";
+        if (escala.preguntas && Array.isArray(escala.preguntas)) {
+            escala.preguntas.forEach((p, i) => {
+                html += `
+                    <div class="mb-4 p-3 border rounded bg-white shadow-sm">
+                        <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
+                            ${i + 1}. ${p.t.toUpperCase()}
+                        </label>
+                        <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.calcularEscalaDinamica()">
+                            <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
+                            ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
+                        </select>
+                    </div>`;
             });
+        }
+        contenedor.innerHTML = html;
 
-        if (errHistorial) throw errHistorial;
+        modalEl.removeAttribute('aria-hidden');
+        modalEl.style.zIndex = "10050";
 
-        alert("¡Expediente dental sincronizado con éxito! 🚀");
-        
-    } catch (error) {
-        console.error("Error en sincronización FisioCid:", error);
-        alert("Error al conectar con la base de datos.");
-    }
-},
-
-// En FisioCidEngine.js
-calcularEscalaDinamica: function() {
-    let puntos = 0;
-    let textosSeleccionados = []; 
-    const inputs = document.querySelectorAll('.escala-input');
-    
-    inputs.forEach((s) => {
-        if (s.value !== "none") puntos += parseInt(s.value);
-        const texto = s.selectedIndex > 0 ? s.options[s.selectedIndex].text : "Pendiente";
-        textosSeleccionados.push(texto);
-    });
-
-    const escala = window.BANCO_ESCALAS[this.escalaActiva];
-    if (escala && escala.interpretar) {
-        // 🚩 Mandamos los puntos y el diente (o los textos si no hay diente)
-        const res = escala.interpretar(puntos, this.dienteActivoEnEscala || textosSeleccionados);
-        
-        const resVivo = document.getElementById('resultadoVivo');
-        if (resVivo) {
-            resVivo.innerHTML = `<b style="color:#d4af37;">${puntos} PTS</b> - <small>${res.g}</small>`;
+        let instanciaModal = bootstrap.Modal.getInstance(modalEl);
+        if (!instanciaModal) {
+            instanciaModal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: true });
         }
         
-       if (escala.rama === "odontologia") {
-            if (window.PeriodontoFisioCid) {
-                window.PeriodontoFisioCid.actualizarHallazgoGlobal(this.escalaActiva, res.notaClinica || res.g);
+        instanciaModal.show();
+    },
+
+    // 📊 CÁLCULO DINÁMICO DE ESCALAS
+    calcularEscalaDinamica: function() {
+        let puntos = 0;
+        let textosSeleccionados = []; 
+        const inputs = document.querySelectorAll('.escala-input');
+        
+        inputs.forEach((s) => {
+            if (s.value !== "none") puntos += parseInt(s.value);
+            const texto = s.selectedIndex > 0 ? s.options[s.selectedIndex].text : "Pendiente";
+            textosSeleccionados.push(texto);
+        });
+
+        const escala = window.BANCO_ESCALAS?.[this.escalaActiva];
+        if (escala && typeof escala.interpretar === 'function') {
+            const res = escala.interpretar(puntos, this.dienteActivoEnEscala || textosSeleccionados);
+            
+            const resVivo = document.getElementById('resultadoVivo');
+            if (resVivo) {
+                resVivo.innerHTML = `<b style="color:#d4af37;">${puntos} PTS</b> - <small>${res.g}</small>`;
             }
-        } 
-        else if (escala.rama === "fisioterapia") {
-            // Guardamos en el almacén de fisio usando el nombre de la escala como llave única
-            if (window.FisioCidClinico) {
+            
+            if (escala.rama === "odontologia" && window.PeriodontoFisioCid) {
+                window.PeriodontoFisioCid.actualizarHallazgoGlobal(this.escalaActiva, res.notaClinica || res.g);
+            } else if (escala.rama === "fisioterapia" && window.FisioCidClinico) {
                 window.FisioCidClinico.hallazgosEscalas[escala.nombre] = res.g;
                 window.FisioCidClinico.actualizarResumen();
             }
         }
-    }
-},
+    },
 
-finalizarEscala: async function() {
-    //console.log("🏁 FisioCid: Iniciando cierre de escala...");
+  // 🏁 FINALIZAR E INYECTAR REPORTE RESUMIDO POR PIEZA AL EXPEDIENTE
+    finalizarEscala: async function() {
+        console.log("🚀 Sincronizando hallazgos odontológicos agrupados por pieza hacia el expediente...");
 
-    // 1. CAPTURA DE DATOS (Leemos lo que el doctor ve en pantalla)
-    const resVivo = document.getElementById('resultadoVivo');
-    const textoLimpio = resVivo ? (resVivo.innerText.split(' - ')[1] || resVivo.innerText) : null;
+        if (window.PeriodontoFisioCid) {
+            window.PeriodontoFisioCid.actualizarResumenVisual();
 
-    // Persistencia por especialidad (Se guarda en el objeto global)
-    if (this.escalaActiva === 'ODONTOPEDIATRIA') window.PeriodontoFisioCid.ultimaEvaluacionPedia = textoLimpio;
-    else if (this.escalaActiva === 'ENDODONCIA') window.PeriodontoFisioCid.ultimaEvaluacionEndo = textoLimpio;
-    else if (this.escalaActiva === 'CIRUGIA') window.PeriodontoFisioCid.ultimaEvaluacionCx = textoLimpio;
-    else if (this.escalaActiva === 'GERIATRIA') window.PeriodontoFisioCid.ultimaEvaluacionGero = textoLimpio;
-    else if (this.escalaActiva === 'MALLAMPATI') window.PeriodontoFisioCid.ultimaEvaluacionViaAerea = textoLimpio;
+            let lineasReporte = [];
+            lineasReporte.push("=== 🦷 EXPLORACIÓN Y REPORTE ODONTOLÓGICO ===");
 
-    // 2. INTEGRACIÓN AL ASISTENTE (clicTag)
-    const esDental = ['PERIODONTOGRAMA', 'ODONTOPEDIATRIA', 'ENDODONCIA', 'CIRUGIA', 'GERIATRIA', 'MALLAMPATI'].includes(this.escalaActiva);
-    
-    if (esDental && window.PeriodontoFisioCid) {
-        // ACTUALIZACIÓN PREVENTIVA: Forzamos el dibujo antes de capturar el texto para el reporte
-        window.PeriodontoFisioCid.actualizarResumenVisual(); 
-        
-        // Damos un respiro de 10ms para que el innerHTML se asiente
-        setTimeout(() => {
-            const resumenVisual = document.getElementById('texto-resumen-dinamico')?.innerText;
-            if (typeof modalEngine !== 'undefined' && resumenVisual) {
-                modalEngine.clicTag(`🦷 REPORTE DENTAL: ${resumenVisual}`);
+            const oleary = window.PeriodontoFisioCid.obtenerAnalisisOleary();
+            const pct = parseFloat(oleary.porcentaje);
+            let estadoHigiene = "EXCELENTE";
+            if (pct > 20 && pct <= 50) estadoHigiene = "REGULAR";
+            else if (pct > 50) estadoHigiene = "DEFICIENTE";
+
+            // Piezas únicas
+            const piezasCaries = new Set();
+            document.querySelectorAll('.cara-diente[fill="#ef4444"]').forEach(el => {
+                piezasCaries.add(el.getAttribute('data-diente'));
+            });
+
+            const piezasExtraer = new Set();
+            document.querySelectorAll('[id^="overlay-extraer-"][style*="display: block"]').forEach(el => {
+                const idSplit = el.id.split('-');
+                piezasExtraer.add(idSplit[idSplit.length - 1]);
+            });
+
+            lineasReporte.push(`• HIGIENE: ${estadoHigiene} (Índice O'Leary: ${oleary.porcentaje}%)`);
+            lineasReporte.push(`• RESUMEN: ${piezasCaries.size} pieza(s) con Caries | ${piezasExtraer.size} pieza(s) Indicada(s) para Extracción`);
+
+            // Agrupar detalle por pieza
+            const mapaPiezas = {};
+            if (this.datosTemporales && this.datosTemporales.length > 0) {
+                this.datosTemporales.forEach(item => {
+                    if (!item.includes('[PROCEDIMIENTO DENTAL]')) {
+                        const match = item.match(/Pieza\s+(\d+)\s*\(([^)]+)\):\s*(.+)/i);
+                        if (match) {
+                            const num = match[1];
+                            const estado = match[3].trim();
+                            if (!mapaPiezas[num]) mapaPiezas[num] = new Set();
+
+                            if (estado.toLowerCase() === 'caries') mapaPiezas[num].add('Caries');
+                            else if (estado.toLowerCase() === 'extraer') mapaPiezas[num].add('Indicado para Extracción');
+                            else if (estado.toLowerCase() === 'tratado') mapaPiezas[num].add('Tratado');
+                            else if (estado.toLowerCase() === 'ausente') mapaPiezas[num].add('Pieza Ausente');
+                            else mapaPiezas[num].add(estado);
+                        }
+                    }
+                });
             }
-        }, 10);
-    } else if (this.ultimoResultadoEscala && typeof modalEngine !== 'undefined') {
-        modalEngine.clicTag(this.ultimoResultadoEscala);
-    }
 
-    // 3. CIERRE FÍSICO Y LIMPIEZA TOTAL
-    const modalEl = document.getElementById('modalEscalaDinamica');
-    if (modalEl) {
-        const m = bootstrap.Modal.getInstance(modalEl);
-        if (m) m.hide();
+            const detallePiezas = [];
+            Object.keys(mapaPiezas).sort((a,b) => a - b).forEach(num => {
+                detallePiezas.push(`Pieza ${num}: ${Array.from(mapaPiezas[num]).join(', ')}`);
+            });
+
+            if (detallePiezas.length > 0) {
+                lineasReporte.push(`• DETALLE PIEZA POR PIEZA:\n  - ${detallePiezas.join('\n  - ')}`);
+            }
+
+            // Procedimientos y Evaluaciones de Sub-módulos
+            const procs = this.datosTemporales ? this.datosTemporales.filter(t => t.includes('[PROCEDIMIENTO DENTAL]')) : [];
+            if (procs.length > 0) {
+                lineasReporte.push("• EVALUACIONES Y PROCEDIMIENTOS:");
+                procs.forEach(p => {
+                    lineasReporte.push(`  - ${p.replace('[PROCEDIMIENTO DENTAL]', '').trim()}`);
+                });
+            }
+
+            const textoReporteFinal = lineasReporte.join('\n');
+
+            // Inyectar en el Textarea de la Historia Clínica
+            const textareaExploracion = document.getElementById('exploracion');
+            if (textareaExploracion) {
+                const contenidoPrevio = textareaExploracion.value.trim();
+                textareaExploracion.value = contenidoPrevio 
+                    ? `${contenidoPrevio}\n\n${textoReporteFinal}` 
+                    : textoReporteFinal;
+                textareaExploracion.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            if (typeof modalEngine !== 'undefined' && typeof modalEngine.clicTag === 'function') {
+                modalEngine.clicTag(textoReporteFinal);
+            }
+        }
+
+        // Cierre de Modal
+        const modales = [document.getElementById('modalOdontoFullscreen'), document.getElementById('modalEscalaDinamica')];
+        modales.forEach(modalEl => {
+            if (modalEl) {
+                const inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+                modalEl.style.display = 'none';
+                modalEl.classList.remove('show');
+            }
+        });
 
         setTimeout(() => {
             document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
-            
-            // Refresco visual final
-            if (window.PeriodontoFisioCid) {
-                window.PeriodontoFisioCid.actualizarResumenVisual();
-            }
         }, 150);
+
+        this.escalaActiva = null;
+        this.dienteActivoEnEscala = null;
+        this.ultimoResultadoEscala = null;
     }
-
-    // 4. RESET DE ESTADO
-    this.escalaActiva = null;
-    this.ultimoResultadoEscala = null;
-    //console.log("✅ FisioCid: Integración finalizada con éxito.");
-},
-
-    // 🦷 GESTIÓN ODONTOLÓGICA (Añadir a FisioCidEngine)
-registrarHallazgoDental: function(diente, cara, estado) {
-    const hallazgo = `Pieza ${diente} (${cara}): ${estado}`;
-    
-    // Si el estado es "Sano", lo quitamos de la lista si existía
-    if (estado === "Sano") {
-        this.datosTemporales = this.datosTemporales.filter(t => !t.startsWith(`Pieza ${diente} (${cara})`));
-    } else {
-        // Evitamos duplicados y añadimos el hallazgo
-        this.datosTemporales = this.datosTemporales.filter(t => !t.startsWith(`Pieza ${diente} (${cara})`));
-        this.datosTemporales.push(hallazgo);
-    }
-    
-    // Refrescamos el panel lateral del asistente
-    if (typeof modalEngine !== 'undefined') {
-        modalEngine.actualizarPanelDiagnostico();
-    }
-},
-
-
-cargarConfiguracionDental: async function() {
-    // 🛡️ Puente omnisciente para obtener el ID del paciente activo
-    const idPac = this.pacienteActual?.id || window.idPaciente || new URLSearchParams(window.location.search).get('id');
-    
-    if (!idPac) {
-        console.warn("⚠️ FisioCidEngine: Esperando ID de paciente para cargar expediente dental...");
-        return; 
-    }
-
-    const client = window.fisioNet || window.supabase;
-    if (!client) {
-        console.warn("⚠️ FisioCidEngine: Cliente de Supabase no detectado.");
-        return;
-    }
-
-    try {
-        // 1. Recuperamos el estado dental base (ADN)
-        const { data, error } = await client
-            .from('pacientes_maestros')
-            .select('estado_dental_base, fecha_nacimiento')
-            .eq('id', idPac.trim())
-            .single();
-
-        if (error) throw error;
-
-        if (data && data.estado_dental_base) {
-            //console.log("🦷 FisioCidEngine: ADN dental previo detectado. Restaurando piezas...");
-            this.aplicarADNAlOdontograma(data.estado_dental_base);
-        } else if (data && data.fecha_nacimiento) {
-            // Configuración automática por Edad (Adulto vs Pediatría)
-            const hoy = new Date();
-            const cumple = new Date(data.fecha_nacimiento);
-            let edad = hoy.getFullYear() - cumple.getFullYear();
-            const esAdulto = edad >= 12;
-
-            const switchEl = document.getElementById('switchAdultoNiño') || document.getElementById('chkModoDenticion');
-            if (switchEl) {
-                switchEl.checked = esAdulto;
-                if (window.PeriodontoFisioCid) window.PeriodontoFisioCid.toggleArcada(switchEl);
-            }
-        }
-    } catch (err) {
-        console.error("Error al cargar configuración dental:", err);
-    }
-},
-
-aplicarADNAlOdontograma: function(adn) {
-    if (!adn || typeof adn !== 'object') return;
-
-    Object.keys(adn).forEach(clave => {
-        // clave ejemplo: "diente_18_V"
-        const partes = clave.split('_');
-        if (partes.length >= 3) {
-            const numDiente = partes[1];
-            const caraId = partes[2];
-
-            const selector = `.cara-diente[data-diente="${numDiente}"][data-cara="${caraId}"]`;
-            const el = document.querySelector(selector);
-            
-            if (el) {
-                el.setAttribute('fill', adn[clave]);
-                if (adn[clave] === '#94a3b8') el.removeAttribute('data-tiene-placa');
-            }
-        }
-    });
-
-    if (window.PeriodontoFisioCid && typeof window.PeriodontoFisioCid.actualizarResumenVisual === 'function') {
-        window.PeriodontoFisioCid.actualizarResumenVisual();
-    }
-}
-
-
 };
 
-
-
 window.FisioCidEngine = FisioCidEngine;
-
