@@ -4078,7 +4078,7 @@ async function verificarYPedirNotificaciones() {
         // Opcional: Puedes mostrar un botón o pedirlo directamente
         const permiso = await Notification.requestPermission();
         if (permiso === 'granted') {
-            console.log('¡Notificaciones activadas con éxito!');
+          //  console.log('¡Notificaciones activadas con éxito!');
             registrarSuscripcionPushEnSupabase();
         }
     }
@@ -4114,10 +4114,10 @@ async function registrarSuscripcionPushEnSupabase() {
             }, { onConflict: 'endpoint' });
 
         if (error) console.error("Error al guardar suscripción push en Supabase:", error);
-        else console.log("📱 Dispositivo registrado con éxito para recibir notificaciones push.");
+       // else console.log("📱 Dispositivo registrado con éxito para recibir notificaciones push.");
 
     } catch (err) {
-        console.error('Error en el proceso de suscripción push:', err);
+       // console.error('Error en el proceso de suscripción push:', err);
     }
 }
 
