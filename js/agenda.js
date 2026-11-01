@@ -111,47 +111,52 @@ export async function suscribirWebhookGoogle(token) {
 }
 
 export async function verificarEstadoGoogle() {
-    const { data: { session } } = await fisioNet.auth.getSession();
-    const btnTexto = document.getElementById('textoVinculacion');
-    const btnVincular = document.getElementById('btnVincularGoogle');
+  const { data: { session } } = await fisioNet.auth.getSession();
+  const btnTexto = document.getElementById('textoVinculacion');
+  const btnVincular = document.getElementById('btnVincularGoogle');
 
-    let tokenGoogle = session?.provider_token;
+  let tokenGoogle = session?.provider_token || localStorage.getItem('google_access_token');
 
-    // 1. Si viene en el HASH de la URL tras la redirección de Google OAuth
-    if (!tokenGoogle && window.location.hash) {
-        const params = new URLSearchParams(window.location.hash.replace('#', '?'));
-        tokenGoogle = params.get('provider_token') || params.get('access_token');
-    }
+  if (!tokenGoogle && window.location.hash) {
+    const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+    tokenGoogle = params.get('provider_token') || params.get('access_token');
+  }
 
-    // 2. Fallback a localStorage si ya se había autenticado antes
-    if (!tokenGoogle) {
-        tokenGoogle = localStorage.getItem('google_access_token');
-    }
+  if (tokenGoogle) {
+    localStorage.setItem('google_access_token', tokenGoogle);
 
-    // 3. Guardado seguro del refresh token en la base de datos
+    // 1. Guardar refresh token en BD si viene en la sesión de OAuth
     if (session?.provider_refresh_token && session?.user?.id) {
-        try {
-            await fisioNet.from('perfiles_profesionales')
-                .update({ google_refresh_token: session.provider_refresh_token })
-                .eq('id', session.user.id);
-        } catch (errDb) {
-            console.warn("⚠️ Omitiendo guardado de google_refresh_token en BD:", errDb);
-        }
+      await fisioNet.from('perfiles_profesionales')
+        .update({ google_refresh_token: session.provider_refresh_token })
+        .eq('id', session.user.id);
     }
 
-    // 4. Si contamos con un token válido, suscribir Webhook y pintar botón en verde
-    if (tokenGoogle) {
-        localStorage.setItem('google_access_token', tokenGoogle);
+    // 2. Verificar si YA EXISTE un canal activo y vigente en la BD antes de suscribir uno nuevo
+    const clinicaId = localStorage.getItem('id_clinica_activa');
+    const { data: canalExistente } = await fisioNet
+      .from('google_calendar_watch')
+      .select('expiration')
+      .eq('id_profesional', session?.user?.id)
+      .eq('id_clinica', clinicaId)
+      .maybeSingle();
 
-        // Invocar suscripción al Webhook pasando el token activo
-        await suscribirWebhookGoogle(tokenGoogle);
-
-        if (btnTexto) btnTexto.innerText = "Calendar Vinculado ✅";
-        if (btnVincular) {
-            btnVincular.style.borderColor = "#34A853";
-            btnVincular.style.background = "#f0fdf4";
-        }
+    const ahora = Date.now();
+    // Si no hay canal o si el canal actual está a menos de 1 día de expirar, se suscribe
+    if (!canalExistente || (canalExistente.expiration - ahora) < 86400000) {
+      console.log("🔄 Suscribiendo o renovando Webhook de Google Calendar...");
+      await suscribirWebhookGoogle(tokenGoogle);
+    } else {
+      console.log("✅ El Webhook en tiempo real ya está activo y vigente en la nube.");
     }
+
+    // 3. Pintar interfaz en verde
+    if (btnTexto) btnTexto.innerText = "Calendar Vinculado ✅";
+    if (btnVincular) {
+      btnVincular.style.borderColor = "#34A853";
+      btnVincular.style.background = "#f0fdf4";
+    }
+  }
 }
 
 // ============================================================================

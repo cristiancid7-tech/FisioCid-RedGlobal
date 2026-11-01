@@ -432,12 +432,66 @@ export function renderizarCitas(citas, modo) {
         } catch (e) { return ""; }
     };
 
-    const formatearFechaCorta = (fechaStr) => {
-        if (!fechaStr) return "";
-        const f = new Date(fechaStr + "T00:00:00");
-        return f.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }).toUpperCase();
+    // Función auxiliar para determinar el Caso de Uso de la Cita de forma limpia
+    const obtenerDatosCasoDeUso = (cita) => {
+        let nombrePaciente = "";
+        let edadInfo = "";
+        let botonAccion = "";
+        let badgeOrigen = "";
+        let esPendienteRegistro = false;
+
+        const esProspectoBool = Boolean(cita.es_prospecto);
+        const tienePacienteMaestro = Boolean(cita.pacientes_maestros);
+        const tieneIdPaciente = Boolean(cita.id_paciente);
+
+        // =========================================================================
+        // 🟢 CASO DE USO 1: PACIENTE REGISTRADO EN SISTEMA (Expediente Activo)
+        // =========================================================================
+        if ((tieneIdPaciente || tienePacienteMaestro) && !esProspectoBool) {
+            const p = cita.pacientes_maestros || {};
+            const nombreBase = `${p.nombre || cita.paciente_nombre_tmp || 'PACIENTE'} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+            
+            nombrePaciente = nombreBase.toUpperCase();
+            edadInfo = calcularEdadPorCurp(p.curp);
+            
+            const idParaExpediente = p.id || cita.id_paciente;
+            botonAccion = `<button onclick="irAHistoria('${idParaExpediente}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;">→</button>`;
+            esPendienteRegistro = false;
+
+        // =========================================================================
+        // 🟡 CASO DE USO 2: PROSPECTO (Agendado Express / Sala de Espera)
+        // =========================================================================
+        } else if (esProspectoBool) {
+            const p = cita.pacientes_maestros || {};
+            const nombreBase = `${p.nombre || cita.paciente_nombre_tmp || 'PROSPECTO'} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+            
+            nombrePaciente = nombreBase.toUpperCase();
+            edadInfo = calcularEdadPorCurp(p.curp);
+            
+          // CASO DE USO 2: PROSPECTO (Agendado Express / Sala de Espera)
+botonAccion = `<button onclick="abrirFiltroLimpieza('${cita.id_cita}', 'solicitud')" title="Completar Expediente" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`;
+ esPendienteRegistro = true;
+
+    // =========================================================================
+// 📱 CASO DE USO 3: REGISTRO MANUAL / GOOGLE CALENDAR / CELULAR
+// =========================================================================
+} else {
+    // Si no tiene paciente_maestro ni id_paciente, extraemos el texto de notas_logistica
+    const tituloGoogle = cita.notas_logistica 
+        ? cita.notas_logistica.replace("Evento desde celular: ", "") 
+        : "AGENDADO DESDE CELULAR";
+    
+    nombrePaciente = `📱 ${tituloGoogle.toUpperCase()}`;
+    badgeOrigen = `<span style="background: #fef3c7; color: #b45309; font-size: 0.6rem; font-weight: 800; padding: 2px 5px; border-radius: 4px; display: inline-block; margin-top: 2px;">REGISTRO PRIVADO</span>`;
+    
+    botonAccion = `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Completar Expediente" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`;
+    esPendienteRegistro = true;
+}
+
+        return { nombrePaciente, edadInfo, botonAccion, badgeOrigen, esPendienteRegistro, esProspectoBool };
     };
 
+    // --- RENDEREADO DE VISTA SEMANAL ---
     if (modo === 'semana') {
         const fechaInput = document.getElementById('filtroFechaAgenda')?.value || new Date().toISOString().split('T')[0];
         const fechaBase = new Date(fechaInput + "T00:00:00");
@@ -459,12 +513,12 @@ export function renderizarCitas(citas, modo) {
             width: 100%;
         `;
 
-        diasSemana.forEach((fechaStr, index) => {
+        diasSemana.forEach((fechaStr) => {
             const citasDelDia = (citas || []).filter(c => c.fecha === fechaStr);
             const fechaObj = new Date(fechaStr + "T00:00:00");
             const nombreDia = fechaObj.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
             
-            const hoyReal = obtenerFechaLocal();
+            const hoyReal = typeof obtenerFechaLocal === 'function' ? obtenerFechaLocal() : new Date().toISOString().split('T')[0];
             const esHoy = (fechaStr === hoyReal);
             
             const columnaDia = document.createElement('div');
@@ -496,16 +550,10 @@ export function renderizarCitas(citas, modo) {
                     </div>`;
             } else {
                 citasDelDia.forEach(cita => {
-                    const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', apellido_materno: '', curp: '', id: '' };
-                    const nombrePaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
-                    const edadInfo = calcularEdadPorCurp(p.curp);
+                    const datos = obtenerDatosCasoDeUso(cita);
 
-                    const botonAccion = cita.es_prospecto 
-                        ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`
-                        : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;">→</button>`;
-
-                    const bgColor = cita.es_prospecto ? '#fefce8' : '#ffffff';
-                    const borderColor = cita.es_prospecto ? '#fde047' : '#e2e8f0';
+                    const bgColor = datos.esPendienteRegistro ? '#fefce8' : '#ffffff';
+                    const borderColor = datos.esPendienteRegistro ? '#fde047' : '#e2e8f0';
 
                     const tarjeta = document.createElement('div');
                     tarjeta.style.cssText = `
@@ -522,23 +570,24 @@ export function renderizarCitas(citas, modo) {
                     tarjeta.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div style="font-size: 0.75rem; font-weight: 800; color: #1e293b; line-height: 1.2;">
-                                ${nombrePaciente}
-                                ${edadInfo ? `<span style="display: block; font-size: 0.65rem; color: #64748b; font-weight: 600; margin-top: 2px;">${edadInfo}</span>` : ''}
+                                ${datos.nombrePaciente}
+                                ${datos.badgeOrigen}
+                                ${datos.edadInfo ? `<span style="display: block; font-size: 0.65rem; color: #64748b; font-weight: 600; margin-top: 2px;">${datos.edadInfo}</span>` : ''}
                             </div>
-                            ${botonAccion}
+                            ${datos.botonAccion}
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
                             <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
                                 ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
                             </span>
-                           <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${Boolean(cita.es_prospecto)})" style="...">
-    <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
-    <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
-    <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
-    <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
-    <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
-    <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
-</select>
+                            <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${datos.esProspectoBool})" style="font-size: 0.7rem; font-weight: bold; padding: 2px 4px; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer;">
+                                <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
+                                <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
+                                <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
+                                <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
+                                <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
+                                <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
+                            </select>
                         </div>
                     `;
                     contenedorTarjetas.appendChild(tarjeta);
@@ -548,6 +597,7 @@ export function renderizarCitas(citas, modo) {
         });
         lista.appendChild(gridSemanal);
         
+    // --- RENDEREADO DE VISTA DIARIA ---
     } else if (modo === 'dia') {
         const fechaInput = document.getElementById('filtroFechaAgenda')?.value || new Date().toISOString().split('T')[0];
         const citasDelDia = (citas || []).filter(c => c.fecha === fechaInput);
@@ -561,15 +611,10 @@ export function renderizarCitas(citas, modo) {
         contenedorDia.style.cssText = "display: flex; flex-direction: column; gap: 10px;";
 
         citasDelDia.forEach(cita => {
-            const p = cita.pacientes_maestros || { nombre: 'Paciente', apellido_paterno: 'Registrado', apellido_materno: '', curp: '', id: '' };
-            const nombrePaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
-            
-            const botonAccionDia = cita.es_prospecto 
-                ? `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Corregir Datos" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: 900;">✍️ REGISTRAR</button>`
-                : `<button onclick="irAHistoria('${p.id}')" title="Ver Expediente" style="background: var(--primary); color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">Abrir Expediente →</button>`;
+            const datos = obtenerDatosCasoDeUso(cita);
 
             const selectorEstatus = `
-                <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${cita.es_prospecto ? true : false})" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
+                <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${datos.esProspectoBool})" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
                     <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
                     <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
                     <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
@@ -581,19 +626,19 @@ export function renderizarCitas(citas, modo) {
 
             const divCita = document.createElement('div');
             divCita.style.cssText = `
-                background: ${cita.es_prospecto ? '#fefce8' : '#ffffff'};
-                border: 1px solid ${cita.es_prospecto ? '#fde047' : '#e2e8f0'};
+                background: ${datos.esPendienteRegistro ? '#fefce8' : '#ffffff'};
+                border: 1px solid ${datos.esPendienteRegistro ? '#fde047' : '#e2e8f0'};
                 padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             `;
 
             divCita.innerHTML = `
                 <div>
-                    <div style="font-weight: 800; font-size: 0.9rem; color: #1e293b;">${nombrePaciente}</div>
-                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : ''} | Modalidad: ${cita.modalidad}</div>
+                    <div style="font-weight: 800; font-size: 0.9rem; color: #1e293b;">${datos.nombrePaciente}</div>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : ''} | Modalidad: ${cita.modalidad || 'CONSULTORIO'}</div>
                 </div>
                 <div style="display: flex; align-items: center;">
                     ${selectorEstatus}
-                    ${botonAccionDia}
+                    ${datos.botonAccion}
                 </div>
             `;
             contenedorDia.appendChild(divCita);
@@ -601,7 +646,6 @@ export function renderizarCitas(citas, modo) {
         lista.appendChild(contenedorDia);
     }
 }
-
 
 window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) => {
     if (!idCita || idCita === 'undefined') return;
@@ -3738,46 +3782,273 @@ function iniciarCanalSalaEspera() {
         .subscribe();
 }
 
-window.abrirFiltroLimpieza = async (idSolicitud) => {
-    // 1. Traemos la basura que guardamos por teléfono ("DOÑA JOSE")
-    const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
-    if(!sol) return;
 
-    // 2. Llenamos el modal para que la recepcionista lo borre y corrija
-    document.getElementById('limpiezaIdSolicitud').value = sol.id;
-    document.getElementById('limpiezaNombre').value = sol.nombre || '';
-    document.getElementById('limpiezaPaterno').value = sol.apellido_p || '';
-    document.getElementById('limpiezaMaterno').value = sol.apellido_m || '';
 
-    // Abrimos la aduana
-    document.getElementById('modalLimpieza').style.display = 'flex';
+window.abrirFiltroLimpieza = async (id, tipoOrigen = 'agenda') => {
+    if (!id || id === 'undefined') {
+        alert("⚠️ El ID de la cita no es válido.");
+        return;
+    }
+
+    const modal = document.getElementById('modalLimpieza');
+    if (!modal) {
+        alert("⚠️ No se encontró el modal de limpieza (#modalLimpieza) en el HTML.");
+        return;
+    }
+
+    // 🎯 Guardar el origen en el dataset del modal para que 'confirmarLimpiezaYProcesar' sepa qué tabla actualizar
+    modal.dataset.origen = (tipoOrigen === 'solicitud') ? 'SOLICITUD' : 'AGENDA';
+
+    document.getElementById('limpiezaIdSolicitud').value = id;
+    document.getElementById('limpiezaIdPacienteExistente').value = '';
+    
+    const badgeVinculado = document.getElementById('badgePacienteVinculado');
+    if (badgeVinculado) badgeVinculado.style.display = 'none';
+
+    let nombreTexto = "";
+
+    if (tipoOrigen === 'solicitud') {
+        // Consulta en solicitudes_citas
+        const { data: sol } = await fisioNet
+            .from('solicitudes_citas')
+            .select('id, nombre, apellido_p, apellido_m')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (sol) {
+            nombreTexto = `${sol.nombre || ''} ${sol.apellido_p || ''} ${sol.apellido_m || ''}`.trim();
+        }
+    } else {
+        // Consulta en agenda_maestra
+        const { data: cita } = await fisioNet
+            .from('agenda_maestra')
+            .select('id_cita, notas_logistica')
+            .eq('id_cita', id)
+            .maybeSingle();
+
+        if (cita) {
+            nombreTexto = (cita.notas_logistica || "").replace("Evento desde celular: ", "");
+        }
+    }
+
+    // Separar nombre completo en partes para autocompletar el formulario
+    const partes = nombreTexto.trim().split(" ");
+    const nom = partes[0] || "";
+    const pat = partes[1] || "";
+    const mat = partes.slice(2).join(" ") || "";
+
+    const inputNom = document.getElementById('limpiezaNombre');
+    const inputPat = document.getElementById('limpiezaPaterno');
+    const inputMat = document.getElementById('limpiezaMaterno');
+
+    if (inputNom) inputNom.value = nom.toUpperCase();
+    if (inputPat) inputPat.value = pat.toUpperCase();
+    if (inputMat) inputMat.value = mat.toUpperCase();
+
+    modal.style.display = 'flex';
+
+    if (nom.length >= 2) {
+        ejecutarBusquedaSugerenciasModal(nom.toUpperCase());
+    }
 };
 
+
+
 window.confirmarLimpiezaYProcesar = async () => {
+    const btnGuardar = document.querySelector("#modalLimpieza button[onclick='confirmarLimpiezaYProcesar()']");
+    if (btnGuardar) btnGuardar.disabled = true;
+
     try {
-        const id = document.getElementById('limpiezaIdSolicitud').value;
+        const idSolicitud = document.getElementById('limpiezaIdSolicitud').value;
+        const idPacienteExistente = document.getElementById('limpiezaIdPacienteExistente').value;
         const nom = document.getElementById('limpiezaNombre').value.trim().toUpperCase();
         const pat = document.getElementById('limpiezaPaterno').value.trim().toUpperCase();
         const mat = document.getElementById('limpiezaMaterno').value.trim().toUpperCase();
+        const clinicaId = localStorage.getItem('id_clinica_activa');
+        
+        // Leemos el origen desde el dataset del modal (o del input hidden)
+        const modal = document.getElementById('modalLimpieza');
+        const origen = modal.dataset.origen || 'SOLICITUD'; // 'SOLICITUD' o 'AGENDA'
 
-        if(!nom || !pat) {
-            alert("⚠️ El Nombre y Apellido Paterno son obligatorios para el expediente real.");
+        if (!idSolicitud) {
+            alert("⚠️ No se pudo determinar el ID de la cita.");
             return;
         }
 
-        await fisioNet.from('solicitudes_citas').update({
-            nombre: nom,
-            apellido_p: pat,
-            apellido_m: mat
-        }).eq('id', id);
+        if (!nom || (!pat && !idPacienteExistente)) {
+            alert("⚠️ El Nombre y el Apellido Paterno son obligatorios.");
+            return;
+        }
+
+        const { data: { user } } = await fisioNet.auth.getUser();
+        let idPacienteFinal = idPacienteExistente;
+
+        // 1. CREAR PACIENTE MAESTRO SI ES NUEVO
+        if (!idPacienteFinal) {
+            const { data: nPac, error: errPac } = await fisioNet
+                .from('pacientes_maestros')
+                .insert([{
+                    nombre: nom,
+                    apellido_paterno: pat,
+                    apellido_materno: mat,
+                    id_clinica: clinicaId,
+                    creado_por: user?.id
+                }])
+                .select('id')
+                .single();
+
+            if (errPac) throw new Error("Error creando paciente: " + errPac.message);
+            idPacienteFinal = nPac.id;
+        }
 
         document.getElementById('modalLimpieza').style.display = 'none';
-        procesarSolicitud(id, 'APROBAR');
+
+        // 2. EJECUTAR ACCIÓN SEGÚN EL ORIGEN REAL
+        if (origen === 'AGENDA') {
+            // ==========================================
+            // 📱 CASO 3: REGISTRO CELULAR / PRIVADO
+            // ==========================================
+            const { error: errAg } = await fisioNet
+                .from('agenda_maestra')
+                .update({ id_paciente: idPacienteFinal })
+                .eq('id_cita', idSolicitud);
+
+            if (errAg) throw errAg;
+
+        } else {
+            // ==========================================
+            // 🟡 CASO 2: PROSPECTO (solicitudes_citas)
+            // ==========================================
+            // A) Traer los datos de la solicitud
+            const { data: solExistente, error: errGetSol } = await fisioNet
+                .from('solicitudes_citas')
+                .select('*')
+                .eq('id', idSolicitud)
+                .single();
+
+            if (errGetSol) throw errGetSol;
+
+            // B) Cambiar estado a APROBADO
+            const { error: errSol } = await fisioNet
+                .from('solicitudes_citas')
+                .update({
+                    nombre: nom,
+                    apellido_p: pat,
+                    apellido_m: mat,
+                    estado: 'APROBADO'
+                })
+                .eq('id', idSolicitud);
+
+            if (errSol) throw errSol;
+
+            // C) Insertar en agenda_maestra
+            const { error: errInsAg } = await fisioNet
+                .from('agenda_maestra')
+                .insert([{
+                    id_paciente: idPacienteFinal,
+                    id_profesional: user.id,
+                    id_clinica: clinicaId,
+                    fecha: solExistente.fecha_cita,
+                    hora_inicio_cita: solExistente.hora_cita,
+                    modalidad: 'CONSULTORIO',
+                    estatus: 'PENDIENTE',
+                    estado: 'ACTIVO',
+                    google_event_id: solExistente.google_event_id || null
+                }]);
+
+            if (errInsAg) throw errInsAg;
+        }
+
+        alert("✅ Cita vinculada exitosamente.");
+
+        if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+        if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
+
     } catch (e) {
-        console.error("Error en limpieza:", e);
-        alert("Ocurrió un error al procesar la limpieza.");
+        console.error("❌ Error en el proceso:", e);
+        alert("Ocurrió un error: " + (e.message || "Error al procesar"));
+    } finally {
+        if (btnGuardar) btnGuardar.disabled = false;
     }
 };
+
+// Función aislada para buscar coincidencias sin duplicar código
+async function ejecutarBusquedaSugerenciasModal(texto) {
+    const contenedorSugerencias = document.getElementById('sugerenciasLimpiezaModal');
+    if (!contenedorSugerencias) return;
+
+    if (texto.length < 2) { 
+        contenedorSugerencias.innerHTML = ''; 
+        return; 
+    }
+
+    const clinicaId = localStorage.getItem('id_clinica_activa');
+    const filtroOr = `nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%,telefono.ilike.%${texto}%`;
+
+    let query = fisioNet.from('pacientes_maestros')
+        .select('id, nombre, apellido_paterno, apellido_materno, telefono')
+        .or(filtroOr)
+        .limit(5);
+
+    if (clinicaId) {
+        query = query.eq('id_clinica', clinicaId);
+    }
+
+    const { data: pacientes, error } = await query;
+
+    if (error) {
+        console.error("Error en la consulta de sugerencias:", error);
+        return;
+    }
+
+    contenedorSugerencias.innerHTML = '';
+
+    if (pacientes && pacientes.length > 0) {
+        pacientes.forEach(p => {
+            const div = document.createElement('div');
+            div.style.cssText = "padding:10px 12px; cursor:pointer; border-bottom:1px solid #f1f5f9; font-size:0.8rem; font-weight:700; color:#1e293b; transition: background 0.15s;";
+            div.onmouseover = () => div.style.background = '#f0fdf4';
+            div.onmouseout = () => div.style.background = '#ffffff';
+
+            const telInfo = p.telefono ? ` <span style="color:#64748b; font-size:0.75rem;">(📞 ${p.telefono})</span>` : '';
+            div.innerHTML = `👤 ${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}${telInfo}`.trim();
+
+            div.onclick = () => {
+                document.getElementById('limpiezaNombre').value = (p.nombre || '').toUpperCase();
+                document.getElementById('limpiezaPaterno').value = (p.apellido_paterno || '').toUpperCase();
+                document.getElementById('limpiezaMaterno').value = (p.apellido_materno || '').toUpperCase();
+                document.getElementById('limpiezaIdPacienteExistente').value = p.id;
+
+                const badgeVinculado = document.getElementById('badgePacienteVinculado');
+                if (badgeVinculado) badgeVinculado.style.display = 'flex';
+                
+                contenedorSugerencias.innerHTML = '';
+            };
+            contenedorSugerencias.appendChild(div);
+        });
+    }
+}
+
+// Event listener sobre el input de nombre
+document.getElementById('limpiezaNombre')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.toUpperCase();
+    const texto = e.target.value.trim();
+    
+    // Si se modifica manualmente el texto, limpiar la vinculación previa
+    document.getElementById('limpiezaIdPacienteExistente').value = '';
+    const badgeVinculado = document.getElementById('badgePacienteVinculado');
+    if (badgeVinculado) badgeVinculado.style.display = 'none';
+
+    ejecutarBusquedaSugerenciasModal(texto);
+});
+
+window.desvincularPacienteModal = () => {
+    document.getElementById('limpiezaIdPacienteExistente').value = '';
+    const badgeVinculado = document.getElementById('badgePacienteVinculado');
+    if (badgeVinculado) badgeVinculado.style.display = 'none';
+};
+
+
 
 window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
     const nuevoEstado = accion === 'APROBAR' ? 'CONFIRMADO' : 'RECHAZADO';
@@ -4111,6 +4382,84 @@ function evaluarAccesoElementosUI(permitido) {
         if (bannerUpgrade) bannerUpgrade.style.setProperty('display', 'flex', 'important');
     }
 }
+
+
+// Búsqueda en tiempo real dentro del modal
+window.buscarPacienteExistente = async (criterio) => {
+    const contenedor = document.getElementById('listaResultadosBusqueda');
+    if (criterio.trim().length < 3) {
+        contenedor.innerHTML = '';
+        return;
+    }
+
+    const { data: pacientes } = await fisioNet
+        .from('pacientes_maestros')
+        .select('id, nombre, paterno, materno, telefono')
+        .or(`nombre.ilike.%${criterio}%,paterno.ilike.%${criterio}%,telefono.ilike.%${criterio}%`)
+        .limit(5);
+
+    contenedor.innerHTML = pacientes.map(p => `
+        <div onclick="vincularCitaAPaciente('${p.id}')" style="padding:8px; border-bottom:1px solid #eee; cursor:pointer; background:#f9fafb;">
+            <strong>${p.nombre} ${p.paterno || ''} ${p.materno || ''}</strong> <small>(${p.telefono || 'Sin Tel'})</small>
+        </div>
+    `).join('');
+};
+
+// Asignar id_paciente a la cita sin tocar la tabla de pacientes
+window.vincularCitaAPaciente = async (idPaciente) => {
+    const idCita = document.getElementById('limpiezaIdCita').value;
+
+    const { error } = await fisioNet
+        .from('agenda_maestra')
+        .update({ id_paciente: idPaciente })
+        .eq('id_cita', idCita);
+
+    if (error) {
+        alert("Error al vincular: " + error.message);
+    } else {
+        alert("¡Cita vinculada exitosamente con el paciente existente!");
+        document.getElementById('modalLimpieza').style.display = 'none';
+        if (typeof cargarCitas === 'function') cargarCitas(); // Recargar tabla
+    }
+};
+
+window.guardarComoNuevoPaciente = async () => {
+    const idCita = document.getElementById('limpiezaIdCita').value;
+    const nombre = document.getElementById('limpiezaNombre').value.trim();
+    const paterno = document.getElementById('limpiezaPaterno').value.trim();
+    const materno = document.getElementById('limpiezaMaterno').value.trim();
+
+    if (!nombre) {
+        alert("El nombre es obligatorio.");
+        return;
+    }
+
+    // 1. Insertar en pacientes_maestros (Genera un nuevo UUID automáticamente)
+    const { data: nuevoPaciente, error: errorPaciente } = await fisioNet
+        .from('pacientes_maestros')
+        .insert([{ nombre, paterno, materno }])
+        .select()
+        .single();
+
+    if (errorPaciente) {
+        alert("Error al crear paciente: " + errorPaciente.message);
+        return;
+    }
+
+    // 2. Vincular el nuevo id_paciente a la cita en agenda_maestra
+    const { error: errorAgenda } = await fisioNet
+        .from('agenda_maestra')
+        .update({ id_paciente: nuevoPaciente.id })
+        .eq('id_cita', idCita);
+
+    if (errorAgenda) {
+        alert("Paciente creado, pero hubo un error al vincular la cita.");
+    } else {
+        alert("¡Paciente creado y cita vinculada correctamente!");
+        document.getElementById('modalLimpieza').style.display = 'none';
+        if (typeof cargarCitas === 'function') cargarCitas();
+    }
+};
 window.abrirModalNuevaSede = abrirModalNuevaSede;
 window.cerrarModalNuevaSede = cerrarModalNuevaSede;
 window.lanzarLaboratorioGeneral = lanzarLaboratorioGeneral;
@@ -4121,3 +4470,4 @@ window.guardarCambiosAlianza = guardarCambiosAlianza;
 window.abrirBuscadorExpressPacientes = abrirBuscadorExpressPacientes;
 window.cerrarBuscadorExpress = cerrarBuscadorExpress;
 window.atenderSolicitudDesdeDashboard = atenderSolicitudDesdeDashboard;
+window.abrirFiltroLimpieza = abrirFiltroLimpieza;
