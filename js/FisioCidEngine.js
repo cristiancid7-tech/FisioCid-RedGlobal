@@ -129,8 +129,8 @@ const FisioCidEngine = {
                         <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
                             ${i + 1}. ${p.t.toUpperCase()}
                         </label>
-                        <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.calcularEscalaDinamica()">
-                            <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
+              <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.soloCalcularEscala()">
+                    <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
                             ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
                         </select>
                     </div>`;
@@ -149,8 +149,8 @@ const FisioCidEngine = {
         instanciaModal.show();
     },
 
-   // 📊 CÁLCULO DINÁMICO E INYECCIÓN MULTI-RAMA (PSICOLOGÍA / ODONTO / FISIO)
-    calcularEscalaDinamica: function() {
+    // 📊 SOLO RECALCULA EN VIVO (CUANDO SELECCIONAS UNA OPCIÓN DEL SELECT)
+    soloCalcularEscala: function() {
         let puntos = 0;
         let textosSeleccionados = []; 
         const inputs = document.querySelectorAll('.escala-input');
@@ -170,46 +170,68 @@ const FisioCidEngine = {
                 resVivo.innerHTML = `<b style="color:#38bdf8;">${puntos} PTS</b> - <small class="text-white">${res.g || res.notaClinica}</small>`;
             }
             
-            // 🧠 SINCRO 1: RAMA PSICOLOGÍA
             if (escala.rama === "psicologia") {
                 const nota = res.notaClinica || res.g;
-                
-                // Actualizar badges numéricos si corresponden a PHQ-9 o GAD-7
                 if (this.escalaActiva === 'PHQ9') {
                     const inputPhq = document.getElementById('val_phq9_total');
-                    if (inputPhq) {
-                        inputPhq.value = puntos;
-                        if (window.PsicoFisioCid) window.PsicoFisioCid.calcularPHQ9();
-                    }
+                    if (inputPhq) { inputPhq.value = puntos; if (window.PsicoFisioCid) window.PsicoFisioCid.calcularPHQ9(); }
                 }
                 if (this.escalaActiva === 'GAD7') {
                     const inputGad = document.getElementById('val_gad7_total');
-                    if (inputGad) {
-                        inputGad.value = puntos;
-                        if (window.PsicoFisioCid) window.PsicoFisioCid.calcularGAD7();
-                    }
+                    if (inputGad) { inputGad.value = puntos; if (window.PsicoFisioCid) window.PsicoFisioCid.calcularGAD7(); }
                 }
-
-                // Inyectar diagnóstico/nota al textarea de objetivos del módulo psicológico
-                if (window.PsicoFisioCid && typeof window.PsicoFisioCid.agregarTagTexto === 'function') {
-                    window.PsicoFisioCid.agregarTagTexto('psico_objetivos', nota);
-                }
-
-                if (!this.datosTemporales.includes(nota)) {
-                    this.datosTemporales.push(nota);
-                }
-
-            // 🦷 SINCRO 2: RAMA ODONTOLOGÍA
-            } else if (escala.rama === "odontologia" && window.PeriodontoFisioCid) {
-                window.PeriodontoFisioCid.actualizarHallazgoGlobal(this.escalaActiva, res.notaClinica || res.g);
-
-            // 🦾 SINCRO 3: RAMA FISIOTERAPIA
-            } else if (escala.rama === "fisioterapia" && window.FisioCidClinico) {
-                window.FisioCidClinico.hallazgosEscalas[escala.nombre] = res.g;
-                window.FisioCidClinico.actualizarResumen();
             }
         }
     },
+
+ // 🏁 CALCULA Y CIERRA EXCLUSIVAMENTE EL TEST FLOTANTE
+    calcularEscalaDinamica: function() {
+        this.soloCalcularEscala(); // Aseguramos el cálculo en vivo
+
+        const escala = window.BANCO_ESCALAS?.[this.escalaActiva];
+        if (escala) {
+            let puntos = 0;
+            const inputs = document.querySelectorAll('.escala-input');
+            inputs.forEach((s) => {
+                if (s.value !== "none") puntos += parseInt(s.value);
+            });
+
+            const res = escala.interpretar(puntos, []);
+            const nota = res.notaClinica || res.g;
+
+            if (escala.rama === "psicologia") {
+                if (window.PsicoFisioCid && typeof window.PsicoFisioCid.agregarTagTexto === 'function') {
+                    window.PsicoFisioCid.agregarTagTexto('psico_objetivos', `${escala.nombre}: ${puntos} PTS - ${nota}`);
+                }
+            }
+            if (!this.datosTemporales.includes(nota)) {
+                this.datosTemporales.push(nota);
+            }
+        }
+
+        // 🛑 OCULTAR ÚNICAMENTE EL MODAL DE LA ESCALA ACTIVA (SIN TOCAR EL ASISTENTE GRANDE)
+        const modalEscala = document.getElementById('modalEscalaDinamica');
+        if (modalEscala) {
+            modalEscala.style.display = 'none';
+            modalEscala.classList.remove('show');
+            modalEscala.setAttribute('aria-hidden', 'true');
+            
+            // Remover manualmente cualquier residuo de backdrop exclusivo de este sub-modal si existe
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 0) {
+                // Si hay más de un backdrop (porque el asistente grande y el test están abiertos), removemos solo el último
+                backdrops[backdrops.length - 1].remove();
+            }
+        }
+
+        // Restaurar el scroll del body por si Bootstrap lo congeló por error al cerrar el sub-modal
+        document.body.classList.add('modal-open'); 
+
+        this.escalaActiva = null;
+        this.dienteActivoEnEscala = null;
+        this.ultimoResultadoEscala = null;
+    },
+
 
     // 💾 COMPILAR ESTADO GLOBAL DENTAL PARA LA COLUMNA piezas_dentales (JSONB) SIN ACENTOS
     obtenerObjetoDentalMaestro: function() {
@@ -268,15 +290,58 @@ const FisioCidEngine = {
         };
     },
 
-   // 🏁 FINALIZAR E INYECTAR REPORTE UNIFICADO Y AGRUPADO AL EXPEDIENTE
+  // 🏁 FINALIZAR E INYECTAR REPORTE (PSICOLOGÍA O ODONTOLOGÍA SEGÚN EL MODAL ACTIVO)
     finalizarEscala: async function() {
-        console.log("🚀 Sincronizando hallazgos odontológicos agrupados hacia el expediente...");
+        console.log("🚀 Sincronizando hallazgos clínicos hacia el expediente...");
 
-        if (window.PeriodontoFisioCid) {
+        // 🧠 CASO 1: SI EL MODAL ACTIVO ES EL DE PSICOLOGÍA (GRANDE)
+        const modalPsico = document.getElementById('modalPsicoFullscreen');
+        const esPsicoActivo = modalPsico && (modalPsico.classList.contains('show') || window.getComputedStyle(modalPsico).display === 'block');
+
+        // Verificamos si realmente se dio clic en el botón principal del modal de psicología
+        // y NO en una escala flotante secundaria.
+        const modalEscalaActivaEl = document.getElementById('modalEscalaDinamica');
+        const esEscalaFlotanteActiva = modalEscalaActivaEl && (modalEscalaActivaEl.classList.contains('show') || window.getComputedStyle(modalEscalaActivaEl).display === 'block');
+
+        if (esPsicoActivo && !esEscalaFlotanteActiva && window.PsicoFisioCid) {
+            console.log("🧠 [FisioCidEngine]: Procesando cierre y distribución de Evaluación Psicológica...");
+
+            const campoObjetivos = document.getElementById('psico_objetivos');
+            const campoTareas = document.getElementById('psico_tareas_casa');
+
+            const textoHallazgos = campoObjetivos ? campoObjetivos.value.trim() : "";
+            const textoTratamiento = campoTareas ? campoTareas.value.trim() : "";
+
+            const textareaExploracion = document.getElementById('exploracion');
+            if (textareaExploracion && textoHallazgos) {
+                const previoExp = textareaExploracion.value.trim();
+                textareaExploracion.value = previoExp 
+                    ? `${previoExp}\n\n=== 🧠 EVALUACIÓN PSICOLÓGICA (HALLAZGOS) ===\n${textoHallazgos}` 
+                    : `=== 🧠 EVALUACIÓN PSICOLÓGICA (HALLAZGOS) ===\n${textoHallazgos}`;
+                textareaExploracion.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            const textareaPlan = document.getElementById('plan_tratamiento');
+            if (textareaPlan && textoTratamiento) {
+                const previoPlan = textareaPlan.value.trim();
+                textareaPlan.value = previoPlan 
+                    ? `${previoPlan}\n\n=== 🧠 INTERVENCIÓN Y TAREAS PSICOLÓGICAS ===\n${textoTratamiento}` 
+                    : `=== 🧠 INTERVENCIÓN Y TAREAS PSICOLÓGICAS ===\n${textoTratamiento}`;
+                textareaPlan.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            // Ocultar modal de psicología limpiamente
+            const instPsico = bootstrap.Modal.getInstance(modalPsico) || new bootstrap.Modal(modalPsico);
+            instPsico.hide();
+            modalPsico.style.display = 'none';
+            modalPsico.classList.remove('show');
+        } 
+        else if (window.PeriodontoFisioCid && !esEscalaFlotanteActiva) {
+            // 🦷 CASO 2: SI ES ODONTOLOGÍA
             window.PeriodontoFisioCid.actualizarResumenVisual();
 
             let lineasReporte = [];
-            lineasReporte.push("=== 🦷 EXPLORACIÓN Y REPORTE ODONTOLÓGICO ===");
+            lineasReporte.push("===🦷 EXPLORACIÓN Y REPORTE ODONTOLÓGICO ===");
 
             const oleary = window.PeriodontoFisioCid.obtenerAnalisisOleary();
             const pct = parseFloat(oleary.porcentaje);
@@ -284,7 +349,6 @@ const FisioCidEngine = {
             if (pct > 20 && pct <= 50) estadoHigiene = "REGULAR";
             else if (pct > 50) estadoHigiene = "DEFICIENTE";
 
-            // 🧠 MAPA DE AGRUPACIÓN EN TIEMPO REAL
             const mapaHallazgos = {
                 'Placa Nueva (Bacteriana)': new Set(),
                 'Placa Antigua / Sarro': new Set(),
@@ -295,23 +359,19 @@ const FisioCidEngine = {
                 'Endodoncia Realizada': new Set()
             };
 
-            // 1. ESCANEO DIRECTO DEL DOM DE PIEZAS Y COLORES
             document.querySelectorAll('.tarjeta-pieza-dental').forEach(tarjeta => {
                 const num = parseInt(tarjeta.getAttribute('data-diente'), 10);
                 if (!num) return;
 
-                // Escaneo de Caras y Colores
                 tarjeta.querySelectorAll('.cara-diente').forEach(c => {
                     const fill = c.getAttribute('fill')?.toLowerCase();
                     if (!fill || fill === '#f8fafc' || fill === 'none') return;
-
                     if (fill === '#ef4444' || fill === 'red') mapaHallazgos['Caries Detectada'].add(num);
                     if (fill === '#3b82f6' || fill === 'blue') mapaHallazgos['Tratado / Restaurado'].add(num);
                     if (fill === '#eab308' || fill === 'yellow') mapaHallazgos['Placa Nueva (Bacteriana)'].add(num);
                     if (fill === '#f97316' || fill === 'orange') mapaHallazgos['Placa Antigua / Sarro'].add(num);
                 });
 
-                // Escaneo de Overlays (Extracción, Ausente, Endodoncia)
                 const overlayExtraer = document.getElementById(`overlay-extraer-${num}`);
                 const overlayAusente = document.getElementById(`overlay-ausente-${num}`);
                 const gutapercha = document.getElementById(`gutapercha-${num}`);
@@ -321,29 +381,9 @@ const FisioCidEngine = {
                 if (gutapercha && gutapercha.style.display === 'block') mapaHallazgos['Endodoncia Realizada'].add(num);
             });
 
-            // 2. ESCANEO ADICIONAL DE DATOS TEMPORALES (Si hay notas registradas por texto)
-            if (this.datosTemporales && this.datosTemporales.length > 0) {
-                this.datosTemporales.forEach(item => {
-                    if (!item.includes('[PROCEDIMIENTO DENTAL]')) {
-                        const match = item.match(/Pieza\s+(\d+)/i);
-                        if (match) {
-                            const num = parseInt(match[1], 10);
-                            const t = item.toLowerCase();
-                            if (t.includes('caries')) mapaHallazgos['Caries Detectada'].add(num);
-                            if (t.includes('placa nueva') || t.includes('p_nueva')) mapaHallazgos['Placa Nueva (Bacteriana)'].add(num);
-                            if (t.includes('placa vieja') || t.includes('p_vieja') || t.includes('sarro')) mapaHallazgos['Placa Antigua / Sarro'].add(num);
-                            if (t.includes('extraer')) mapaHallazgos['Indicado para Extracción'].add(num);
-                            if (t.includes('ausente')) mapaHallazgos['Pieza Ausente'].add(num);
-                        }
-                    }
-                });
-            }
-
-            // Resumen de higiene general
             lineasReporte.push(`• HIGIENE: ${estadoHigiene} (Índice O'Leary: ${oleary.porcentaje}%)`);
             lineasReporte.push(`• RESUMEN GENERAL: ${mapaHallazgos['Caries Detectada'].size} pieza(s) con Caries | ${mapaHallazgos['Indicado para Extracción'].size} pieza(s) Indicadas para Extracción`);
 
-            // 3. CONSTRUCCIÓN DE RENGLONES UNIFICADOS
             const renglonesAgrupados = [];
             Object.keys(mapaHallazgos).forEach(hallazgo => {
                 if (mapaHallazgos[hallazgo].size > 0) {
@@ -356,43 +396,29 @@ const FisioCidEngine = {
                 lineasReporte.push(`• HALLAZGOS CLINICOS AGRUPADOS:\n${renglonesAgrupados.join('\n')}`);
             }
 
-            // Procedimientos registrados en submódulos
-            const procs = this.datosTemporales ? this.datosTemporales.filter(t => t.includes('[PROCEDIMIENTO DENTAL]')) : [];
-            if (procs.length > 0) {
-                lineasReporte.push("• EVALUACIONES Y PROCEDIMIENTOS:");
-                procs.forEach(p => {
-                    lineasReporte.push(`  - ${p.replace('[PROCEDIMIENTO DENTAL]', '').trim()}`);
-                });
-            }
-
             const textoReporteFinal = lineasReporte.join('\n');
-
-            // 4. INYECTAR EN EL TEXTAREA DE EXPLORACIÓN
             const textareaExploracion = document.getElementById('exploracion');
             if (textareaExploracion) {
                 const contenidoPrevio = textareaExploracion.value.trim();
-                textareaExploracion.value = contenidoPrevio 
-                    ? `${contenidoPrevio}\n\n${textoReporteFinal}` 
-                    : textoReporteFinal;
+                textareaExploracion.value = contenidoPrevio ? `${contenidoPrevio}\n\n${textoReporteFinal}` : textoReporteFinal;
                 textareaExploracion.dispatchEvent(new Event('input', { bubbles: true }));
             }
 
-            if (typeof modalEngine !== 'undefined' && typeof modalEngine.clicTag === 'function') {
-                modalEngine.clicTag(textoReporteFinal);
+            const modalOdonto = document.getElementById('modalOdontoFullscreen');
+            if (modalOdonto) {
+                const inst = bootstrap.Modal.getInstance(modalOdonto) || new bootstrap.Modal(modalOdonto);
+                inst.hide();
+                modalOdonto.style.display = 'none';
+                modalOdonto.classList.remove('show');
             }
         }
+        else {
+            // 🧪 CASO 3: SI ES UNA ESCALA DINÁMICA FLOTANTE (Ej. Coopersmith, PHQ9, etc.)
+            this.calcularEscalaDinamica();
+            return; // Salimos para no disparar limpiezas globales innecesarias
+        }
 
-        // Cierre y limpieza de Modales
-        const modales = [document.getElementById('modalOdontoFullscreen'), document.getElementById('modalEscalaDinamica')];
-        modales.forEach(modalEl => {
-            if (modalEl) {
-                const inst = bootstrap.Modal.getInstance(modalEl);
-                if (inst) inst.hide();
-                modalEl.style.display = 'none';
-                modalEl.classList.remove('show');
-            }
-        });
-
+        // 🧹 LIMPIEZA GENERAL DE BACKDROPS SOLO SI SE CERRÓ UN MODAL PRINCIPAL
         setTimeout(() => {
             document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
             document.body.classList.remove('modal-open');
@@ -403,7 +429,7 @@ const FisioCidEngine = {
         this.escalaActiva = null;
         this.dienteActivoEnEscala = null;
         this.ultimoResultadoEscala = null;
-    }
+    },
 };
 
 window.FisioCidEngine = FisioCidEngine;

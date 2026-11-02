@@ -675,7 +675,7 @@ html, body {
                             <!-- Modelo / Enfoque Terapéutico -->
                             <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
                                 <label class="form-label text-info fw-bold small text-uppercase">Modelo / Enfoque Terapéutico</label>
-                                <select id="psico_enfoque" class="form-select bg-dark text-white border-secondary">
+                                <select id="psico_enfoque" class="form-select bg-dark text-white border-secondary" onchange="PsicoFisioCid.actualizarVistaPreviaEnVivo()">
                                     <option value="COGNITIVO_CONDUCTUAL">Cognitivo-Conductual (TCC)</option>
                                     <option value="HUMANISTA">Humanista / Gestalt</option>
                                     <option value="PSICODINAMICO">Psicodinámico / Psicoanálisis</option>
@@ -688,49 +688,54 @@ html, body {
                             <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
                                 <label class="form-label fw-bold d-flex justify-content-between text-warning small text-uppercase">
                                     <span>Estado de Ánimo Actual</span>
-                                    <span id="lbl_animo_val" class="badge bg-warning text-dark">5/10</span>
+                                    <span id="lbl_animo_val" class="badge bg-warning text-dark">0/10</span>
                                 </label>
-                                <input type="range" class="form-range" id="psico_slider_animo" min="1" max="10" value="5" oninput="PsicoFisioCid.actualizarIndicadoresVisuales()">
-                            </div>
+                         <input type="range" class="form-range" id="psico_slider_animo" min="1" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                         </div>
 
                             <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
                                 <label class="form-label fw-bold d-flex justify-content-between text-danger small text-uppercase">
                                     <span>Nivel de Ansiedad Percibido</span>
                                     <span id="lbl_ansiedad_val" class="badge bg-danger">0/10</span>
                                 </label>
-                                <input type="range" class="form-range" id="psico_slider_ansiedad" min="0" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales()">
-                            </div>
+                       <input type="range" class="form-range" id="psico_slider_ansiedad" min="0" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                      </div>
 
-                            <!-- Escalas Rápidas Depresión / Ansiedad -->
+                            <!-- ESCALAS PHQ-9 Y GAD-7 -->
                             <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
-                                <label class="form-label text-info fw-bold small text-uppercase d-flex justify-content-between">
-                                    <span>Escala PHQ-9 (Depresión)</span>
-                                    <span id="badge_phq9_res" class="badge bg-success">0 pts - Mínima</span>
-                                </label>
-                                <div class="input-group mb-2">
-                                    <input type="number" id="val_phq9_total" class="form-control bg-dark text-white border-secondary" placeholder="Puntaje 0-27" min="0" max="27" oninput="PsicoFisioCid.calcularPHQ9()">
+                                <!-- PHQ-9 -->
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label text-info fw-bold small text-uppercase mb-0">Escala PHQ-9 (Depresión)</label>
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important;" onclick="PsicoFisioCid.lanzarTestModal('PHQ9')">🧪 Abrir Test PHQ-9</button>
                                 </div>
-                                <label class="form-label text-info fw-bold small text-uppercase d-flex justify-content-between mt-2">
-                                    <span>Escala GAD-7 (Ansiedad)</span>
-                                    <span id="badge_gad7_res" class="badge bg-success">0 pts - Mínima</span>
-                                </label>
+                                <div class="input-group mb-2">
+                              <input type="number" id="val_phq9_total" class="form-control bg-dark text-white border-secondary" placeholder="0-27" min="0" max="27" oninput="PsicoFisioCid.calcularPHQ9(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                                <span id="badge_phq9_res" class="badge bg-success d-flex align-items-center px-3">0 pts - Mínima</span>
+                                </div>
+
+                                <!-- GAD-7 -->
+                                <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+                                    <label class="form-label text-info fw-bold small text-uppercase mb-0">Escala GAD-7 (Ansiedad)</label>
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important;" onclick="PsicoFisioCid.lanzarTestModal('GAD7')">🧪 Abrir Test GAD-7</button>
+                                </div>
                                 <div class="input-group">
-                                    <input type="number" id="val_gad7_total" class="form-control bg-dark text-white border-secondary" placeholder="Puntaje 0-21" min="0" max="21" oninput="PsicoFisioCid.calcularGAD7()">
+<input type="number" id="val_gad7_total" class="form-control bg-dark text-white border-secondary" placeholder="0-21" min="0" max="21" oninput="PsicoFisioCid.calcularGAD7(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+    <span id="badge_gad7_res" class="badge bg-success d-flex align-items-center px-3">0 pts - Mínima</span>
                                 </div>
                             </div>
 
                             <!-- Riesgo y Alerta Clínica -->
                             <div class="form-check form-switch p-3 bg-danger bg-opacity-10 border border-danger rounded">
-                                <input class="form-check-input ms-0 me-2" type="checkbox" id="psico_chk_riesgo">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" id="psico_chk_riesgo" onchange="PsicoFisioCid.actualizarVistaPreviaEnVivo()">
                                 <label class="form-check-label text-danger fw-bold small" for="psico_chk_riesgo">⚠️ REGISTRAR ALERTA DE RIESGO DE AUTOLESIÓN / IDEACIÓN</label>
                             </div>
 
                         </div>
 
-                        <!-- Columna 2: Redes de Apoyo y Mecanismos de Afrontamiento (Con Chips Compactos) -->
+                        <!-- Columna 2: Redes de Apoyo y Mecanismos de Afrontamiento -->
                         <div class="col-12 col-lg-6">
                             
-                          <!-- Redes de Apoyo y Entorno -->
+                            <!-- Redes de Apoyo y Entorno -->
                             <div class="mb-3 card bg-secondary bg-opacity-10 border-secondary p-3">
                                 <label class="form-label text-light fw-bold small text-uppercase mb-2">Redes de Apoyo y Entorno</label>
                                 <div class="d-flex flex-wrap gap-1.5 mb-2">
@@ -740,7 +745,7 @@ html, body {
                                     <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red de amigos y compañeros de trabajo funcionales.')">+ Red Laboral</button>
                                     <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Ausencia total de red de apoyo socioemocional.')">+ Sin Redes</button>
                                 </div>
-                                <textarea id="psico_redes_apoyo" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Notas sobre el soporte afectivo o social..."></textarea>
+                                <textarea id="psico_redes_apoyo" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Notas sobre el soporte afectivo o social..." oninput="PsicoFisioCid.actualizarVistaPreviaEnVivo()"></textarea>
                             </div>
 
                             <!-- Mecanismos de Afrontamiento -->
@@ -753,25 +758,26 @@ html, body {
                                     <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Mecanismo de negación y represión de afectos.')">+ Negación</button>
                                     <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Despliegue de conductas de ira y catarsis disfuncional.')">+ Catarsis Hostil</button>
                                 </div>
-                                <textarea id="psico_afrontamiento" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Estrategias de regulación o respuestas ante estrés..."></textarea>
+                                <textarea id="psico_afrontamiento" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Estrategias de regulación o respuestas ante estrés..." oninput="PsicoFisioCid.actualizarVistaPreviaEnVivo()"></textarea>
                             </div>
+
                         </div>
 
                     </div>
 
-                    <!-- FILA INFERIOR (Ancho Completo de 12 Columnas para Objetivos y Tareas) -->
+                    <!-- FILA INFERIOR (Ancho Completo para Objetivos y Tareas) -->
                     <div class="row g-4">
                         
-                        <!-- Objetivos Terapéuticos (Ancho Completo) -->
+                        <!-- Objetivos Terapéuticos -->
                         <div class="col-12">
                             <div class="card bg-secondary bg-opacity-10 border-secondary p-3">
                                 <label class="form-label text-info fw-bold small text-uppercase">🎯 Objetivos Terapéuticos y Hallazgos de Test</label>
-                                <textarea id="psico_objetivos" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Metas acordadas con el paciente e interpretaciones de test..."></textarea>
+                                <textarea id="psico_objetivos" class="form-control bg-dark text-white border-secondary" rows="4" placeholder="Metas acordadas con el paciente e interpretaciones de test..."></textarea>
                             </div>
                         </div>
 
-                       <div class="col-12">
-                        <!-- Tareas para Casa / Intervención (Ancho Completo con Chips Compactos) -->
+                        <!-- Tareas para Casa / Intervención -->
+                        <div class="col-12">
                             <div class="card bg-secondary bg-opacity-10 border-secondary p-3">
                                 <label class="form-label text-light fw-bold small text-uppercase mb-2">📋 Tareas e Intervención Terapéutica</label>
                                 <div class="d-flex flex-wrap gap-1.5 mb-2">
@@ -786,8 +792,6 @@ html, body {
                         </div>
 
                     </div>
-
-                   
 
                 </div>
             </div>

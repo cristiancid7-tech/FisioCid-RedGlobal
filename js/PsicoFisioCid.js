@@ -212,10 +212,64 @@ window.PsicoFisioCid = (function () {
         if (document.getElementById('lbl_ansiedad_val')) document.getElementById('lbl_ansiedad_val').innerText = `${ansiedadVal}/10`;
     };
 
+ // 👁️ VISTA PREVIA EN VIVO UNIFICADA Y LIMPIA
+    const actualizarVistaPreviaEnVivo = () => {
+        const enfoque = document.getElementById('psico_enfoque')?.value || 'COGNITIVO_CONDUCTUAL';
+        const animo = document.getElementById('psico_slider_animo')?.value;
+        const ansiedad = document.getElementById('psico_slider_ansiedad')?.value;
+        
+        const phq9Input = document.getElementById('val_phq9_total')?.value;
+        const phq9Badge = document.getElementById('badge_phq9_res')?.innerText || '';
+        
+        const gad7Input = document.getElementById('val_gad7_total')?.value;
+        const gad7Badge = document.getElementById('badge_gad7_res')?.innerText || '';
+        
+        const chkRiesgo = document.getElementById('psico_chk_riesgo')?.checked;
+        const redes = document.getElementById('psico_redes_apoyo')?.value.trim();
+        const afrontamiento = document.getElementById('psico_afrontamiento')?.value.trim();
+
+        // 1. Armar estatus general y escalas
+        let partesEstatus = [`Enfoque: ${enfoque.replace(/_/g, ' ')}`];
+        if (animo !== undefined && animo !== '') partesEstatus.push(`Ánimo: ${animo}/10`);
+        if (ansiedad !== undefined && ansiedad !== '') partesEstatus.push(`Ansiedad: ${ansiedad}/10`);
+
+        let textoEnVivo = `[RESUMEN CLÍNICO EN VIVO] ${partesEstatus.join(' | ')}`;
+
+        if (phq9Input !== undefined && phq9Input !== '') {
+            textoEnVivo += ` | PHQ-9: ${phq9Input} pts (${phq9Badge})`;
+        }
+        if (gad7Input !== undefined && gad7Input !== '') {
+            textoEnVivo += ` | GAD-7: ${gad7Input} pts (${gad7Badge})`;
+        }
+        if (chkRiesgo) {
+            textoEnVivo += ` | ⚠️ ALERTA: RIESGO DE AUTOLESIÓN ACTIVADO`;
+        }
+
+        // 2. Integrar Redes de Apoyo y Afrontamiento en el mismo bloque si tienen texto
+        if (redes) {
+            textoEnVivo += `\n• Redes de Apoyo: ${redes.replace(/\n/g, ' - ')}`;
+        }
+        if (afrontamiento) {
+            textoEnVivo += `\n• Mecanismos de Afrontamiento: ${afrontamiento.replace(/\n/g, ' - ')}`;
+        }
+
+        const campoObjetivos = document.getElementById('psico_objetivos');
+        if (!campoObjetivos) return;
+
+        let contenidoActual = campoObjetivos.value;
+        const regexBloque = /\[RESUMEN CLÍNICO EN VIVO\][\s\S]*?(?=\n\n[A-Z]|$)/;
+
+        if (regexBloque.test(contenidoActual)) {
+            campoObjetivos.value = contenidoActual.replace(regexBloque, textoEnVivo);
+        } else {
+            campoObjetivos.value = textoEnVivo + (contenidoActual ? '\n\n' + contenidoActual : '');
+        }
+    };
+
     
 
     return {
-        estirarLienzo,
+       estirarLienzo,
         agregarTagTexto,
         lanzarTestModal,
         renderizarSubmodulo,
@@ -223,6 +277,7 @@ window.PsicoFisioCid = (function () {
         cargarEstadoPsicologicoMaestro,
         calcularPHQ9,
         calcularGAD7,
-        actualizarIndicadoresVisuales
+        actualizarIndicadoresVisuales,
+        actualizarVistaPreviaEnVivo
     };
 })();
