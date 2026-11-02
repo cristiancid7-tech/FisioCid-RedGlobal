@@ -636,6 +636,172 @@ html, body {
                     </div>
                 </div>
 
+<!-- 🧠 MODAL FULLSCREEN ASISTENTE PSICOLÓGICO -->
+<div class="modal fade" id="modalPsicoFullscreen" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen w-100 mw-100 m-0">
+        <div class="modal-content bg-dark text-white border-0 min-vh-100">
+            
+            <!-- HEADER PRINCIPAL -->
+            <div class="modal-header border-bottom border-secondary py-3 px-4">
+                <h5 class="modal-title fw-bold text-info fs-5 d-flex align-items-center gap-2">
+                    🧠 ASISTENTE DE EVALUACIÓN PSICOLÓGICA Y SALUD MENTAL
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4 overflow-auto">
+                <div class="container-fluid">
+
+                    <!-- 🎛️ BARRA SUPERIOR DE BATERÍA DE PRUEBAS Y SUB-MÓDULOS -->
+                    <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-4">
+                        <label class="form-label text-warning fw-bold small text-uppercase mb-2">
+                            🧠 BATERÍA DE PRUEBAS Y EVALUACIÓN ESPECIALIZADA
+                        </label>
+                        <div class="btn-group w-100 mb-2" role="group" id="grupo-tabs-psico">
+                            <button type="button" class="btn btn-sm btn-outline-info active bg-info text-dark" onclick="PsicoFisioCid.renderizarSubmodulo('PSICOMETRIA', this)">📊 Psicométricos</button>
+                            <button type="button" class="btn btn-sm btn-outline-warning" onclick="PsicoFisioCid.renderizarSubmodulo('PROYECTIVOS', this)">🎨 Proyectivos</button>
+                            <button type="button" class="btn btn-sm btn-outline-light" onclick="PsicoFisioCid.renderizarSubmodulo('INFANTIL', this)">👶 Infanto-Juvenil</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="PsicoFisioCid.renderizarSubmodulo('PAREJA', this)">👥 Pareja / Familia</button>
+                        </div>
+                        <div id="contenedor-baterias-test"></div>
+                    </div>
+
+                    <!-- FILA PRINCIPAL SUPERIOR (2 Columnas Balanceadas) -->
+                    <div class="row g-4 mb-4">
+                        
+                        <!-- Columna 1: Enfoque, Sliders y Escalas Cuantitativas -->
+                        <div class="col-12 col-lg-6">
+                            
+                            <!-- Modelo / Enfoque Terapéutico -->
+                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
+                                <label class="form-label text-info fw-bold small text-uppercase">Modelo / Enfoque Terapéutico</label>
+                                <select id="psico_enfoque" class="form-select bg-dark text-white border-secondary">
+                                    <option value="COGNITIVO_CONDUCTUAL">Cognitivo-Conductual (TCC)</option>
+                                    <option value="HUMANISTA">Humanista / Gestalt</option>
+                                    <option value="PSICODINAMICO">Psicodinámico / Psicoanálisis</option>
+                                    <option value="SISTEMICO">Sistémico / Familiar</option>
+                                    <option value="BREVE_SOLUCIONES">Terapia Breve Centrada en Soluciones</option>
+                                </select>
+                            </div>
+
+                            <!-- Sliders Visuales de Ánimo y Ansiedad -->
+                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
+                                <label class="form-label fw-bold d-flex justify-content-between text-warning small text-uppercase">
+                                    <span>Estado de Ánimo Actual</span>
+                                    <span id="lbl_animo_val" class="badge bg-warning text-dark">5/10</span>
+                                </label>
+                                <input type="range" class="form-range" id="psico_slider_animo" min="1" max="10" value="5" oninput="PsicoFisioCid.actualizarIndicadoresVisuales()">
+                            </div>
+
+                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
+                                <label class="form-label fw-bold d-flex justify-content-between text-danger small text-uppercase">
+                                    <span>Nivel de Ansiedad Percibido</span>
+                                    <span id="lbl_ansiedad_val" class="badge bg-danger">0/10</span>
+                                </label>
+                                <input type="range" class="form-range" id="psico_slider_ansiedad" min="0" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales()">
+                            </div>
+
+                            <!-- Escalas Rápidas Depresión / Ansiedad -->
+                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
+                                <label class="form-label text-info fw-bold small text-uppercase d-flex justify-content-between">
+                                    <span>Escala PHQ-9 (Depresión)</span>
+                                    <span id="badge_phq9_res" class="badge bg-success">0 pts - Mínima</span>
+                                </label>
+                                <div class="input-group mb-2">
+                                    <input type="number" id="val_phq9_total" class="form-control bg-dark text-white border-secondary" placeholder="Puntaje 0-27" min="0" max="27" oninput="PsicoFisioCid.calcularPHQ9()">
+                                </div>
+                                <label class="form-label text-info fw-bold small text-uppercase d-flex justify-content-between mt-2">
+                                    <span>Escala GAD-7 (Ansiedad)</span>
+                                    <span id="badge_gad7_res" class="badge bg-success">0 pts - Mínima</span>
+                                </label>
+                                <div class="input-group">
+                                    <input type="number" id="val_gad7_total" class="form-control bg-dark text-white border-secondary" placeholder="Puntaje 0-21" min="0" max="21" oninput="PsicoFisioCid.calcularGAD7()">
+                                </div>
+                            </div>
+
+                            <!-- Riesgo y Alerta Clínica -->
+                            <div class="form-check form-switch p-3 bg-danger bg-opacity-10 border border-danger rounded">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" id="psico_chk_riesgo">
+                                <label class="form-check-label text-danger fw-bold small" for="psico_chk_riesgo">⚠️ REGISTRAR ALERTA DE RIESGO DE AUTOLESIÓN / IDEACIÓN</label>
+                            </div>
+
+                        </div>
+
+                        <!-- Columna 2: Redes de Apoyo y Mecanismos de Afrontamiento (Con Chips Compactos) -->
+                        <div class="col-12 col-lg-6">
+                            
+                          <!-- Redes de Apoyo y Entorno -->
+                            <div class="mb-3 card bg-secondary bg-opacity-10 border-secondary p-3">
+                                <label class="form-label text-light fw-bold small text-uppercase mb-2">Redes de Apoyo y Entorno</label>
+                                <div class="d-flex flex-wrap gap-1.5 mb-2">
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red familiar contenedora y de alto soporte.')">+ Familia Sólida</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Vive solo/a con aislamiento social significativo.')">+ Aislamiento</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Conflicto severo de pareja o dinámicas familiares disfuncionales.')">+ Conflicto Pareja</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red de amigos y compañeros de trabajo funcionales.')">+ Red Laboral</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Ausencia total de red de apoyo socioemocional.')">+ Sin Redes</button>
+                                </div>
+                                <textarea id="psico_redes_apoyo" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Notas sobre el soporte afectivo o social..."></textarea>
+                            </div>
+
+                            <!-- Mecanismos de Afrontamiento -->
+                            <div class="mb-3 card bg-secondary bg-opacity-10 border-secondary p-3">
+                                <label class="form-label text-light fw-bold small text-uppercase mb-2">Mecanismos de Afrontamiento</label>
+                                <div class="d-flex flex-wrap gap-1.5 mb-2">
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Rumiación cognitiva persistente sobre el pasado.')">+ Rumiación</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Patrón de evitación conductual ante situaciones estresantes.')">+ Evitación</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Estrategias adaptativas activas (ejercicio, meditación, resolución de problemas).')">+ Adaptativo</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Mecanismo de negación y represión de afectos.')">+ Negación</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Despliegue de conductas de ira y catarsis disfuncional.')">+ Catarsis Hostil</button>
+                                </div>
+                                <textarea id="psico_afrontamiento" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Estrategias de regulación o respuestas ante estrés..."></textarea>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- FILA INFERIOR (Ancho Completo de 12 Columnas para Objetivos y Tareas) -->
+                    <div class="row g-4">
+                        
+                        <!-- Objetivos Terapéuticos (Ancho Completo) -->
+                        <div class="col-12">
+                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3">
+                                <label class="form-label text-info fw-bold small text-uppercase">🎯 Objetivos Terapéuticos y Hallazgos de Test</label>
+                                <textarea id="psico_objetivos" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Metas acordadas con el paciente e interpretaciones de test..."></textarea>
+                            </div>
+                        </div>
+
+                       <div class="col-12">
+                        <!-- Tareas para Casa / Intervención (Ancho Completo con Chips Compactos) -->
+                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3">
+                                <label class="form-label text-light fw-bold small text-uppercase mb-2">📋 Tareas e Intervención Terapéutica</label>
+                                <div class="d-flex flex-wrap gap-1.5 mb-2">
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Diario de registro ABC de pensamientos automáticos.')">+ Registro TCC</button>
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Práctica diaria de respiración diafragmática 4-7-8.')">+ Respiración 4-7-8</button>
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Técnica de la silla vacía para elaboración de duelo/asuntos inconclusos.')">+ Silla Vacía</button>
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Asignación de lectura biblioterapéutica recomendada.')">+ Biblioterapia</button>
+                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Implementación de técnica de higiene del sueño.')">+ Higiene del Sueño</button>
+                                </div>
+                                <textarea id="psico_tareas_casa" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Ej. Ejercicios asignados para la siguiente sesión..."></textarea>
+                            </div>
+                        </div>
+
+                    </div>
+
+                   
+
+                </div>
+            </div>
+
+            <!-- FOOTER CON BOTÓN DE GUARDADO -->
+            <div class="modal-footer border-top border-secondary p-3">
+                <button type="button" class="btn btn-success w-100 fw-bold py-2 fs-6" onclick="window.FisioCidEngine.finalizarEscala()">
+                    ✅ FINALIZAR Y GUARDAR EVALUACIÓN PSICOLÓGICA EN EXPEDIENTE
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
 <!-- 🪟 MODAL DENTAL FULLSCREEN PRO -->
 <div class="modal fade modal-fullscreen" id="modalOdontoFullscreen" tabindex="-1" aria-hidden="true" style="z-index: 10050;">
     <div class="modal-dialog modal-fullscreen w-100 mw-100 h-100 m-0 p-0">
@@ -903,8 +1069,9 @@ html, body {
 <script src="js/protocolos.js"></script>
 
 <!-- 🧠 ASEGÚRATE DE INCLUIR ESTE SCRIPT (O EL NOMBRE REAL DE TU ARCHIVO DE ODONTOLOGÍA) -->
+<script src="js/banco-escalas.js"></script>
 <script src="js/PeriodontoFisioCid.js"></script>
-
+<script src="js/PsicoFisioCid.js"></script>
 <script src="js/FisioCidEngine.js"></script>
 <script src="js/modalEngine.js"></script>
 <script src="js/motivospredictivos.js"></script>

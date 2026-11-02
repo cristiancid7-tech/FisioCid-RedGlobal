@@ -114,9 +114,12 @@ const cargarExpedienteFijo = async () => {
     }
 
     const p = pacienteData; 
+    window.pacienteCargado = p;
     if (document.getElementById('nombre')) {
         document.getElementById('nombre').innerText = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.toUpperCase();
     }
+ 
+    
 
     // EDAD INTELIGENTE
     let edadTexto = "EDAD NO REGISTRADA";
@@ -312,8 +315,9 @@ window.calcularIMC = () => {
 
 
 
+
 // ============================================================================
-// 3. GUARDAR HISTORIA Y GENERAR PDF
+// 3. GUARDAR HISTORIA Y GENERAR PDF (VINCULADO A piezas_dentales SIN ACENTOS)
 // ============================================================================
 
 const formHistoria = document.getElementById('formHistoria');
@@ -364,16 +368,32 @@ if (formHistoria) {
                 throw new Error("No se detectó una sede vinculada activa para tu usuario.");
             }
 
-            // 3. ACTUALIZAR PACIENTE MAESTRO
-            await fisioNet.from('pacientes_maestros').update({
+            // 🎯 3. COMPILAR MATRIZ DENTAL MAESTRA (SIN ACENTOS)
+            const objetoDental = (window.FisioCidEngine && typeof window.FisioCidEngine.obtenerObjetoDentalMaestro === 'function')
+                ? window.FisioCidEngine.obtenerObjetoDentalMaestro()
+                : null;
+
+            // Objeto de actualización mapeado exactamente a la estructura de pacientes_maestros
+            const datosActualizacionPaciente = {
                 alergias: document.getElementById('alergias')?.value || '',
                 antecedentes_quirurgicos: document.getElementById('quirurgicos')?.value || '',
                 antecedentes_patologicos: document.getElementById('cronicos')?.value || '',
                 farmacologia_activa: document.getElementById('medicamentos')?.value || '',
-                ocupacion: document.getElementById('ocupacion')?.value || ''
-            }).eq('id', idPaciente);
+                ocupacion: document.getElementById('ocupacion')?.value || '',
+                fecha_modificacion: new Date().toISOString(),
+                ultima_modificacion_por: user.id
+            };
 
-            // 4. CREAR NUEVA NOTA CLÍNICA
+            // 📌 INYECCIÓN DIRECTA A LA COLUMNA piezas_dentales (JSONB)
+            if (objetoDental) {
+                datosActualizacionPaciente.piezas_dentales = objetoDental;
+            }
+
+            await fisioNet.from('pacientes_maestros')
+                .update(datosActualizacionPaciente)
+                .eq('id', idPaciente);
+
+            // 4. CREAR NUEVA NOTA CLÍNICA EN HISTORIAL
             const nuevaNota = {
                 id_paciente: idPaciente,
                 id_profesional: user.id,
@@ -388,7 +408,7 @@ if (formHistoria) {
                 exploracion_fisica: document.getElementById('exploracion')?.value || '',
                 diagnostico_principal: document.getElementById('diagnostico_principal')?.value.toUpperCase() || '',
                 codigo_cie10: document.getElementById('codigo_cie_final')?.value || '',
-              eva: parseInt(document.getElementById('eva_slider')?.value) || 0,
+                eva: parseInt(document.getElementById('eva_slider')?.value) || 0,
                 ta_sistolica: parseInt(document.getElementById('valSistolica')?.value) || 0,
                 ta_diastolica: parseInt(document.getElementById('valDiastolica')?.value) || 0,
                 frecuencia_cardiaca: parseInt(document.getElementById('valFC')?.value) || 0,
@@ -406,7 +426,7 @@ if (formHistoria) {
             const { error: errHistorial } = await fisioNet.from('historial_clinico').insert([nuevaNota]);
             if (errHistorial) throw errHistorial;
 
-            // 🚀 4.1. SI VENÍA VINCULADA A UNA RECETA PENDIENTE, LA MARCAMOS COMO COMPLETADA
+            // 🚀 4.1. MARCAR RECETA PENDIENTE COMO COMPLETADA SI EXISTE
             if (window.recetaPendienteVinculadaId) {
                 const { error: errReceta } = await fisioNet
                     .from('recetas_medicas')
@@ -420,15 +440,15 @@ if (formHistoria) {
                 }
             }
 
-         // 5. 🔒 LIMPIAR PERMISO OTP DE SESIÓN
-const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
-if (idPacienteLimpio) {
-    sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
-    sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
-    localStorage.removeItem(`fisiocid_draft_exploracion_${idPacienteLimpio}`);
-}
+            // 5. 🔒 LIMPIAR PERMISOS OTP Y BORRADOR LOCAL
+            const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
+            if (idPacienteLimpio) {
+                sessionStorage.removeItem(`otp_aprobado_paciente_${idPacienteLimpio}`);
+                sessionStorage.removeItem(`otp_id_paciente_${idPacienteLimpio}`);
+                localStorage.removeItem(`fisiocid_draft_exploracion_${idPacienteLimpio}`);
+            }
 
-            // 6. IMPRESIÓN Y GENERACIÓN DE PDF MEDIANTE MOTOR JSPDF
+            // 6. IMPRESIÓN Y GENERACIÓN DE PDF
             const deseaImprimir = confirm("✅ ¡Consulta guardada con éxito!\n\n¿Deseas generar la receta/reporte en PDF?");
             if (deseaImprimir) {
                 if (typeof window.generarPDF === 'function') {
@@ -438,7 +458,7 @@ if (idPacienteLimpio) {
                 }
             }
 
-            // Redirigir a la lista de pacientes (AHORA SÍ DESPUÉS DE QUE TODO SE GUARDÓ)
+            // Redirección final
             window.location.href = 'lista-pacientes.html';
 
         } catch (error) {
@@ -1828,6 +1848,8 @@ const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_pacie
                 }
             }
 
+            
+
             // 3. Insertar registro guardando la ruta del almacenamiento y la firma
             const { error: dbError } = await fisioNet
                 .from('paciente_evidencia_multimedia')
@@ -1865,6 +1887,37 @@ const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_pacie
             }
         }
     });
+    // ============================================================================
+// 🦷 REHIDRATACIÓN DINÁMICA DEL ODONTOGRAMA AL ABRIR MODAL
+// ============================================================================
+document.addEventListener('click', (e) => {
+    const btnAsistente = e.target.closest('#btn-asistente-exploracion') || e.target.closest('[data-bs-target="#modalOdontoFullscreen"]');
+    if (btnAsistente) {
+        setTimeout(() => {
+            const estadoDental = window.pacienteCargado?.piezas_dentales || window.pacienteCargado?.datos_dentales;
+            if (estadoDental && window.PeriodontoFisioCid && typeof window.PeriodontoFisioCid.cargarEstadoDentalMaestro === 'function') {
+                console.log("🎨 Rehidratando piezas en caliente al desplegar asistente...", estadoDental);
+                window.PeriodontoFisioCid.cargarEstadoDentalMaestro(estadoDental);
+            }
+        }, 250);
+    }
+});
+// ============================================================================
+// 🧠 REHIDRATACIÓN DINÁMICA DE PSICOLOGÍA AL ABRIR ASISTENTE / MODAL
+// ============================================================================
+document.addEventListener('click', (e) => {
+    const btnAsistentePsico = e.target.closest('#btn-asistente-exploracion') || e.target.closest('[data-bs-target="#modalPsicoFullscreen"]');
+    if (btnAsistentePsico) {
+        setTimeout(() => {
+            const estadoPsico = window.pacienteCargado?.evaluacion_psicologica || window.pacienteCargado?.datos_psicologicos;
+            if (estadoPsico && window.PsicoFisioCid && typeof window.PsicoFisioCid.cargarEstadoPsicologicoMaestro === 'function') {
+                console.log("🎨 Rehidratando evaluación psicológica al desplegar asistente...", estadoPsico);
+                window.PsicoFisioCid.cargarEstadoPsicologicoMaestro(estadoPsico);
+            }
+        }, 250);
+    }
+});
+    
 });
 
 
@@ -1994,13 +2047,6 @@ async function cargarHistorialEvidencias() {
 
 
 
-function resetFiltrosEvidencia() {
-    const fechaInput = document.getElementById('filtro_fecha_evidencia');
-    const catInput = document.getElementById('filtro_categoria_evidencia');
-    if (fechaInput) fechaInput.value = '';
-    if (catInput) catInput.value = 'TODAS';
-    renderizarListaEvidencias(coleccionEvidenciasPaciente);
-}
 
 // ============================================================================
 // 🎨 RENDERIZADO UNIFICADO DE EVIDENCIAS Y ESTUDIOS
@@ -2072,6 +2118,9 @@ function renderizarListaEvidencias(lista) {
     contenedor.innerHTML = html;
 }
 
+// ============================================================================
+// 🎨 FILTRADO LOCAL CORREGIDO POR FECHA Y CATEGORÍA
+// ============================================================================
 // ============================================================================
 // 🎨 FILTRADO LOCAL CORREGIDO POR FECHA Y CATEGORÍA
 // ============================================================================

@@ -149,7 +149,7 @@ const FisioCidEngine = {
         instanciaModal.show();
     },
 
-    // 📊 CÁLCULO DINÁMICO DE ESCALAS
+   // 📊 CÁLCULO DINÁMICO E INYECCIÓN MULTI-RAMA (PSICOLOGÍA / ODONTO / FISIO)
     calcularEscalaDinamica: function() {
         let puntos = 0;
         let textosSeleccionados = []; 
@@ -167,11 +167,43 @@ const FisioCidEngine = {
             
             const resVivo = document.getElementById('resultadoVivo');
             if (resVivo) {
-                resVivo.innerHTML = `<b style="color:#d4af37;">${puntos} PTS</b> - <small>${res.g}</small>`;
+                resVivo.innerHTML = `<b style="color:#38bdf8;">${puntos} PTS</b> - <small class="text-white">${res.g || res.notaClinica}</small>`;
             }
             
-            if (escala.rama === "odontologia" && window.PeriodontoFisioCid) {
+            // 🧠 SINCRO 1: RAMA PSICOLOGÍA
+            if (escala.rama === "psicologia") {
+                const nota = res.notaClinica || res.g;
+                
+                // Actualizar badges numéricos si corresponden a PHQ-9 o GAD-7
+                if (this.escalaActiva === 'PHQ9') {
+                    const inputPhq = document.getElementById('val_phq9_total');
+                    if (inputPhq) {
+                        inputPhq.value = puntos;
+                        if (window.PsicoFisioCid) window.PsicoFisioCid.calcularPHQ9();
+                    }
+                }
+                if (this.escalaActiva === 'GAD7') {
+                    const inputGad = document.getElementById('val_gad7_total');
+                    if (inputGad) {
+                        inputGad.value = puntos;
+                        if (window.PsicoFisioCid) window.PsicoFisioCid.calcularGAD7();
+                    }
+                }
+
+                // Inyectar diagnóstico/nota al textarea de objetivos del módulo psicológico
+                if (window.PsicoFisioCid && typeof window.PsicoFisioCid.agregarTagTexto === 'function') {
+                    window.PsicoFisioCid.agregarTagTexto('psico_objetivos', nota);
+                }
+
+                if (!this.datosTemporales.includes(nota)) {
+                    this.datosTemporales.push(nota);
+                }
+
+            // 🦷 SINCRO 2: RAMA ODONTOLOGÍA
+            } else if (escala.rama === "odontologia" && window.PeriodontoFisioCid) {
                 window.PeriodontoFisioCid.actualizarHallazgoGlobal(this.escalaActiva, res.notaClinica || res.g);
+
+            // 🦾 SINCRO 3: RAMA FISIOTERAPIA
             } else if (escala.rama === "fisioterapia" && window.FisioCidClinico) {
                 window.FisioCidClinico.hallazgosEscalas[escala.nombre] = res.g;
                 window.FisioCidClinico.actualizarResumen();
@@ -179,9 +211,66 @@ const FisioCidEngine = {
         }
     },
 
-  // 🏁 FINALIZAR E INYECTAR REPORTE RESUMIDO POR PIEZA AL EXPEDIENTE
+    // 💾 COMPILAR ESTADO GLOBAL DENTAL PARA LA COLUMNA piezas_dentales (JSONB) SIN ACENTOS
+    obtenerObjetoDentalMaestro: function() {
+        const esAdulto = document.getElementById('switchArcada')?.checked ?? true;
+        const oleary = window.PeriodontoFisioCid
+            ? window.PeriodontoFisioCid.obtenerAnalisisOleary()
+            : { porcentaje: 0 };
+        
+        const mapaPiezas = {};
+
+        // Función interna para remover acentos de cadenas de texto
+        const removerAcentos = (str) => {
+            if (!str) return "";
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        };
+
+        // Recorremos las tarjetas de piezas dentales
+        document.querySelectorAll('.tarjeta-pieza-dental').forEach(tarjeta => {
+            const num = tarjeta.getAttribute('data-diente');
+            const carasObj = {};
+            
+            tarjeta.querySelectorAll('.cara-diente').forEach(c => {
+                const cara = c.getAttribute('data-cara');
+                const fill = c.getAttribute('fill');
+                if (fill && fill !== '#f8fafc') {
+                    carasObj[cara] = fill;
+                }
+            });
+
+            const overlayExtraer = document.getElementById(`overlay-extraer-${num}`);
+            const overlayAusente = document.getElementById(`overlay-ausente-${num}`);
+            const gutapercha = document.getElementById(`gutapercha-${num}`);
+
+            const esExtraer = overlayExtraer && overlayExtraer.style.display === 'block';
+            const esAusente = overlayAusente && overlayAusente.style.display === 'block';
+            const tieneEndo = gutapercha && gutapercha.style.display === 'block';
+
+            if (Object.keys(carasObj).length > 0 || esExtraer || esAusente || tieneEndo) {
+                mapaPiezas[num] = {
+                    estado: esExtraer ? 'extraer' : (esAusente ? 'ausente' : 'activo'),
+                    caras: carasObj,
+                    endodoncia: tieneEndo
+                };
+            }
+        });
+
+        // Limpieza de historial temporal sin acentos
+        const historialLimpio = (this.datosTemporales || []).map(item => removerAcentos(item));
+
+        return {
+            denticion_activa: esAdulto ? 'permanente' : 'temporal',
+            ultimo_oleary: parseFloat(oleary.porcentaje),
+            ultima_actualizacion: new Date().toISOString(),
+            piezas: mapaPiezas,
+            historial_temporales: historialLimpio
+        };
+    },
+
+   // 🏁 FINALIZAR E INYECTAR REPORTE UNIFICADO Y AGRUPADO AL EXPEDIENTE
     finalizarEscala: async function() {
-        console.log("🚀 Sincronizando hallazgos odontológicos agrupados por pieza hacia el expediente...");
+        console.log("🚀 Sincronizando hallazgos odontológicos agrupados hacia el expediente...");
 
         if (window.PeriodontoFisioCid) {
             window.PeriodontoFisioCid.actualizarResumenVisual();
@@ -195,52 +284,79 @@ const FisioCidEngine = {
             if (pct > 20 && pct <= 50) estadoHigiene = "REGULAR";
             else if (pct > 50) estadoHigiene = "DEFICIENTE";
 
-            // Piezas únicas
-            const piezasCaries = new Set();
-            document.querySelectorAll('.cara-diente[fill="#ef4444"]').forEach(el => {
-                piezasCaries.add(el.getAttribute('data-diente'));
+            // 🧠 MAPA DE AGRUPACIÓN EN TIEMPO REAL
+            const mapaHallazgos = {
+                'Placa Nueva (Bacteriana)': new Set(),
+                'Placa Antigua / Sarro': new Set(),
+                'Caries Detectada': new Set(),
+                'Indicado para Extracción': new Set(),
+                'Pieza Ausente': new Set(),
+                'Tratado / Restaurado': new Set(),
+                'Endodoncia Realizada': new Set()
+            };
+
+            // 1. ESCANEO DIRECTO DEL DOM DE PIEZAS Y COLORES
+            document.querySelectorAll('.tarjeta-pieza-dental').forEach(tarjeta => {
+                const num = parseInt(tarjeta.getAttribute('data-diente'), 10);
+                if (!num) return;
+
+                // Escaneo de Caras y Colores
+                tarjeta.querySelectorAll('.cara-diente').forEach(c => {
+                    const fill = c.getAttribute('fill')?.toLowerCase();
+                    if (!fill || fill === '#f8fafc' || fill === 'none') return;
+
+                    if (fill === '#ef4444' || fill === 'red') mapaHallazgos['Caries Detectada'].add(num);
+                    if (fill === '#3b82f6' || fill === 'blue') mapaHallazgos['Tratado / Restaurado'].add(num);
+                    if (fill === '#eab308' || fill === 'yellow') mapaHallazgos['Placa Nueva (Bacteriana)'].add(num);
+                    if (fill === '#f97316' || fill === 'orange') mapaHallazgos['Placa Antigua / Sarro'].add(num);
+                });
+
+                // Escaneo de Overlays (Extracción, Ausente, Endodoncia)
+                const overlayExtraer = document.getElementById(`overlay-extraer-${num}`);
+                const overlayAusente = document.getElementById(`overlay-ausente-${num}`);
+                const gutapercha = document.getElementById(`gutapercha-${num}`);
+
+                if (overlayExtraer && overlayExtraer.style.display === 'block') mapaHallazgos['Indicado para Extracción'].add(num);
+                if (overlayAusente && overlayAusente.style.display === 'block') mapaHallazgos['Pieza Ausente'].add(num);
+                if (gutapercha && gutapercha.style.display === 'block') mapaHallazgos['Endodoncia Realizada'].add(num);
             });
 
-            const piezasExtraer = new Set();
-            document.querySelectorAll('[id^="overlay-extraer-"][style*="display: block"]').forEach(el => {
-                const idSplit = el.id.split('-');
-                piezasExtraer.add(idSplit[idSplit.length - 1]);
-            });
-
-            lineasReporte.push(`• HIGIENE: ${estadoHigiene} (Índice O'Leary: ${oleary.porcentaje}%)`);
-            lineasReporte.push(`• RESUMEN: ${piezasCaries.size} pieza(s) con Caries | ${piezasExtraer.size} pieza(s) Indicada(s) para Extracción`);
-
-            // Agrupar detalle por pieza
-            const mapaPiezas = {};
+            // 2. ESCANEO ADICIONAL DE DATOS TEMPORALES (Si hay notas registradas por texto)
             if (this.datosTemporales && this.datosTemporales.length > 0) {
                 this.datosTemporales.forEach(item => {
                     if (!item.includes('[PROCEDIMIENTO DENTAL]')) {
-                        const match = item.match(/Pieza\s+(\d+)\s*\(([^)]+)\):\s*(.+)/i);
+                        const match = item.match(/Pieza\s+(\d+)/i);
                         if (match) {
-                            const num = match[1];
-                            const estado = match[3].trim();
-                            if (!mapaPiezas[num]) mapaPiezas[num] = new Set();
-
-                            if (estado.toLowerCase() === 'caries') mapaPiezas[num].add('Caries');
-                            else if (estado.toLowerCase() === 'extraer') mapaPiezas[num].add('Indicado para Extracción');
-                            else if (estado.toLowerCase() === 'tratado') mapaPiezas[num].add('Tratado');
-                            else if (estado.toLowerCase() === 'ausente') mapaPiezas[num].add('Pieza Ausente');
-                            else mapaPiezas[num].add(estado);
+                            const num = parseInt(match[1], 10);
+                            const t = item.toLowerCase();
+                            if (t.includes('caries')) mapaHallazgos['Caries Detectada'].add(num);
+                            if (t.includes('placa nueva') || t.includes('p_nueva')) mapaHallazgos['Placa Nueva (Bacteriana)'].add(num);
+                            if (t.includes('placa vieja') || t.includes('p_vieja') || t.includes('sarro')) mapaHallazgos['Placa Antigua / Sarro'].add(num);
+                            if (t.includes('extraer')) mapaHallazgos['Indicado para Extracción'].add(num);
+                            if (t.includes('ausente')) mapaHallazgos['Pieza Ausente'].add(num);
                         }
                     }
                 });
             }
 
-            const detallePiezas = [];
-            Object.keys(mapaPiezas).sort((a,b) => a - b).forEach(num => {
-                detallePiezas.push(`Pieza ${num}: ${Array.from(mapaPiezas[num]).join(', ')}`);
+            // Resumen de higiene general
+            lineasReporte.push(`• HIGIENE: ${estadoHigiene} (Índice O'Leary: ${oleary.porcentaje}%)`);
+            lineasReporte.push(`• RESUMEN GENERAL: ${mapaHallazgos['Caries Detectada'].size} pieza(s) con Caries | ${mapaHallazgos['Indicado para Extracción'].size} pieza(s) Indicadas para Extracción`);
+
+            // 3. CONSTRUCCIÓN DE RENGLONES UNIFICADOS
+            const renglonesAgrupados = [];
+            Object.keys(mapaHallazgos).forEach(hallazgo => {
+                if (mapaHallazgos[hallazgo].size > 0) {
+                    const listaPiezas = Array.from(mapaHallazgos[hallazgo]).sort((a, b) => a - b);
+                    renglonesAgrupados.push(`  - ${hallazgo}: Pieza(s) ${listaPiezas.join(', ')}`);
+                }
             });
 
-            if (detallePiezas.length > 0) {
-                lineasReporte.push(`• DETALLE PIEZA POR PIEZA:\n  - ${detallePiezas.join('\n  - ')}`);
+            if (renglonesAgrupados.length > 0) {
+                lineasReporte.push(`• HALLAZGOS CLINICOS AGRUPADOS:\n${renglonesAgrupados.join('\n')}`);
             }
 
-            // Procedimientos y Evaluaciones de Sub-módulos
+            // Procedimientos registrados en submódulos
             const procs = this.datosTemporales ? this.datosTemporales.filter(t => t.includes('[PROCEDIMIENTO DENTAL]')) : [];
             if (procs.length > 0) {
                 lineasReporte.push("• EVALUACIONES Y PROCEDIMIENTOS:");
@@ -251,7 +367,7 @@ const FisioCidEngine = {
 
             const textoReporteFinal = lineasReporte.join('\n');
 
-            // Inyectar en el Textarea de la Historia Clínica
+            // 4. INYECTAR EN EL TEXTAREA DE EXPLORACIÓN
             const textareaExploracion = document.getElementById('exploracion');
             if (textareaExploracion) {
                 const contenidoPrevio = textareaExploracion.value.trim();
@@ -266,7 +382,7 @@ const FisioCidEngine = {
             }
         }
 
-        // Cierre de Modal
+        // Cierre y limpieza de Modales
         const modales = [document.getElementById('modalOdontoFullscreen'), document.getElementById('modalEscalaDinamica')];
         modales.forEach(modalEl => {
             if (modalEl) {
