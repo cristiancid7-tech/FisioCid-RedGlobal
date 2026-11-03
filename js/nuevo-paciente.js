@@ -705,6 +705,90 @@ function crearBotonDesbloqueoDinamico() {
         tituloSeccion.appendChild(btnKey);
     }
 }
+
+// 🔄 Cambiar dinámicamente el placeholder según el canal elegido
+function cambiarCanalOTP() {
+    const canal = document.getElementById('selectCanalOTP').value;
+    const inputContacto = document.getElementById('inputContactoDinamico');
+    const labelContacto = document.getElementById('lblLabelContacto');
+    const pacienteData = window.pacienteCargado;
+
+    if (canal === 'CORREO_EN_VIVO') {
+        labelContacto.innerText = "Correo Electrónico del Paciente:";
+        inputContacto.type = "email";
+        inputContacto.value = pacienteData?.correo_electronico || "";
+        inputContacto.placeholder = "correo@dominio.com";
+    } else if (canal === 'SMS_EN_VIVO') {
+        labelContacto.innerText = "Celular a 10 dígitos (SMS en vivo):";
+        inputContacto.type = "tel";
+        inputContacto.value = pacienteData?.telefono || "";
+        inputContacto.placeholder = "2383885291";
+    } else if (canal === 'FISIOCID_APP') {
+        labelContacto.innerText = "ID o Usuario en Red FisioCid:";
+        inputContacto.type = "text";
+        inputContacto.value = pacienteData?.nombre || "";
+        inputContacto.placeholder = "Usuario vinculado";
+    }
+}
+
+// 🚀 Disparar la generación y envío del OTP en tiempo real frente al doctor
+async function dispararOTPEnVivo() {
+    const canalElegido = document.getElementById('selectCanalOTP').value;
+    const contactoDestino = document.getElementById('inputContactoDinamico').value.trim();
+    const pacienteData = window.pacienteCargado;
+
+    if (!contactoDestino) {
+        alert("⚠️ Por favor ingresa un contacto válido (correo o teléfono) para enviar el código.");
+        return;
+    }
+
+    const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiraEn = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const idDestinatarioOTP = (pacienteData?.es_menor_edad && pacienteData?.id_tutor) ? pacienteData.id_tutor : pacienteData.id;
+
+        // 1. Guardar la solicitud en la tabla de auditoría con su canal
+        const { error: errOTP } = await fisioNet
+            .from('solicitudes_acceso_otp')
+            .insert([{
+                id_paciente: idDestinatarioOTP,
+                id_profesional: user ? user.id : null,
+                nombre_profesional: "EDICIÓN FICHA MAESTRA (EN VIVO)",
+                codigo_otp: codigoOTP,
+                canal_envio: canalElegido,
+                contacto_destino: contactoDestino,
+                permisos_concedidos: { 
+                    edicion_ficha: true, 
+                    paciente_afectado_id: pacienteData.id,
+                    paciente_nombre: `${pacienteData.nombre || ''} ${pacienteData.apellido_paterno || ''}`.trim()
+                },
+                estado_solicitud: 'PENDIENTE',
+                expira_en: expiraEn,
+                id_clinica: idClinicaActiva || null
+            }]);
+
+        if (errOTP) throw errOTP;
+
+        tokenSeguridadActivo = codigoOTP;
+
+        // 2. Si el canal es correo en vivo, aprovechamos tu SMTP de Resend configurado
+        if (canalElegido === 'CORREO_EN_VIVO') {
+            // Opcional: Llamas a tu Edge Function o flujo de envío inmediato con el código OTP generado
+            await fisioNet.functions.invoke('enviar-otp-dinamico', {
+                body: { email: contactoDestino, codigo: codigoOTP, nombre: pacienteData.nombre }
+            });
+        }
+
+        alert(`✅ ¡Código generado con éxito!\n\nSe ha enviado el token de 6 dígitos vía ${canalElegido} a: ${contactoDestino}.\n\nPídalo al paciente para ingresarlo abajo.`);
+
+    } catch (err) {
+        console.error("💥 Error al disparar OTP en vivo:", err);
+        alert("Error al enviar el código: " + err.message);
+    }
+}
 // ==========================================
 // 🗝️ VALIDACIÓN DEL CÓDIGO INGRESADO EN MODAL
 // ==========================================

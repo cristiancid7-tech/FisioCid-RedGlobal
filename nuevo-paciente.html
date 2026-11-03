@@ -348,37 +348,54 @@
         </div>
     </div>
 
-    <!-- MODAL VALIDAR OTP (SIN ARIA-HIDDEN PARA EVITAR ADVERTENCIA) -->
-<div class="modal fade" id="modalValidarOTP" tabindex="-1" aria-labelledby="modalValidarOTPLabel" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal OTP Multicanal en Vivo -->
+<div class="modal fade" id="modalValidarOTP" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header bg-warning text-dark border-0">
-                <h5 class="modal-title fw-bold" id="modalValidarOTPLabel">
-                    <i class="fas fa-shield-alt"></i> Confirmación de Seguridad OTP
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div class="modal-header bg-primary text-white" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <h5 class="modal-title fw-bold"><i class="fas fa-shield-alt me-2"></i> Autorización OTP en Vivo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            
-            <div class="modal-body p-4 text-center">
-                <p class="text-muted small mb-3">
-                    Se ha enviado la clave de seguridad al Portal del Paciente / Tutor autorizado.
-                </p>
-
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">Selecciona el canal para enviar el código de desbloqueo al paciente o tutor en este momento:</p>
+                
+                <!-- Selector de Canal -->
                 <div class="mb-3">
-                    <label class="form-label fw-bold text-dark small">INGRESE EL CÓDIGO DE 6 DÍGITOS:</label>
-                    <input type="text" id="inputCodigoIngresadoOTP" class="form-control text-center fw-bold fs-4 tracking-widest" maxlength="6" placeholder="000000" style="letter-spacing: 5px;">
+                    <label class="form-label fw-bold text-dark">Canal de Envío:</label>
+                    <select id="selectCanalOTP" class="form-select" onchange="cambiarCanalOTP()">
+                        <option value="CORREO_EN_VIVO">✉️ Correo Electrónico (Vía Resend en vivo)</option>
+                        <option value="SMS_EN_VIVO">📱 Mensaje de Texto SMS (Frente al doctor)</option>
+                        <option value="FISIOCID_APP">🔔 Notificación Push / App FisioCid</option>
+                    </select>
                 </div>
 
-                <div id="msgErrorOTP" class="alert alert-danger py-2 small d-none mb-3">
-                    ❌ Código incorrecto. Verifique e intente de nuevo.
+                <!-- Input dinámico para capturar el contacto si no lo tiene guardado -->
+                <div class="mb-3" id="divInputContactoDinamico">
+                    <label id="lblLabelContacto" class="form-label fw-bold text-dark">Correo Electrónico del Paciente:</label>
+                    <input type="text" id="inputContactoDinamico" class="form-control" placeholder="ejemplo@correo.com">
                 </div>
 
-                <div class="d-flex gap-2 justify-content-center">
-                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" onclick="validarCodigoOTPIngresado()">
-                        <i class="fas fa-check-circle"></i> Desbloquear Ficha
+                <!-- Botón para disparar el código -->
+                <div class="d-grid mb-3">
+                    <button type="button" class="btn btn-outline-primary fw-bold" onclick="dispararOTPEnVivo()">
+                        <i class="fas fa-paper-plane me-1"></i> Enviar Código de 6 Dígitos
                     </button>
                 </div>
+
+                <hr class="my-3">
+
+                <!-- Ingreso del código dictado -->
+                <div class="mb-3 text-center">
+                    <label class="form-label fw-bold text-success">Ingresa el código dictado por el paciente:</label>
+                    <input type="text" id="inputCodigoIngresadoOTP" class="form-control text-center fs-3 fw-bold tracking-widest" maxlength="6" placeholder="------" style="letter-spacing: 8px;">
+                    <div id="msgErrorOTP" class="text-danger small mt-2 d-none">❌ Código incorrecto o expirado. Intenta de nuevo.</div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light" style="border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success fw-bold px-4" onclick="validarCodigoOTPIngresado()">
+                    <i class="fas fa-check-circle me-1"></i> Validar y Desbloquear
+                </button>
             </div>
         </div>
     </div>
