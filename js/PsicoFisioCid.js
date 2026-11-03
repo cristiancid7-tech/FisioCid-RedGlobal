@@ -120,17 +120,16 @@ window.PsicoFisioCid = (function () {
         contenedor.innerHTML = html;
     };
 
-    // 🎯 LANZADOR DE CUESTIONARIOS / REGISTRO DE TEST
+ // 🎯 LANZADOR DE CUESTIONARIOS / REGISTRO DE TEST
     const lanzarTestModal = (idTest) => {
         console.log(`🧠 [PsicoFisioCid]: Lanzando test: ${idTest}`);
+        
+        // Conexión directa y unificada con el motor principal de cuestionarios
         if (window.FisioCidEngine && typeof window.FisioCidEngine.lanzarCuestionario === 'function') {
             window.FisioCidEngine.lanzarCuestionario(idTest);
         } else {
-            let res = "";
-            if (idTest === 'HTP') res = "HTP: Trazo débil, aislamiento detectado.";
-            if (idTest === 'APGAR') res = "APGAR: Disfuncionalidad familiar moderada.";
-            if (idTest === 'GENOGRAMA') res = "Genograma: Triangulación afectiva en 3ª generación.";
-            if (res) agregarTagTexto('psico_objetivos', res);
+            console.error("❌ [PsicoFisioCid]: FisioCidEngine o su método lanzarCuestionario no están disponibles.");
+            alert(`No se pudo abrir el test "${idTest}". Verifique la consola.`);
         }
     };
 

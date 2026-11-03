@@ -80,8 +80,11 @@ const modalEngine = {
             window.PeriodontoFisioCid.iniciarArcadas();
         } else if (espKey === 'PSICOLOGIA' && window.PsicoFisioCid && typeof window.PsicoFisioCid.actualizarIndicadoresVisuales === 'function') {
             window.PsicoFisioCid.actualizarIndicadoresVisuales();
-        } else if (espKey === 'FISIOTERAPIA' && window.FisioFisioCid && typeof window.FisioFisioCid.inicializarPruebas === 'function') {
-            window.FisioFisioCid.inicializarPruebas();
+      } else if (espKey === 'FISIOTERAPIA' && window.FisioFisioCid) {
+            const btnExp = document.querySelector('#grupo-tabs-fisio-exp button');
+            const btnTrat = document.querySelector('#grupo-tabs-fisio-trat button');
+            if (btnExp) window.FisioFisioCid.renderizarAreaExploracion('DEPORTIVA', btnExp);
+            if (btnTrat) window.FisioFisioCid.renderizarAreaTratamiento('DEPORTIVA', btnTrat);
         }
     },
 
@@ -122,11 +125,11 @@ const modalEngine = {
         if (typeof window.PsicoFisioCid.estirarLienzo === 'function') {
             window.PsicoFisioCid.estirarLienzo(); // 👈 Estira el modal de Psicología a pantalla completa
         }
-        } else if (espKey === 'FISIOTERAPIA' && window.FisioFisioCid && typeof window.FisioFisioCid.cargarEstadoFisioterapiaMaestro === 'function') {
-            const estadoFisio = window.pacienteCargado?.evaluacion_fisioterapia;
-            if (estadoFisio) {
-                window.FisioFisioCid.cargarEstadoFisioterapiaMaestro(estadoFisio);
-            }
+       } else if (espKey === 'FISIOTERAPIA' && window.FisioFisioCid) {
+            const btnExp = document.querySelector('#grupo-tabs-fisio-exp button');
+            const btnTrat = document.querySelector('#grupo-tabs-fisio-trat button');
+            if (btnExp) window.FisioFisioCid.renderizarAreaExploracion('DEPORTIVA', btnExp);
+            if (btnTrat) window.FisioFisioCid.renderizarAreaTratamiento('DEPORTIVA', btnTrat);
         }
     }, 150);
 },

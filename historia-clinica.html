@@ -8,6 +8,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+
+        /* Forzar expansión absoluta en Fisioterapia al igual que Odontología */
+#modalFisioFullscreen .modal-dialog,
+#modalFisioFullscreen .modal-content {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+}
+#modalFisioFullscreen .modal-body {
+    width: 100% !important;
+    max-width: 100% !important;
+}
         /* Botones compactos tipo píldora para sub-escalas odontológicas */
 #modalOdontoFullscreen .btn-opcion-subescala {
     width: auto !important;
@@ -636,36 +652,37 @@ html, body {
                     </div>
                 </div>
 
-<!-- 🧠 MODAL FULLSCREEN ASISTENTE PSICOLÓGICO -->
-<div class="modal fade" id="modalPsicoFullscreen" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-fullscreen w-100 mw-100 m-0">
-        <div class="modal-content bg-dark text-white border-0 min-vh-100">
+<!-- 🧠 MODAL FULLSCREEN ASISTENTE PSICOLÓGICO (ESTILO CLÍNICO LIMPIO) -->
+<div class="modal fade" id="modalPsicoFullscreen" tabindex="-1" aria-hidden="true" style="z-index: 10050;">
+    <div class="modal-dialog modal-fullscreen w-100 mw-100 h-100 m-0 p-0">
+        <div class="modal-content border-0 w-100 h-100 text-dark" style="background: #f8fafc; min-height: 100vh;">
             
             <!-- HEADER PRINCIPAL -->
-            <div class="modal-header border-bottom border-secondary py-3 px-4">
-                <h5 class="modal-title fw-bold text-info fs-5 d-flex align-items-center gap-2">
+            <div class="modal-header border-bottom py-3 px-4" style="background: #ffffff; border-color: #e2e8f0 !important;">
+                <h5 class="modal-title fw-bold text-primary fs-5 d-flex align-items-center gap-2">
                     🧠 ASISTENTE DE EVALUACIÓN PSICOLÓGICA Y SALUD MENTAL
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <div class="modal-body p-4 overflow-auto">
+            <!-- CUERPO DEL MODAL -->
+            <div class="modal-body p-4 overflow-auto" style="background: #f8fafc;">
                 <div class="container-fluid">
-
+                    
                     <!-- 🎛️ BARRA SUPERIOR DE BATERÍA DE PRUEBAS Y SUB-MÓDULOS -->
-                    <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-4">
-                        <label class="form-label text-warning fw-bold small text-uppercase mb-2">
+                    <div class="card bg-white border shadow-sm p-3 mb-4" style="border-color: #e2e8f0 !important;">
+                        <label class="form-label text-primary fw-bold small text-uppercase mb-2">
                             🧠 BATERÍA DE PRUEBAS Y EVALUACIÓN ESPECIALIZADA
                         </label>
                         <div class="btn-group w-100 mb-2" role="group" id="grupo-tabs-psico">
-                            <button type="button" class="btn btn-sm btn-outline-info active bg-info text-dark" onclick="PsicoFisioCid.renderizarSubmodulo('PSICOMETRIA', this)">📊 Psicométricos</button>
-                            <button type="button" class="btn btn-sm btn-outline-warning" onclick="PsicoFisioCid.renderizarSubmodulo('PROYECTIVOS', this)">🎨 Proyectivos</button>
-                            <button type="button" class="btn btn-sm btn-outline-light" onclick="PsicoFisioCid.renderizarSubmodulo('INFANTIL', this)">👶 Infanto-Juvenil</button>
-                            <button type="button" class="btn btn-sm btn-outline-success" onclick="PsicoFisioCid.renderizarSubmodulo('PAREJA', this)">👥 Pareja / Familia</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary active bg-primary text-white" onclick="PsicoFisioCid.renderizarSubmodulo('PSICOMETRIA', this)">📊 Psicométricos</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="PsicoFisioCid.renderizarSubmodulo('PROYECTIVOS', this)">🎨 Proyectivos</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="PsicoFisioCid.renderizarSubmodulo('INFANTIL', this)">👶 Infanto-Juvenil</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="PsicoFisioCid.renderizarSubmodulo('PAREJA', this)">👥 Pareja / Familia</button>
                         </div>
                         <div id="contenedor-baterias-test"></div>
                     </div>
-
+                    
                     <!-- FILA PRINCIPAL SUPERIOR (2 Columnas Balanceadas) -->
                     <div class="row g-4 mb-4">
                         
@@ -673,9 +690,9 @@ html, body {
                         <div class="col-12 col-lg-6">
                             
                             <!-- Modelo / Enfoque Terapéutico -->
-                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
-                                <label class="form-label text-info fw-bold small text-uppercase">Modelo / Enfoque Terapéutico</label>
-                                <select id="psico_enfoque" class="form-select bg-dark text-white border-secondary" onchange="PsicoFisioCid.actualizarVistaPreviaEnVivo()">
+                            <div class="card bg-white border shadow-sm p-3 mb-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label text-primary fw-bold small text-uppercase">Modelo / Enfoque Terapéutico</label>
+                                <select id="psico_enfoque" class="form-select bg-white text-dark border-secondary" onchange="PsicoFisioCid.actualizarVistaPreviaEnVivo()">
                                     <option value="COGNITIVO_CONDUCTUAL">Cognitivo-Conductual (TCC)</option>
                                     <option value="HUMANISTA">Humanista / Gestalt</option>
                                     <option value="PSICODINAMICO">Psicodinámico / Psicoanálisis</option>
@@ -683,122 +700,118 @@ html, body {
                                     <option value="BREVE_SOLUCIONES">Terapia Breve Centrada en Soluciones</option>
                                 </select>
                             </div>
-
+                            
                             <!-- Sliders Visuales de Ánimo y Ansiedad -->
-                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
-                                <label class="form-label fw-bold d-flex justify-content-between text-warning small text-uppercase">
+                            <div class="card bg-white border shadow-sm p-3 mb-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label fw-bold d-flex justify-content-between text-secondary small text-uppercase">
                                     <span>Estado de Ánimo Actual</span>
                                     <span id="lbl_animo_val" class="badge bg-warning text-dark">0/10</span>
                                 </label>
-                         <input type="range" class="form-range" id="psico_slider_animo" min="1" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
-                         </div>
+                                <input type="range" class="form-range" id="psico_slider_animo" min="1" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                            </div>
 
-                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
-                                <label class="form-label fw-bold d-flex justify-content-between text-danger small text-uppercase">
+                            <div class="card bg-white border shadow-sm p-3 mb-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label fw-bold d-flex justify-content-between text-secondary small text-uppercase">
                                     <span>Nivel de Ansiedad Percibido</span>
                                     <span id="lbl_ansiedad_val" class="badge bg-danger">0/10</span>
                                 </label>
-                       <input type="range" class="form-range" id="psico_slider_ansiedad" min="0" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
-                      </div>
-
+                                <input type="range" class="form-range" id="psico_slider_ansiedad" min="0" max="10" value="0" oninput="PsicoFisioCid.actualizarIndicadoresVisuales(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                            </div>
+                            
                             <!-- ESCALAS PHQ-9 Y GAD-7 -->
-                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3 mb-3">
+                            <div class="card bg-white border shadow-sm p-3 mb-3" style="border-color: #e2e8f0 !important;">
                                 <!-- PHQ-9 -->
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <label class="form-label text-info fw-bold small text-uppercase mb-0">Escala PHQ-9 (Depresión)</label>
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important;" onclick="PsicoFisioCid.lanzarTestModal('PHQ9')">🧪 Abrir Test PHQ-9</button>
+                                    <label class="form-label text-primary fw-bold small text-uppercase mb-0">Escala PHQ-9 (Depresión)</label>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.lanzarTestModal('PHQ9')">🧪 Abrir Test PHQ-9</button>
                                 </div>
                                 <div class="input-group mb-2">
-                              <input type="number" id="val_phq9_total" class="form-control bg-dark text-white border-secondary" placeholder="0-27" min="0" max="27" oninput="PsicoFisioCid.calcularPHQ9(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
-                                <span id="badge_phq9_res" class="badge bg-success d-flex align-items-center px-3">0 pts - Mínima</span>
+                                    <input type="number" id="val_phq9_total" class="form-control bg-white text-dark border-secondary" placeholder="0-27" min="0" max="27" oninput="PsicoFisioCid.calcularPHQ9(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                                    <span id="badge_phq9_res" class="badge bg-success d-flex align-items-center px-3">0 pts - Mínima</span>
                                 </div>
 
                                 <!-- GAD-7 -->
                                 <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
-                                    <label class="form-label text-info fw-bold small text-uppercase mb-0">Escala GAD-7 (Ansiedad)</label>
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important;" onclick="PsicoFisioCid.lanzarTestModal('GAD7')">🧪 Abrir Test GAD-7</button>
+                                    <label class="form-label text-primary fw-bold small text-uppercase mb-0">Escala GAD-7 (Ansiedad)</label>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.lanzarTestModal('GAD7')">🧪 Abrir Test GAD-7</button>
                                 </div>
                                 <div class="input-group">
-<input type="number" id="val_gad7_total" class="form-control bg-dark text-white border-secondary" placeholder="0-21" min="0" max="21" oninput="PsicoFisioCid.calcularGAD7(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
-    <span id="badge_gad7_res" class="badge bg-success d-flex align-items-center px-3">0 pts - Mínima</span>
+                                    <input type="number" id="val_gad7_total" class="form-control bg-white text-dark border-secondary" placeholder="0-21" min="0" max="21" oninput="PsicoFisioCid.calcularGAD7(); PsicoFisioCid.actualizarVistaPreviaEnVivo();">
+                                    <span id="badge_gad7_res" class="badge bg-success d-flex align-items-center px-3">0 pts - Mínima</span>
                                 </div>
                             </div>
-
+                            
                             <!-- Riesgo y Alerta Clínica -->
                             <div class="form-check form-switch p-3 bg-danger bg-opacity-10 border border-danger rounded">
                                 <input class="form-check-input ms-0 me-2" type="checkbox" id="psico_chk_riesgo" onchange="PsicoFisioCid.actualizarVistaPreviaEnVivo()">
                                 <label class="form-check-label text-danger fw-bold small" for="psico_chk_riesgo">⚠️ REGISTRAR ALERTA DE RIESGO DE AUTOLESIÓN / IDEACIÓN</label>
                             </div>
-
+                            
                         </div>
-
+                        
                         <!-- Columna 2: Redes de Apoyo y Mecanismos de Afrontamiento -->
                         <div class="col-12 col-lg-6">
                             
                             <!-- Redes de Apoyo y Entorno -->
-                            <div class="mb-3 card bg-secondary bg-opacity-10 border-secondary p-3">
-                                <label class="form-label text-light fw-bold small text-uppercase mb-2">Redes de Apoyo y Entorno</label>
+                            <div class="mb-3 card bg-white border shadow-sm p-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label text-primary fw-bold small text-uppercase mb-2">Redes de Apoyo y Entorno</label>
                                 <div class="d-flex flex-wrap gap-1.5 mb-2">
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red familiar contenedora y de alto soporte.')">+ Familia Sólida</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Vive solo/a con aislamiento social significativo.')">+ Aislamiento</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Conflicto severo de pareja o dinámicas familiares disfuncionales.')">+ Conflicto Pareja</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red de amigos y compañeros de trabajo funcionales.')">+ Red Laboral</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Ausencia total de red de apoyo socioemocional.')">+ Sin Redes</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red familiar contenedora y de alto soporte.')">+ Familia Sólida</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Vive solo/a con aislamiento social significativo.')">+ Aislamiento</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Conflicto severo de pareja o dinámicas familiares disfuncionales.')">+ Conflicto Pareja</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Red de amigos y compañeros de trabajo funcionales.')">+ Red Laboral</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_redes_apoyo', 'Ausencia total de red de apoyo socioemocional.')">+ Sin Redes</button>
                                 </div>
-                                <textarea id="psico_redes_apoyo" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Notas sobre el soporte afectivo o social..." oninput="PsicoFisioCid.actualizarVistaPreviaEnVivo()"></textarea>
+                                <textarea id="psico_redes_apoyo" class="form-control bg-white text-dark border-secondary" rows="3" placeholder="Notas sobre el soporte afectivo o social..." oninput="PsicoFisioCid.actualizarVistaPreviaEnVivo()"></textarea>
                             </div>
-
+                            
                             <!-- Mecanismos de Afrontamiento -->
-                            <div class="mb-3 card bg-secondary bg-opacity-10 border-secondary p-3">
-                                <label class="form-label text-light fw-bold small text-uppercase mb-2">Mecanismos de Afrontamiento</label>
+                            <div class="mb-3 card bg-white border shadow-sm p-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label text-primary fw-bold small text-uppercase mb-2">Mecanismos de Afrontamiento</label>
                                 <div class="d-flex flex-wrap gap-1.5 mb-2">
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Rumiación cognitiva persistente sobre el pasado.')">+ Rumiación</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Patrón de evitación conductual ante situaciones estresantes.')">+ Evitación</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Estrategias adaptativas activas (ejercicio, meditación, resolución de problemas).')">+ Adaptativo</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Mecanismo de negación y represión de afectos.')">+ Negación</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Despliegue de conductas de ira y catarsis disfuncional.')">+ Catarsis Hostil</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Rumiación cognitiva persistente sobre el pasado.')">+ Rumiación</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Patrón de evitación conductual ante situaciones estresantes.')">+ Evitación</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Estrategias adaptativas activas (ejercicio, meditación, resolución de problemas).')">+ Adaptativo</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Mecanismo de negación y represión de afectos.')">+ Negación</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_afrontamiento', 'Despliegue de conductas de ira y catarsis disfuncional.')">+ Catarsis Hostil</button>
                                 </div>
-                                <textarea id="psico_afrontamiento" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Estrategias de regulación o respuestas ante estrés..." oninput="PsicoFisioCid.actualizarVistaPreviaEnVivo()"></textarea>
+                                <textarea id="psico_afrontamiento" class="form-control bg-white text-dark border-secondary" rows="3" placeholder="Estrategias de regulación o respuestas ante estrés..." oninput="PsicoFisioCid.actualizarVistaPreviaEnVivo()"></textarea>
                             </div>
-
+                            
                         </div>
-
+                        
                     </div>
-
+                    
                     <!-- FILA INFERIOR (Ancho Completo para Objetivos y Tareas) -->
                     <div class="row g-4">
+                        <div class="col-12">
+                            <div class="card bg-white border shadow-sm p-3 mb-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label text-primary fw-bold small text-uppercase">🎯 Objetivos Terapéuticos y Hallazgos de Test</label>
+                                <textarea id="psico_objetivos" class="form-control bg-white text-dark border-secondary" rows="4" placeholder="Metas acordadas con el paciente e interpretaciones de test..."></textarea>
+                            </div>
+                        </div>
                         
-                        <!-- Objetivos Terapéuticos -->
                         <div class="col-12">
-                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3">
-                                <label class="form-label text-info fw-bold small text-uppercase">🎯 Objetivos Terapéuticos y Hallazgos de Test</label>
-                                <textarea id="psico_objetivos" class="form-control bg-dark text-white border-secondary" rows="4" placeholder="Metas acordadas con el paciente e interpretaciones de test..."></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Tareas para Casa / Intervención -->
-                        <div class="col-12">
-                            <div class="card bg-secondary bg-opacity-10 border-secondary p-3">
-                                <label class="form-label text-light fw-bold small text-uppercase mb-2">📋 Tareas e Intervención Terapéutica</label>
+                            <div class="card bg-white border shadow-sm p-3" style="border-color: #e2e8f0 !important;">
+                                <label class="form-label text-primary fw-bold small text-uppercase mb-2">📋 Tareas e Intervención Terapéutica</label>
                                 <div class="d-flex flex-wrap gap-1.5 mb-2">
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Diario de registro ABC de pensamientos automáticos.')">+ Registro TCC</button>
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Práctica diaria de respiración diafragmática 4-7-8.')">+ Respiración 4-7-8</button>
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Técnica de la silla vacía para elaboración de duelo/asuntos inconclusos.')">+ Silla Vacía</button>
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Asignación de lectura biblioterapéutica recomendada.')">+ Biblioterapia</button>
-                                    <button type="button" class="btn btn-xs btn-outline-info py-1 px-2.5 rounded-pill" style="font-size: 0.75rem; width: auto !important; display: inline-block !important;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Implementación de técnica de higiene del sueño.')">+ Higiene del Sueño</button>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Diario de registro ABC de pensamientos automáticos.')">+ Registro TCC</button>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Práctica diaria de respiración diafragmática 4-7-8.')">+ Respiración 4-7-8</button>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Técnica de la silla vacía para elaboración de duelo/asuntos inconclusos.')">+ Silla Vacía</button>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Asignación de lectura biblioterapéutica recomendada.')">+ Biblioterapia</button>
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2.5 rounded-pill" style="font-size: 0.75rem;" onclick="PsicoFisioCid.agregarTagTexto('psico_tareas_casa', 'Implementación de técnica de higiene del sueño.')">+ Higiene del Sueño</button>
                                 </div>
-                                <textarea id="psico_tareas_casa" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Ej. Ejercicios asignados para la siguiente sesión..."></textarea>
+                                <textarea id="psico_tareas_casa" class="form-control bg-white text-dark border-secondary" rows="3" placeholder="Ej. Ejercicios asignados para la siguiente sesión..."></textarea>
                             </div>
                         </div>
-
                     </div>
 
                 </div>
             </div>
 
             <!-- FOOTER CON BOTÓN DE GUARDADO -->
-            <div class="modal-footer border-top border-secondary p-3">
-                <button type="button" class="btn btn-success w-100 fw-bold py-2 fs-6" onclick="window.FisioCidEngine.finalizarEscala()">
+            <div class="modal-footer border-top p-3" style="background: #ffffff; border-color: #e2e8f0 !important;">
+                <button type="button" class="btn btn-success w-100 fw-bold py-2 fs-6 shadow-sm" onclick="window.FisioCidEngine.finalizarEscala()">
                     ✅ FINALIZAR Y GUARDAR EVALUACIÓN PSICOLÓGICA EN EXPEDIENTE
                 </button>
             </div>
@@ -806,97 +819,78 @@ html, body {
         </div>
     </div>
 </div>
-<!-- 🪟 MODAL DENTAL FULLSCREEN PRO -->
+<!-- 🪟 MODAL DENTAL FULLSCREEN PRO (ESTILO CLÍNICO LIMPIO) -->
 <div class="modal fade modal-fullscreen" id="modalOdontoFullscreen" tabindex="-1" aria-hidden="true" style="z-index: 10050;">
     <div class="modal-dialog modal-fullscreen w-100 mw-100 h-100 m-0 p-0">
-        <div class="modal-content border-0 w-100 h-100" style="background: #0b1329; min-height: 100vh;">
+        <div class="modal-content border-0 w-100 h-100 text-dark" style="background: #f8fafc; min-height: 100vh;">
             
             <!-- Encabezado -->
-            <div class="modal-header border-bottom border-secondary px-4 py-3" style="background: #0f172a; color: white;">
-                <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="tituloEscalaOdonto" style="color: #38bdf8; font-size: 1.1rem;">
+            <div class="modal-header border-bottom py-3 px-4" style="background: #ffffff; border-color: #e2e8f0 !important;">
+                <h5 class="modal-title fw-bold text-primary d-flex align-items-center gap-2" id="tituloEscalaOdonto" style="font-size: 1.1rem;">
                     🛠️ ASISTENTE DE EXPLORACIÓN | ODONTOLOGÍA, PERIODONCIA Y ENDODONCIA
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             
             <!-- Cuerpo -->
-            <div class="modal-body p-4 w-100" id="cuerpoEscalaOdonto" style="background: #0b1329; overflow-y: auto;">
-                
+            <div class="modal-body p-4 w-100" id="cuerpoEscalaOdonto" style="background: #f8fafc; overflow-y: auto;">
                 <div id="contenedor-odontograma-modulo" class="w-100">
                     
-                 <!-- 1. BARRA SUPERIOR DE MÓDULOS DE EVALUACIÓN RÁPIDA -->
-<div class="row g-2 mb-3">
-    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-info" onclick="PeriodontoFisioCid.abrirEscalaModulo('MALLAMPATI')">👅 MALLAMPATI</button></div>
-    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-info" onclick="PeriodontoFisioCid.abrirEscalaModulo('KENNEDY')">👄 KENNEDY</button></div>
-    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-success" onclick="PeriodontoFisioCid.abrirEscalaModulo('PERIO')">🩸 PERIO</button></div>
-    <div class="col-md-3"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-warning" onclick="PeriodontoFisioCid.abrirEscalaModulo('OCLUSION')">😬 OCLUSIÓN</button></div>
-    
-    <div class="col-md-4" id="btn-modulo-geria"><button type="button" class="btn btn-dark w-100 fw-bold border-secondary text-warning" onclick="PeriodontoFisioCid.abrirEscalaModulo('GERIATRIA')">👴 GERIATRÍA</button></div>
-    <div class="col-md-4" id="btn-modulo-pedia" style="display: none !important;"><button type="button" class="btn btn-danger w-100 fw-bold" style="background: #ec4899; border: none;" onclick="PeriodontoFisioCid.abrirEscalaModulo('PEDIA')">👶 PEDIA</button></div>
-    
-    <div class="col-md-4"><button type="button" class="btn btn-info w-100 fw-bold text-white" style="background: #06b6d4; border: none;" onclick="PeriodontoFisioCid.abrirEscalaModulo('ENDO')">🦷 ENDO</button></div>
-    <div class="col-md-4"><button type="button" class="btn btn-danger w-100 fw-bold" style="background: #b91c1c; border: none;" onclick="PeriodontoFisioCid.abrirEscalaModulo('CIRUGIA')">🔪 CIRUGÍA</button></div>
-</div>
-
-                  <!-- 2. PALETA DE PINCELES (BOTONES COMPACTOS EN FILA) Y SWITCH -->
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 p-3 rounded-3" style="background: #1e293b; border: 1px solid #334155;">
-    
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-        <span class="text-white fw-bold me-2 small" style="font-size: 0.75rem;">PINCEL:</span>
-        
-        <button type="button" class="btn btn-sm btn-outline-light paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#f8fafc', this, 'sano')">
-            ⚪ SANO
-        </button>
-        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #ec4899; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#ec4899', this, 'p_nueva')">
-            🌸 P. NUEVA
-        </button>
-        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #a855f7; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#a855f7', this, 'p_vieja')">
-            🟣 P. VIEJA
-        </button>
-        <button type="button" class="btn btn-sm btn-danger paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#ef4444', this, 'caries')">
-            🔴 CARIES
-        </button>
-        <button type="button" class="btn btn-sm btn-primary paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#3b82f6', this, 'tratado')">
-            🔵 TRATADO
-        </button>
-        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #dc2626; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#dc2626', this, 'extraer')">
-            ❌ EXTRAER
-        </button>
-        <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #64748b; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#64748b', this, 'ausente')">
-            ⚪ AUSENTE
-        </button>
-    </div>
-    
-    <div class="form-check form-switch text-white mt-2 mt-md-0">
-        <input class="form-check-input" type="checkbox" id="switchArcada" checked onchange="PeriodontoFisioCid.toggleArcada(this)" style="cursor: pointer;">
-        <label class="form-check-input-label fw-bold small ms-1" id="labelDenticion" for="switchArcada" style="font-size: 0.75rem; cursor: pointer;">
-            DENTICIÓN PERMANENTE (ADULTO)
-        </label>
-    </div>
-
-</div>
-
+                    <!-- 1. BARRA SUPERIOR DE MÓDULOS DE EVALUACIÓN RÁPIDA -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3"><button type="button" class="btn btn-light w-100 fw-bold border shadow-sm text-primary" onclick="PeriodontoFisioCid.abrirEscalaModulo('MALLAMPATI')">👅 MALLAMPATI</button></div>
+                        <div class="col-md-3"><button type="button" class="btn btn-light w-100 fw-bold border shadow-sm text-primary" onclick="PeriodontoFisioCid.abrirEscalaModulo('KENNEDY')">👄 KENNEDY</button></div>
+                        <div class="col-md-3"><button type="button" class="btn btn-light w-100 fw-bold border shadow-sm text-success" onclick="PeriodontoFisioCid.abrirEscalaModulo('PERIO')">🩸 PERIO</button></div>
+                        <div class="col-md-3"><button type="button" class="btn btn-light w-100 fw-bold border shadow-sm text-warning" onclick="PeriodontoFisioCid.abrirEscalaModulo('OCLUSION')">😬 OCLUSIÓN</button></div>
+                        
+                        <div class="col-md-4" id="btn-modulo-geria"><button type="button" class="btn btn-light w-100 fw-bold border shadow-sm text-dark" onclick="PeriodontoFisioCid.abrirEscalaModulo('GERIATRIA')">👴 GERIATRÍA</button></div>
+                        <div class="col-md-4" id="btn-modulo-pedia" style="display: none !important;"><button type="button" class="btn btn-danger w-100 fw-bold" onclick="PeriodontoFisioCid.abrirEscalaModulo('PEDIA')">👶 PEDIA</button></div>
+                        
+                        <div class="col-md-4"><button type="button" class="btn btn-info w-100 fw-bold text-white shadow-sm" onclick="PeriodontoFisioCid.abrirEscalaModulo('ENDO')">🦷 ENDO</button></div>
+                        <div class="col-md-4"><button type="button" class="btn btn-danger w-100 fw-bold shadow-sm" onclick="PeriodontoFisioCid.abrirEscalaModulo('CIRUGIA')">🔪 CIRUGÍA</button></div>
+                    </div>
+                    
+                    <!-- 2. PALETA DE PINCELES Y SWITCH -->
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 p-3 rounded-3 bg-white border shadow-sm" style="border-color: #e2e8f0 !important;">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="text-secondary fw-bold me-2 small" style="font-size: 0.75rem;">PINCEL:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#f8fafc', this, 'sano')">⚪ SANO</button>
+                            <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #ec4899; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#ec4899', this, 'p_nueva')">🌸 P. NUEVA</button>
+                            <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #a855f7; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#a855f7', this, 'p_vieja')">🟣 P. VIEJA</button>
+                            <button type="button" class="btn btn-sm btn-danger paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#ef4444', this, 'caries')">🔴 CARIES</button>
+                            <button type="button" class="btn btn-sm btn-primary paleta-color fw-bold px-3 rounded-pill" style="font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#3b82f6', this, 'tratado')">🔵 TRATADO</button>
+                            <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #dc2626; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#dc2626', this, 'extraer')">❌ EXTRAER</button>
+                            <button type="button" class="btn btn-sm paleta-color fw-bold text-white px-3 rounded-pill" style="background: #64748b; border: none; font-size: 0.7rem; padding: 4px 10px;" onclick="PeriodontoFisioCid.setBrush('#64748b', this, 'ausente')">⚪ AUSENTE</button>
+                        </div>
+                        
+                        <div class="form-check form-switch text-dark mt-2 mt-md-0">
+                            <input class="form-check-input" type="checkbox" id="switchArcada" checked onchange="PeriodontoFisioCid.toggleArcada(this)" style="cursor: pointer;">
+                            <label class="form-check-input-label fw-bold small ms-1 text-secondary" id="labelDenticion" for="switchArcada" style="font-size: 0.75rem; cursor: pointer;">
+                                DENTICIÓN PERMANENTE (ADULTO)
+                            </label>
+                        </div>
+                    </div>
+                    
                     <!-- 3. ARCADAS DENTALES -->
-                    <div class="d-flex flex-column gap-3 align-items-center w-100">
+                    <div class="d-flex flex-column gap-3 align-items-center w-100 bg-white p-3 rounded border shadow-sm mb-3" style="border-color: #e2e8f0 !important;">
                         <div id="arcada-superior" class="arcada-container w-100"></div>
                         <div id="temporales-superior" class="arcada-container w-100" style="display: none !important;"></div>
                         <div id="temporales-inferior" class="arcada-container w-100" style="display: none !important;"></div>
                         <div id="arcada-inferior" class="arcada-container w-100"></div>
                     </div>
-
-                    <!-- 4. CAJA DE FEEDBACK INTERACTIVO DE RAÍCES (NUEVA) -->
+                    
+                    <!-- 4. CAJA DE FEEDBACK INTERACTIVO -->
                     <div id="detalle-raiz-activa" class="mt-3"></div>
-
+                    
                     <!-- 5. RESUMEN DINÁMICO -->
-                    <div id="texto-resumen-dinamico" class="mt-3 text-white"></div>
+                    <div id="texto-resumen-dinamico" class="mt-3 text-dark"></div>
                 </div>
-
             </div>
             
             <!-- Pie de Modal -->
-            <div class="modal-footer border-top border-secondary px-4 py-3" style="background: #0f172a;">
+            <div class="modal-footer border-top px-4 py-3" style="background: #ffffff; border-color: #e2e8f0 !important;">
                 <div id="resultadoVivoOdonto" class="me-auto fw-bold text-primary"></div>
-                <button type="button" class="btn btn-success fw-bold px-4 rounded-pill" onclick="if(window.FisioCidEngine) window.FisioCidEngine.finalizarEscala()">
+                <button type="button" class="btn btn-success fw-bold px-4 rounded-pill shadow-sm" onclick="if(window.FisioCidEngine) window.FisioCidEngine.finalizarEscala()">
                     ✅ FINALIZAR Y GUARDAR EN EXPEDIENTE
                 </button>
             </div>
@@ -904,6 +898,86 @@ html, body {
         </div>
     </div>
 </div>
+
+<!-- 🛠️ MODAL FULLSCREEN - ASISTENTE DE FISIOTERAPIA (ESTILO CLÍNICO LIMPIO) -->
+<div class="modal fade" id="modalFisioFullscreen" tabindex="-1" aria-hidden="true" style="z-index: 10050;">
+  <div class="modal-dialog modal-fullscreen w-100 mw-100 h-100 m-0 p-0">
+    <div class="modal-content border-0 w-100 h-100 text-dark" style="background: #f8fafc; min-height: 100vh;">
+
+        <!-- HEADER PRINCIPAL -->
+        <div class="modal-header border-bottom py-3 px-4" style="background: #ffffff; border-color: #e2e8f0 !important;">
+            <h5 class="modal-title fw-bold text-primary fs-5 d-flex align-items-center gap-2">
+                🛠️ ASISTENTE DE VALORACIÓN CLÍNICA Y FISIOTERAPIA AVANZADA
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <!-- CUERPO DEL MODAL (GRID MAESTRO) -->
+        <div class="modal-body p-0 w-100" style="background: #f8fafc; overflow: hidden;">
+            <div class="container-fluid h-100 w-100 p-0">
+                <div class="row h-100 g-0">
+                    
+                    <!-- MENÚ LATERAL CLÍNICO (GRIS CLARO SOBRIO) -->
+                    <div class="col-md-3 col-lg-2 border-end p-3 d-flex flex-column gap-2" id="menu-lateral-fisio" style="background: #ffffff !important; border-color: #e2e8f0 !important;">
+                        <span class="text-secondary text-uppercase fw-bold mb-2" style="font-size: 0.7rem; letter-spacing: 1px;">Regiones Anatómicas</span>
+
+                        <button type="button" class="btn text-start py-2 px-3 rounded-2 text-dark active fw-bold shadow-sm d-flex align-items-center gap-2 mb-1" onclick="FisioFisioCid.seleccionarArea('LUMBAR_RAD_001', this)" style="font-size: 0.8rem; background: #e2e8f0;">
+                            <span>🦴</span> <span>Columna Lumbar</span>
+                        </button>
+                        <button type="button" class="btn text-start py-2 px-3 rounded-2 text-secondary d-flex align-items-center gap-2 mb-1" onclick="FisioFisioCid.seleccionarArea('CERVICAL_RAD_002', this)" style="font-size: 0.8rem; background: #f1f5f9;">
+                            <span>⚡</span> <span>Cervical & Hombro</span>
+                        </button>
+                        <button type="button" class="btn text-start py-2 px-3 rounded-2 text-secondary d-flex align-items-center gap-2 mb-1" onclick="FisioFisioCid.seleccionarArea('CODO_MANO_003', this)" style="font-size: 0.8rem; background: #f1f5f9;">
+                            <span>💪</span> <span>Codo, Muñeca & Mano</span>
+                        </button>
+                        <button type="button" class="btn text-start py-2 px-3 rounded-2 text-secondary d-flex align-items-center gap-2 mb-1" onclick="FisioFisioCid.seleccionarArea('CADERA_004', this)" style="font-size: 0.8rem; background: #f1f5f9;">
+                            <span>🚶‍♂️</span> <span>Cadera & Pelvis</span>
+                        </button>
+                        <button type="button" class="btn text-start py-2 px-3 rounded-2 text-secondary d-flex align-items-center gap-2 mb-1" onclick="FisioFisioCid.seleccionarArea('RODILLA_005', this)" style="font-size: 0.8rem; background: #f1f5f9;">
+                            <span>🦵</span> <span>Rodilla</span>
+                        </button>
+                        <button type="button" class="btn text-start py-2 px-3 rounded-2 text-secondary d-flex align-items-center gap-2" onclick="FisioFisioCid.seleccionarArea('TOBILLO_006', this)" style="font-size: 0.8rem; background: #f1f5f9;">
+                            <span>🦶</span> <span>Tobillo y Pie</span>
+                        </button>
+                    </div>
+
+                    <!-- COLUMNA DERECHA: CONTENIDO DE VALORACIÓN -->
+                    <div class="col-md-9 col-lg-10 p-4" style="overflow-y: auto; max-height: calc(100vh - 130px);">
+                        
+                        <!-- SECCIÓN 1: EXPLORACIÓN -->
+                        <div class="card bg-white border shadow-sm p-3 mb-4" style="border-color: #e2e8f0 !important;">
+                            <label class="form-label text-primary fw-bold small text-uppercase mb-3 d-flex align-items-center gap-2">
+                                1. 🔍 Exploración Funcional, Pruebas Ortopédicas y Test
+                            </label>
+                            <div id="contenedor-test-exploracion" class="w-100"></div>
+                        </div>
+
+                        <!-- SECCIÓN 2: PRESCRIPCIÓN DE EJERCICIO -->
+                        <div class="card bg-white border shadow-sm p-3 mb-4" style="border-color: #e2e8f0 !important;">
+                            <label class="form-label text-primary fw-bold small text-uppercase mb-3 d-flex align-items-center gap-2">
+                                📋 2. Prescripción de Ejercicio Terapéutico y Protocolos
+                            </label>
+                            <div id="contenedor-ejercicios-tratamiento" class="w-100"></div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER CON BOTÓN DE GUARDADO -->
+        <div class="modal-footer border-top p-3" style="background: #ffffff; border-color: #e2e8f0 !important;">
+            <button type="button" class="btn btn-success w-100 fw-bold py-2 fs-6 shadow-sm" onclick="FisioFisioCid.finalizarEscala()">
+                ✅ FINALIZAR Y GUARDAR EVALUACIÓN DE FISIOTERAPIA EN EXPEDIENTE
+            </button>
+        </div>
+
+    </div>
+  </div>
+</div>
+
+
 
               
 
@@ -1075,6 +1149,8 @@ html, body {
 <!-- 🧠 ASEGÚRATE DE INCLUIR ESTE SCRIPT (O EL NOMBRE REAL DE TU ARCHIVO DE ODONTOLOGÍA) -->
 <script src="js/banco-escalas.js"></script>
 <script src="js/PeriodontoFisioCid.js"></script>
+<script src="js/protocolosFISIO.js"></script>
+<script src="js/FisioFisioCid.js"></script>
 <script src="js/PsicoFisioCid.js"></script>
 <script src="js/FisioCidEngine.js"></script>
 <script src="js/modalEngine.js"></script>

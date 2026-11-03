@@ -436,7 +436,7 @@ if (formHistoria) {
                 if (errReceta) {
                     console.warn("⚠️ No se pudo actualizar el estatus de la receta:", errReceta.message);
                 } else {
-                    console.log("✅ Receta vinculada actualizada a estatus COMPLETADO.");
+                console.log("✅ Receta vinculada actualizada a estatus COMPLETADO.");
                 }
             }
 
@@ -1607,7 +1607,7 @@ window.prerellenarConUltimaNotaGuardada = () => {
     // 3. Plan de tratamiento previo sugerido (opcional)
     llenarSiExiste('plan_tratamiento', u.plan_tratamiento);
 
-    console.log("⚡ [FisioCid]: Somatometría y diagnóstico pre-rellenados con éxito.");
+  //  console.log("⚡ [FisioCid]: Somatometría y diagnóstico pre-rellenados con éxito.");
 };
 
 // ============================================================================
@@ -1620,7 +1620,7 @@ async function cargarDatosDesdeRecetaPendiente() {
     if (!recetaId) return; // Si es consulta normal, no hace nada
 
     try {
-        console.log("🔍 Detectada receta pendiente ID:", recetaId);
+       // console.log("🔍 Detectada receta pendiente ID:", recetaId);
         
         const { data: receta, error } = await fisioNet
             .from('recetas_medicas')
@@ -1887,31 +1887,39 @@ const otpActivoId = solicitudOTPActivaId || sessionStorage.getItem(`otp_id_pacie
             }
         }
     });
+
     // ============================================================================
-// 🦷 REHIDRATACIÓN DINÁMICA DEL ODONTOGRAMA AL ABRIR MODAL
+// 🦷 REHIDRATACIÓN DINÁMICA DEL ODONTOGRAMA (SOLO SI ES ODONTOLOGÍA)
 // ============================================================================
 document.addEventListener('click', (e) => {
+    const especialidad = (localStorage.getItem('especialidadUsuario') || '').toUpperCase();
+    if (!especialidad.includes('DENT') && !especialidad.includes('ODONTO')) return; // 🛑 Salir si no es dentista
+
     const btnAsistente = e.target.closest('#btn-asistente-exploracion') || e.target.closest('[data-bs-target="#modalOdontoFullscreen"]');
     if (btnAsistente) {
         setTimeout(() => {
             const estadoDental = window.pacienteCargado?.piezas_dentales || window.pacienteCargado?.datos_dentales;
             if (estadoDental && window.PeriodontoFisioCid && typeof window.PeriodontoFisioCid.cargarEstadoDentalMaestro === 'function') {
-                console.log("🎨 Rehidratando piezas en caliente al desplegar asistente...", estadoDental);
+              //  console.log("🎨 Rehidratando piezas dentales...", estadoDental);
                 window.PeriodontoFisioCid.cargarEstadoDentalMaestro(estadoDental);
             }
         }, 250);
     }
 });
+
 // ============================================================================
-// 🧠 REHIDRATACIÓN DINÁMICA DE PSICOLOGÍA AL ABRIR ASISTENTE / MODAL
+// 🧠 REHIDRATACIÓN DINÁMICA DE PSICOLOGÍA (SOLO SI ES PSICOLOGÍA)
 // ============================================================================
 document.addEventListener('click', (e) => {
+    const especialidad = (localStorage.getItem('especialidadUsuario') || '').toUpperCase();
+    if (!especialidad.includes('PSICO')) return; // 🛑 Salir si no es psicólogo
+
     const btnAsistentePsico = e.target.closest('#btn-asistente-exploracion') || e.target.closest('[data-bs-target="#modalPsicoFullscreen"]');
     if (btnAsistentePsico) {
         setTimeout(() => {
             const estadoPsico = window.pacienteCargado?.evaluacion_psicologica || window.pacienteCargado?.datos_psicologicos;
             if (estadoPsico && window.PsicoFisioCid && typeof window.PsicoFisioCid.cargarEstadoPsicologicoMaestro === 'function') {
-                console.log("🎨 Rehidratando evaluación psicológica al desplegar asistente...", estadoPsico);
+              //  console.log("🎨 Rehidratando evaluación psicológica...", estadoPsico);
                 window.PsicoFisioCid.cargarEstadoPsicologicoMaestro(estadoPsico);
             }
         }, 250);
@@ -2482,7 +2490,7 @@ function restaurarBorradorLocal(pacienteId) {
             llenarCampo('diagnostico_principal', datos.diagnostico_principal);
             llenarCampo('diagnostico_funcional', datos.diagnostico_funcional);
 
-            console.log("📝 [Borrador Local]: Avance recuperado de localStorage para paciente:", pacienteId);
+          //  console.log("📝 [Borrador Local]: Avance recuperado de localStorage para paciente:", pacienteId);
         } catch (e) {
             console.error("Error al restaurar borrador local:", e);
         }

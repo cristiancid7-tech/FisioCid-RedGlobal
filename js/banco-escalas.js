@@ -1,17 +1,8 @@
-// ============================================================================
-// 🧠 BANCO GLOBAL DE ESCALAS Y CUESTIONARIOS CLÍNICOS (Psicología, Odonto, Fisio)
-// ============================================================================
+
 
 window.BANCO_ESCALAS = window.BANCO_ESCALAS || {};
 
-// ----------------------------------------------------------------------------
-// 📊 1. BATERÍA PSICOMÉTRICA (ESTANDARIZADA)
-// ----------------------------------------------------------------------------
-// ============================================================================
-// 🧠 ESCALAS ADICIONALES (DAS, COOPERSMITH, DIBUJO FAMILIA, WISC-V, RORSCHACH, LLUVIA, MMPI-2)
-// ============================================================================
-
-// 💍 1. DAS (Escala de Ajuste Marital / Dyadic Adjustment Scale)
+// 1. ESCALAS Y TESTS DE PSICOLOGÍA (A nivel raíz)
 window.BANCO_ESCALAS['DAS'] = {
     nombre: "Escala de Ajuste Marital (DAS)",
     rama: "psicologia",
@@ -27,7 +18,6 @@ window.BANCO_ESCALAS['DAS'] = {
     }
 };
 
-// ⭐ 2. COOPERSMITH (Inventario de Autoestima Escolar / Adultos)
 window.BANCO_ESCALAS['COOPERSMITH'] = {
     nombre: "Inventario de Autoestima de Coopersmith",
     rama: "psicologia",
@@ -43,7 +33,6 @@ window.BANCO_ESCALAS['COOPERSMITH'] = {
     }
 };
 
-// 👨‍👩‍👧 3. DIBUJO DE LA FAMILIA (Test Proyectivo Infantil)
 window.BANCO_ESCALAS['DIBUJO_FAMILIA'] = {
     nombre: "Test Proyectivo del Dibujo de la Familia",
     rama: "psicologia",
@@ -57,7 +46,6 @@ window.BANCO_ESCALAS['DIBUJO_FAMILIA'] = {
     }
 };
 
-// 🧩 4. WISC-V (Escala de Inteligencia Wechsler para Niños - Cribado Rápido)
 window.BANCO_ESCALAS['WISC5'] = {
     nombre: "Cribado de Capacidad Intelectual (WISC-V)",
     rama: "psicologia",
@@ -71,7 +59,6 @@ window.BANCO_ESCALAS['WISC5'] = {
     }
 };
 
-// 🩸 5. RORSCHACH (Test de Manchas de Tinta)
 window.BANCO_ESCALAS['RORSCHACH'] = {
     nombre: "Test de Rorschach (Manchas de Tinta)",
     rama: "psicologia",
@@ -85,7 +72,6 @@ window.BANCO_ESCALAS['RORSCHACH'] = {
     }
 };
 
-// 🌧️ 6. PERSONA BAJO LA LLUVIA (Test Proyectivo)
 window.BANCO_ESCALAS['LLUVIA'] = {
     nombre: "Test Proyectivo 'Persona Bajo la Lluvia'",
     rama: "psicologia",
@@ -99,7 +85,6 @@ window.BANCO_ESCALAS['LLUVIA'] = {
     }
 };
 
-// 🧬 7. MMPI-2 / MCMI-IV (Inventario Multifásico de Personalidad de Minnesota)
 window.BANCO_ESCALAS['MMPI2'] = {
     nombre: "Inventario Multifásico de Personalidad (MMPI-2)",
     rama: "psicologia",
@@ -112,7 +97,7 @@ window.BANCO_ESCALAS['MMPI2'] = {
         return { g: "Perfil MMPI-2 Analizado", notaClinica: obs };
     }
 };
-// 🧪 PHQ-9 (Depresión)
+
 window.BANCO_ESCALAS['PHQ9'] = {
     nombre: "Escala de Depresión del Paciente (PHQ-9)",
     rama: "psicologia",
@@ -137,7 +122,6 @@ window.BANCO_ESCALAS['PHQ9'] = {
     }
 };
 
-// 🧪 GAD-7 (Ansiedad Generada)
 window.BANCO_ESCALAS['GAD7'] = {
     nombre: "Escala de Ansiedad Generalizada (GAD-7)",
     rama: "psicologia",
@@ -159,7 +143,6 @@ window.BANCO_ESCALAS['GAD7'] = {
     }
 };
 
-// 📋 INVENTARIO BECK (BDI-II)
 window.BANCO_ESCALAS['BECK'] = {
     nombre: "Inventario de Depresión de Beck (BDI-II)",
     rama: "psicologia",
@@ -178,7 +161,6 @@ window.BANCO_ESCALAS['BECK'] = {
     }
 };
 
-// 📈 SCL-90-R (Cuestionario de 90 Síntomas)
 window.BANCO_ESCALAS['SCL90'] = {
     nombre: "Cuestionario de 90 Síntomas (SCL-90-R)",
     rama: "psicologia",
@@ -194,11 +176,6 @@ window.BANCO_ESCALAS['SCL90'] = {
     }
 };
 
-// ----------------------------------------------------------------------------
-// 🎨 2. PRUEBAS PROYECTIVAS (CUALITATIVAS)
-// ----------------------------------------------------------------------------
-
-// 🏡 HTP (Casa-Árbol-Persona)
 window.BANCO_ESCALAS['HTP'] = {
     nombre: "Test Proyectivo HTP (Casa - Árbol - Persona)",
     rama: "psicologia",
@@ -213,7 +190,6 @@ window.BANCO_ESCALAS['HTP'] = {
     }
 };
 
-// 👤 Figura Humana (Machover)
 window.BANCO_ESCALAS['MACHOVER'] = {
     nombre: "Test de la Figura Humana (Karen Machover)",
     rama: "psicologia",
@@ -227,11 +203,6 @@ window.BANCO_ESCALAS['MACHOVER'] = {
     }
 };
 
-// ----------------------------------------------------------------------------
-// 👶 3. EVALUACIÓN INFANTO-JUVENIL
-// ----------------------------------------------------------------------------
-
-// 📝 Conners (TDAH)
 window.BANCO_ESCALAS['CONNERS'] = {
     nombre: "Escala Conners Simplificada (Indicadores TDAH)",
     rama: "psicologia",
@@ -247,11 +218,6 @@ window.BANCO_ESCALAS['CONNERS'] = {
     }
 };
 
-// ----------------------------------------------------------------------------
-// 👥 4. PAREJA Y DINÁMICA FAMILIAR (SISTÉMICA)
-// ----------------------------------------------------------------------------
-
-// 🏡 APGAR Familiar
 window.BANCO_ESCALAS['APGAR'] = {
     nombre: "Evaluación de Funcionalidad Familiar (APGAR)",
     rama: "psicologia",
@@ -271,7 +237,6 @@ window.BANCO_ESCALAS['APGAR'] = {
     }
 };
 
-// 🌳 Genograma 3 Generaciones
 window.BANCO_ESCALAS['GENOGRAMA'] = {
     nombre: "Genograma y Dinámica Multigeneracional",
     rama: "psicologia",
@@ -285,3 +250,230 @@ window.BANCO_ESCALAS['GENOGRAMA'] = {
         return { g: "Genograma Registrado", notaClinica: obs };
     }
 };
+
+
+// 2. MÓDULOS DE FISIOTERAPIA (Alojados en su propia propiedad para no sobrescribir nada)
+window.BANCO_ESCALAS.FISIOTERAPEUTA = [
+    {
+        titulo: "Abordaje Integral de Columna Lumbar y Pelvis",
+        id: "LUMBAR_RAD_001",
+        triggers: ["lumbar", "espalda baja", "pelvis", "cadera", "ciatica", "nalga", "pompa", "lumbago", "hernia", "disco", "estenosis"],
+        fuentes: { clinica: "Klaus Buckup / Díaz Mancha", anatomia: "Netter / Moore (Niveles L1-S2)" },
+        gabinete_sugerido: {
+            RMN: ["Deshidratación L4-L5", "Extrusión L5-S1", "Estenosis Canal", "Modic II", "Abombamiento L3-L4"],
+            USG: ["Engrosamiento Nervio Ciático", "Inflamación Facetaria", "Edema de Partes Blandas"],
+            RX: ["Disminución de Espacio", "Osteofitos Marginales", "Escoliosis Antálgica"]
+        },
+        anamnesis: {
+            sistemas: [
+                "Dolor central (Lumbago mecánico)", "Dolor irradiado (Ciatalgia)", "Parestesias / Hormigueo", 
+                "Aumento de dolor al sentarse / flexión", "Alivio en bipedestación / extensión", "Dolor al toser o estornudar (Valsalva)",
+                "Debilidad muscular distal", "Claudicación (Dolor al caminar)", "Rigidez matutina importante", "Dolor glúteo profundo (punzante)", "Intolerancia a estar sentado > 20 min"
+            ],
+            redFlags: [
+                "🚩 Anestesia en silla de montar (S3-S5)", "🚩 Pérdida de control de esfínteres", "🚩 Déficit motor súbito", 
+                "🚩 Pérdida de peso inexplorada", "🚩 Antecedente de cáncer", "🚩 Dolor nocturno que NO desaparece con el reposo"
+            ]
+        },
+        exploracion: {
+            neurologia: {
+                sensibilidad: [
+                    { nivel: "L1", zona: "Inguinal/Trocánter" }, { nivel: "L2", zona: "Cara ant. Muslo (medio)" },
+                    { nivel: "L3", zona: "Cóndilo femoral medial" }, { nivel: "L4", zona: "Maléolo medial" },
+                    { nivel: "L5", zona: "Dorso del pie (3er espacio)" }, { nivel: "S1", zona: "Borde lateral pie (5to dedo)" }
+                ],
+                fuerza: [
+                    { miotoma: "L1-L2", accion: "Flexión cadera (Psoas)" }, { miotoma: "L3", accion: "Extensión rodilla (Cuádriceps)" },
+                    { miotoma: "L4", accion: "Dorsiflexión pie (Tibial Ant.)" }, { miotoma: "L5", accion: "Extensión 1er dedo (EHL)" },
+                    { miotoma: "S1", accion: "Flexión plantar (Gastroc)" }
+                ],
+                reflejos: [
+                    { rot: "L4", nombre: "Rotuliano (Cuádriceps)", nivel: "L2-L4" },
+                    { rot: "S1", nombre: "Aquíleo (Gastronemios)", nivel: "L5-S2" }
+                ]
+            },
+            pruebasOrtopedicas: [
+                {
+                    categoria: "Neurodinamia y Radiculares (Buckup)",
+                    items: [
+                        { nombre: "Lasègue (SLR)", tecnica: "Elevación pierna recta. Positivo si hay dolor radicular 30°-70°." },
+                        { nombre: "Slump Test", tecnica: "Flexión tronco/cuello + ext. rodilla + dorsiflexión. Máxima tensión dural." },
+                        { nombre: "Bragard", tecnica: "Dorsiflexión súbita tras Lasègue (+). Confirma origen neural." },
+                        { nombre: "Wasserman", tecnica: "Extensión cadera en prono. Raíces altas (L2-L4)." },
+                        { nombre: "Prueba de Kemp", tecnica: "Extensión lumbar máxima, rotación y flexión lateral." }
+                    ]
+                },
+                {
+                    categoria: "Atrapamientos Extracanaliculares y Pelvis",
+                    items: [
+                        { nombre: "Prueba de FAIR", tecnica: "Flexión, Aducción y Rotación Interna. (+) si reproduce dolor glúteo o ciático." },
+                        { nombre: "Beatty Test", tecnica: "Paciente de lado, eleva rodilla против resistencia. (+) dolor en glúteo." },
+                        { nombre: "Signo de Fortin", tecnica: "El paciente indica con un dedo el dolor exacto sobre la articulación SI." }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        titulo: "Abordaje de Columna Cervical y Miembro Superior",
+        id: "CERVICAL_RAD_002",
+        triggers: ["cuello", "nuca", "trapecio", "hombro", "brazo", "mano", "hormigueo", "cervical", "torticolis"],
+        fuentes: { clinica: "Netter / Wainner", anatomia: "Rouviere (C5-T1)" },
+        gabinete_sugerido: {
+            RMN: ["Hernia C5-C6", "Uncoartrosis", "Rectificación Cervical"],
+            RX: ["Signo de la Plomada", "Osteofitos anteriores", "Forámenes estrechos"]
+        },
+        anamnesis: {
+            sistemas: [
+                "Dolor referido a escápula", "Parestesias en dedos", "Debilidad al cargar objetos",
+                "Dolor que aumenta con la lectura/celular", "Cefalea tensional (nuca)", "Mareo cervicogénico"
+            ],
+            redFlags: ["🚩 Disfagia (dificultad al tragar)", "🚩 Marcha atáxica", "🚩 Signo de Lhermitte", "🚩 Diplopía"]
+        },
+        exploracion: {
+            neurologia: {
+                sensibilidad: [
+                    { nivel: "C5", zona: "Cara lateral del deltoides" }, { nivel: "C6", zona: "Dorso del pulgar" },
+                    { nivel: "C7", zona: "Dedo medio" }, { nivel: "C8", zona: "Borde cubital mano (meñique)" }
+                ],
+                fuerza: [
+                    { miotoma: "C5", accion: "Abducción hombro (Deltoides)" }, { miotoma: "C6", accion: "Extensión muñeca / Flexión codo" },
+                    { miotoma: "C7", accion: "Extensión codo (Tríceps)" }, { miotoma: "C8", accion: "Flexión de dedos" }
+                ],
+                reflejos: [
+                    { rot: "C5", nombre: "Bicipital", nivel: "C5-C6" }, { rot: "C6", nombre: "Estilorradial", nivel: "C5-C6" },
+                    { rot: "C7", nombre: "Tricipital", nivel: "C7-C8" }
+                ]
+            },
+            pruebasOrtopedicas: [
+                {
+                    categoria: "Pruebas Radiculares y Hombro (Wainner / Magee)",
+                    items: [
+                        { nombre: "Prueba de Spurling", tecnica: "Inclinación + compresión axial. (+) dolor irradiado al brazo." },
+                        { nombre: "Distracción Cervical", tecnica: "Tracción manual hacia cefálico. (+) si disminuyen síntomas." },
+                        { nombre: "Prueba de Neer / Hawkins", tecnica: "Evaluación de pinzamiento subacromial." },
+                        { nombre: "Prueba de Jobe (Empty Can)", tecnica: "Evaluación de tendón supraespinoso." }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        titulo: "Codo, Muñeca y Mano",
+        id: "CODO_MANO_003",
+        gabinete_sugerido: { USG: ["Tenosinovitis de Quervain", "Epicondilitis Lateral", "Síndrome Túnel Carpiano"], RX: ["Fractura de Escafoides", "Artrosis radiocarpiana"] },
+        anamnesis: {
+            sistemas: ["Dolor en cara lateral de codo al agarrar", "Parestesias en primeros 3 dedos (noches)", "Dolor en tabaquera anatómica", "Pérdida de fuerza de prensión", "Chasquido en flexión de dedos"],
+            redFlags: ["🚩 Atrofia severa de eminencia tenar", "🚩 Pérdida total de sensibilidad autónoma radial/mediana"]
+        },
+        exploracion: {
+            pruebasOrtopedicas: [
+                {
+                    categoria: "Pruebas de Codo y Muñeca",
+                    items: [
+                        { nombre: "Cozen / Mill", tecnica: "Resistencia a extensión de muñeca. (+) Codo de tenista." },
+                        { nombre: "Phalen / Tinel", tecnica: "Flexión mantenida de muñecas / Percusión. (+) Túnel carpiano." },
+                        { nombre: "Finkelstein", tecnica: "Desviación cubital con pulgar dentro. (+) Quervain." },
+                        { nombre: "Valgo/Varo de Codo", tecnica: "Evaluación de ligamentos colaterales de codo." }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        titulo: "Cadera y Articulación Sacroilíaca",
+        id: "CADERA_004",
+        gabinete_sugerido: { RMN: ["Pinzamiento Femoroacetabular", "Necrosis Avascular"], RX: ["Coxartrosis", "Disminución espacio articular"] },
+        anamnesis: {
+            sistemas: ["Dolor inguinal profundo al flexionar", "Imposibilidad para cruzar la pierna", "Dolor trocantéreo lateral al dormir de lado", "Chasquido coxal interno/externo"],
+            redFlags: ["🚩 Incapacidad absoluta de carga tras caída", "🚩 Acortamiento y rotación externa evidente de extremidad"]
+        },
+        exploracion: {
+            pruebasOrtopedicas: [
+                {
+                    categoria: "Pruebas de Cadera y Pelvis",
+                    items: [
+                        { nombre: "FABER (Patrick)", tecnica: "Flexión, Abducción y Rotación Externa. (+) Cadera/Sacroilíaca." },
+                        { nombre: "FADIR", tecnica: "Flexión, Aducción y Rotación Interna. (+) Pinzamiento femoroacetabular." },
+                        { nombre: "Gaenslen", tecnica: "Extensión hiperextensión de cadera en camilla. (+) Art. Sacroilíaca." },
+                        { nombre: "Trendelenburg", tecnica: "Bipedestación unipodal. (+) Debilidad de glúteo medio." }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        titulo: "Evaluación Completa de Rodilla",
+        id: "RODILLA_005",
+        triggers: ["rodilla", "menisco", "ligamento", "cruzado", "pata de ganso", "estrepito", "bloqueo", "falle", "inflamacion rodilla"],
+        fuentes: { clinica: "Magee / Torg", anatomia: "Kapandji" },
+        gabinete_sugerido: {
+            USG: ["Bursitis", "Tendinosis Rotuliana", "Quiste de Baker"],
+            RMN: ["Ruptura Meniscal", "Edema Óseo", "Lesión Grado II/III Ligamentaria"]
+        },
+        anamnesis: {
+            sistemas: [
+                "Sensación de inestabilidad ('se me va la rodilla')", "Bloqueo articular", "Chasquido audible",
+                "Dolor al bajar escaleras", "Dificultad para la extensión completa", "Inflamación inmediata (<2h)"
+            ],
+            redFlags: ["🚩 Incapacidad total de carga", "🚩 Deformidad articular evidente", "🚩 Derrame articular masivo"]
+        },
+        exploracion: {
+            neurologia: { sensibilidad: [], fuerza: [], reflejos: [] },
+            pruebasOrtopedicas: [
+                {
+                    categoria: "Estabilidad Ligamentaria y Meniscal",
+                    items: [
+                        { nombre: "Lachman", tecnica: "Flexión 20-30°. Traslación anterior de tibia. (+) Lesión LCA." },
+                        { nombre: "Cajón Anterior / Posterior", tecnica: "Flexión 90°. Tracción anteroposterior." },
+                        { nombre: "Bostezo (Valgo/Varo)", tecnica: "Estrés medial/lateral para ligamentos colaterales." },
+                        { nombre: "McMurray", tecnica: "Flexión + Rotación + Extensión. (+) Chasquido o dolor meniscal." }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        titulo: "Evaluación Completa de Tobillo y Pie",
+        id: "TOBILLO_006",
+        triggers: ["tobillo", "pie", "talon", "esguince", "torcedura", "fascia plantar", "aquiles", "maleolo", "inversion"],
+        fuentes: { clinica: "Reglas de Ottawa / Magee", anatomia: "Netter" },
+        gabinete_sugerido: {
+            RX: ["Reglas de Ottawa (+)", "Fractura de Maleolo", "Espolón Calcáneo"],
+            USG: ["Ruptura de Tendón de Aquiles", "Neuroma de Morton", "Fascitis Plantar"]
+        },
+        anamnesis: {
+            sistemas: [
+                "Dolor al dar el primer paso en la mañana", "Inestabilidad en terrenos irregulares",
+                "Sensación de chasquido lateral", "Edema localizado", "Dolor punzante en el talón"
+            ],
+            redFlags: ["🚩 Incapacidad de dar 4 pasos seguidos", "🚩 Dolor óseo exquisito en zona maleolar (Ottawa)", "🚩 Ausencia de pulso pedio"]
+        },
+        exploracion: {
+            neurologia: {
+                sensibilidad: [
+                    { nivel: "L4", zona: "Cara medial del pie" }, { nivel: "L5", zona: "Dorso del pie / 1er espacio" },
+                    { nivel: "S1", zona: "Borde lateral del pie" }
+                ],
+                fuerza: [
+                    { miotoma: "L4", accion: "Dorsiflexión (Tibial Anterior)" }, { miotoma: "L5", accion: "Extensión del 1er dedo" },
+                    { miotoma: "S1", accion: "Plantiflexión (Gastronemios)" }
+                ],
+                reflejos: [
+                    { rot: "S1", nombre: "Aquileo", nivel: "L5-S1-S2" }
+                ]
+            },
+            pruebasOrtopedicas: [
+                {
+                    categoria: "Estabilidad y Test Funcionales de Tobillo/Pie",
+                    items: [
+                        { nombre: "Cajón Anterior de Tobillo", tecnica: "Fijar tibia, traccionar calcáneo. (+) Lesión LPAI." },
+                        { nombre: "Prueba de Thompson", tecnica: "Compresión de pantorrilla. (+) Ausencia de plantiflexión = Ruptura Aquiles." },
+                        { nombre: "Prueba de Windlass", tecnica: "Extensión pasiva del 1er dedo. (+) Dolor en fascia plantar." },
+                        { nombre: "Prueba de Mulder", tecnica: "Compresión metatarsal transversal. (+) Clic y dolor en Neuroma de Morton." }
+                    ]
+                }
+            ]
+        }
+    }
+];

@@ -89,8 +89,13 @@ const FisioCidEngine = {
         }
     },
 
-    // 🎯 LANZADOR UNIVERSAL DE CUESTIONARIOS Y MODALES
+   
+ // 🎯 LANZADOR UNIVERSAL DE CUESTIONARIOS Y MODALES
     lanzarCuestionario: function(id, dienteId = null) {
+     //   console.log("🔍 [DEBUG LANZAR] ID recibido:", id);
+       
+     //console.log("📦 [DEBUG BANCO] window.BANCO_ESCALAS actual:", window.BANCO_ESCALAS);
+
         if (id === 'PERIODONTOGRAMA' || id === 'ODONTOGRAMA') {
             if (window.PeriodontoFisioCid && typeof window.PeriodontoFisioCid.iniciarArcadas === 'function') {
                 window.PeriodontoFisioCid.iniciarArcadas();
@@ -101,12 +106,23 @@ const FisioCidEngine = {
         }
 
         const banco = window.BANCO_ESCALAS;
-        if (!banco || !banco[id]) {
+        
+        // 🔍 Búsqueda flexible y segura de la escala en el banco global
+        let escala = null;
+        if (banco) {
+            escala = banco[id] || 
+                     (banco.psicologia && banco.psicologia[id]) || 
+                     (Array.isArray(banco.FISIOTERAPEUTA) && banco.FISIOTERAPEUTA.find(item => item.id === id));
+        }
+
+        ////console.log("🎯 [DEBUG ESCALA ENCONTRADA]:", escala);
+
+        if (!escala) {
             console.warn(`⚠️ [FisioCidEngine]: No existe la escala "${id}" en BANCO_ESCALAS.`);
+            alert(`La escala o cuestionario "${id}" no se encuentra disponible.`);
             return;
         }
 
-        const escala = banco[id];
         this.escalaActiva = id; 
         this.dienteActivoEnEscala = dienteId;
 
@@ -114,40 +130,61 @@ const FisioCidEngine = {
         const contenedor = document.getElementById('cuerpoEscala');
         const modalEl = document.getElementById('modalEscalaDinamica');
 
+        ////console.log("🪟 [DEBUG DOM MODAL]:", { titulo, contenedor, modalEl });
+
         if (!titulo || !contenedor || !modalEl) {
-            console.error("❌ [FisioCidEngine]: Faltan elementos DOM del modal de escala dinámica.");
+            console.error("❌ [FisioCidEngine]: Faltan elementos DOM del modal de escala dinámica (revisa si existe #modalEscalaDinamica en tu HTML).");
+            alert("Error crítico: Falta el contenedor HTML del modal flotante de escalas.");
             return;
         }
 
-        titulo.innerText = escala.nombre.toUpperCase();
+        titulo.innerText = (escala.nombre || escala.titulo || id).toUpperCase();
 
         let html = "";
+        // Verificamos si la escala tiene preguntas estructuradas
         if (escala.preguntas && Array.isArray(escala.preguntas)) {
             escala.preguntas.forEach((p, i) => {
                 html += `
-                    <div class="mb-4 p-3 border rounded bg-white shadow-sm">
-                        <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
-                            ${i + 1}. ${p.t.toUpperCase()}
-                        </label>
-              <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.soloCalcularEscala()">
-                    <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
-                            ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
-                        </select>
-                    </div>`;
+                <div class="mb-4 p-3 border rounded bg-white shadow-sm">
+                    <label class="d-block fw-bold text-dark mb-2" style="font-size: 0.85rem;">
+                        ${i + 1}. ${p.t.toUpperCase()}
+                    </label>
+                    <select class="form-select form-select-sm escala-input" onchange="window.FisioCidEngine.soloCalcularEscala()">
+                        <option value="none" selected disabled>SELECCIONE UNA OPCIÓN...</option>
+                        ${p.o.map((op, v) => `<option value="${v}">${op.toUpperCase()}</option>`).join('')}
+                    </select>
+                </div>`;
             });
+        } else {
+            html = `<div class="p-3 text-muted">Este elemento clínico no requiere cuestionario de selección múltiple.</div>`;
         }
-        contenedor.innerHTML = html;
 
+       contenedor.innerHTML = html;
+
+        // 🛡️ ASEGURAR CAPAS Y VISIBILIDAD FORZADA
+        modalEl.style.display = 'block';
+        modalEl.style.zIndex = "10060"; // Un nivel arriba del modal principal (10050)
         modalEl.removeAttribute('aria-hidden');
-        modalEl.style.zIndex = "10050";
+        modalEl.setAttribute('aria-modal', 'true');
+        modalEl.classList.add('show');
 
+        // Crear o reutilizar la instancia de Bootstrap
         let instanciaModal = bootstrap.Modal.getInstance(modalEl);
         if (!instanciaModal) {
-            instanciaModal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: true });
+            instanciaModal = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
         }
         
         instanciaModal.show();
+        
+        // Forzar capa de fondo (backdrop) específica para el sub-modal si fuera necesario
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 0) {
+                backdrops[backdrops.length - 1].style.zIndex = "10055";
+            }
+        }, 100);
     },
+
 
     // 📊 SOLO RECALCULA EN VIVO (CUANDO SELECCIONAS UNA OPCIÓN DEL SELECT)
     soloCalcularEscala: function() {
@@ -290,21 +327,22 @@ const FisioCidEngine = {
         };
     },
 
-  // 🏁 FINALIZAR E INYECTAR REPORTE (PSICOLOGÍA O ODONTOLOGÍA SEGÚN EL MODAL ACTIVO)
-    finalizarEscala: async function() {
-        console.log("🚀 Sincronizando hallazgos clínicos hacia el expediente...");
+finalizarEscala: async function() {
+        //console.log("🚀 Sincronizando hallazgos clínicos hacia el expediente...");
 
         // 🧠 CASO 1: SI EL MODAL ACTIVO ES EL DE PSICOLOGÍA (GRANDE)
         const modalPsico = document.getElementById('modalPsicoFullscreen');
         const esPsicoActivo = modalPsico && (modalPsico.classList.contains('show') || window.getComputedStyle(modalPsico).display === 'block');
 
-        // Verificamos si realmente se dio clic en el botón principal del modal de psicología
-        // y NO en una escala flotante secundaria.
+        // 🛠️ CASO 2: SI EL MODAL ACTIVO ES EL DE FISIOTERAPIA (GRANDE)
+        const modalFisio = document.getElementById('modalFisioFullscreen');
+        const esFisioActivo = modalFisio && (modalFisio.classList.contains('show') || window.getComputedStyle(modalFisio).display === 'block');
+
+        // Verificamos si realmente se dio clic en una escala flotante secundaria
         const modalEscalaActivaEl = document.getElementById('modalEscalaDinamica');
         const esEscalaFlotanteActiva = modalEscalaActivaEl && (modalEscalaActivaEl.classList.contains('show') || window.getComputedStyle(modalEscalaActivaEl).display === 'block');
 
-        if (esPsicoActivo && !esEscalaFlotanteActiva && window.PsicoFisioCid) {
-            console.log("🧠 [FisioCidEngine]: Procesando cierre y distribución de Evaluación Psicológica...");
+        if (esPsicoActivo && !esEscalaFlotanteActiva && window.PsicoFisioCid) {    //  console.log("🧠 [FisioCidEngine]: Procesando cierre y distribución de Evaluación Psicológica...");
 
             const campoObjetivos = document.getElementById('psico_objetivos');
             const campoTareas = document.getElementById('psico_tareas_casa');
@@ -336,6 +374,52 @@ const FisioCidEngine = {
             modalPsico.style.display = 'none';
             modalPsico.classList.remove('show');
         } 
+
+        else if (esFisioActivo && !esEscalaFlotanteActiva) {
+            // 🛠️ INTEGRACIÓN DEL ASISTENTE DE FISIOTERAPIA
+            const textareaHallazgosEnVivo = document.getElementById('textarea-hallazgos-en-vivo');
+            const textareaTratEnVivo = document.getElementById('textarea-tratamiento-en-vivo');
+
+            let contenidoExp = '';
+            let contenidoTrat = '';
+
+            if (textareaHallazgosEnVivo && textareaHallazgosEnVivo.value.trim()) {
+                contenidoExp += textareaHallazgosEnVivo.value.trim();
+            }
+            
+            // Adjuntar puntaje de severidad acumulado si está disponible
+            if (typeof estadoFisio !== 'undefined' && estadoFisio.puntajeAcumulado > 0) {
+                contenidoExp += `\n• [Puntaje de Severidad Clínica]: ${estadoFisio.puntajeAcumulado} Puntos`;
+            }
+
+            const cajaHipotesis = document.getElementById('caja-hipotesis-sugerida');
+            if (cajaHipotesis && !cajaHipotesis.innerHTML.includes('Acumula al menos')) {
+                contenidoExp += `\n• [Hipótesis Funcional Sugerida]: ${cajaHipotesis.innerText.replace(/Nivel \(\d+ Pts\):/g, '').trim()}`;
+            }
+
+            const textareaExploracion = document.getElementById('exploracion');
+            if (textareaExploracion && contenidoExp) {
+                const previoExp = textareaExploracion.value.trim();
+                textareaExploracion.value = previoExp ? `${previoExp}\n\n=== 🛠️ VALORACIÓN FISIOTERAPÉUTICA ===\n${contenidoExp}` : `=== 🛠️ VALORACIÓN FISIOTERAPÉUTICA ===\n${contenidoExp}`;
+                textareaExploracion.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            if (textareaTratEnVivo && textareaTratEnVivo.value.trim()) {
+                contenidoTrat = textareaTratEnVivo.value.trim();
+                const textareaPlan = document.getElementById('plan_tratamiento');
+                if (textareaPlan) {
+                    const previoPlan = textareaPlan.value.trim();
+                    textareaPlan.value = previoPlan ? `${previoPlan}\n\n=== 📋 PROPUESTA DE TRATAMIENTO FISIOTERAPÉUTICO ===\n${contenidoTrat}` : `=== 📋 PROPUESTA DE TRATAMIENTO FISIOTERAPÉUTICO ===\n${contenidoTrat}`;
+                    textareaPlan.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+
+            // Ocultar modal de fisioterapia limpiamente
+            const instFisio = bootstrap.Modal.getInstance(modalFisio) || new bootstrap.Modal(modalFisio);
+            instFisio.hide();
+            modalFisio.style.display = 'none';
+            modalFisio.classList.remove('show');
+        }
         else if (window.PeriodontoFisioCid && !esEscalaFlotanteActiva) {
             // 🦷 CASO 2: SI ES ODONTOLOGÍA
             window.PeriodontoFisioCid.actualizarResumenVisual();
