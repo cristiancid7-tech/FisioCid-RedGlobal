@@ -44,15 +44,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         campoFecha.setAttribute('min', hace110Anios);
     }
 
-    // 🔥 1. MAYÚSCULAS AUTOMÁTICAS (Menos en correo y contraseña)
-    document.addEventListener('input', (e) => {
-        const el = e.target;
-        if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && 
-             el.type !== 'email' && el.type !== 'password' && el.id !== 'valemail') {
-            el.value = el.value.toUpperCase();
-        }
-    });
-
+// 🔥 1. MAYÚSCULAS AUTOMÁTICAS (Menos en correo, contraseña y campos de contacto dinámicos)
+document.addEventListener('input', (e) => {
+    const el = e.target;
+    if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') &&  
+         el.type !== 'email' && 
+         el.type !== 'password' && 
+         el.id !== 'valemail' && 
+         el.id !== 'inputContactoDinamico' && 
+         el.id !== 'tutExpEmail' && 
+         el.id !== 'correo-tutor') {
+        el.value = el.value.toUpperCase();
+    }
+});
     // Escuchadores dinámicos para campos maestros
     const camposMaestros = ['valNombre', 'valPaterno', 'valMaterno', 'valFecha', 'valGenero', 'valEstado'];
     camposMaestros.forEach(id => {
