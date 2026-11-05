@@ -1270,13 +1270,13 @@ document.getElementById('formConfigInicial')?.addEventListener('submit', async (
         return;
     }
 
-    // 🕒 Función auxiliar que convierte el formato de 12 horas (ej. 09:00 p. m.) a 24 horas (21:00)
+   // 🕒 Función auxiliar blindada para procesar las horas del select
     function convertirA24Horas(horaStr) {
         if (!horaStr) return "00:00";
-        let limpio = horaStr.trim().toLowerCase();
+        let limpio = String(horaStr).trim().toLowerCase();
         
-        // Si ya viene en formato de 24 horas limpio
-        if (!limpo.includes('p') && !limpo.includes('a')) {
+        // Si ya viene en formato de 24 horas (ej. "21:00" o "14:00")
+        if (!limpio.includes('p') && !limpio.includes('a')) {
             const partes = limpio.split(':');
             let h = parseInt(partes[0]) || 0;
             let m = partes[1] || '00';
