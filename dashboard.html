@@ -908,10 +908,32 @@
                         <option value="0">Domingo</option>
                     </select>
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <input type="time" class="h-ini" value="09:00" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                        <span style="color: #94a3b8; font-size: 0.8rem;">a</span>
-                        <input type="time" class="h-fin" value="18:00" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                    </div>
+    <!-- Hora de Inicio -->
+    <select class="h-ini" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: white;">
+        <option value="07:00">07:00 a. m.</option>
+        <option value="08:00">08:00 a. m.</option>
+        <option value="09:00" selected>09:00 a. m.</option>
+        <option value="10:00">10:00 a. m.</option>
+        <option value="11:00">11:00 a. m.</option>
+        <option value="12:00">12:00 p. m.</option>
+        <option value="13:00">01:00 p. m.</option>
+        <option value="16:00">04:00 p. m.</option>
+    </select>
+
+    <span style="color: #94a3b8; font-size: 0.8rem;">a</span>
+
+    <!-- Hora de Fin (¡Aquí está el poder total hasta las 21:00 / 9 PM!) -->
+    <select class="h-fin" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: white;">
+        <option value="14:00">02:00 p. m.</option>
+        <option value="15:00">03:00 p. m.</option>
+        <option value="16:00">04:00 p. m.</option>
+        <option value="17:00">05:00 p. m.</option>
+        <option value="18:00">06:00 p. m.</option>
+        <option value="19:00">07:00 p. m.</option>
+        <option value="20:00">08:00 p. m.</option>
+        <option value="21:00" selected>09:00 p. m.</option>
+    </select>
+</div>
                 </div>
             </div>
 

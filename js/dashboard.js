@@ -1259,6 +1259,7 @@ async function guardarCambiosAlianza() {
         alert("❌ Error al guardar convenio: " + error.message);
     }
 }
+
 document.getElementById('formConfigInicial')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const { data: { user } } = await fisioNet.auth.getUser();
@@ -1269,12 +1270,43 @@ document.getElementById('formConfigInicial')?.addEventListener('submit', async (
         return;
     }
 
+    // 🕒 Función auxiliar que convierte el formato de 12 horas (ej. 09:00 p. m.) a 24 horas (21:00)
+    function convertirA24Horas(horaStr) {
+        if (!horaStr) return "00:00";
+        let limpio = horaStr.trim().toLowerCase();
+        
+        // Si ya viene en formato de 24 horas limpio
+        if (!limpo.includes('p') && !limpo.includes('a')) {
+            const partes = limpio.split(':');
+            let h = parseInt(partes[0]) || 0;
+            let m = partes[1] || '00';
+            return `${String(h).padStart(2, '0')}:${m}`;
+        }
+
+        const esPM = limpio.includes('p');
+        const soloNumeros = limpio.replace(/[^0-9:]/g, '');
+        const partes = soloNumeros.split(':');
+        let h = parseInt(partes[0]) || 0;
+        let m = partes[1] || '00';
+
+        if (esPM && h < 12) h += 12;
+        if (!esPM && h === 12) h = 0;
+
+        return `${String(h).padStart(2, '0')}:${m}`;
+    }
+
     // 1. Recolectar bloques de horario
     let horariosArray = [];
-    document.querySelectorAll('.bloque-horario').forEach(bloque => {
+   document.querySelectorAll('.bloque-horario').forEach(bloque => {
         const seleccion = bloque.querySelector('.dia-semana')?.value?.trim();
-        const inicio = bloque.querySelector('.h-ini')?.value;
-        const fin = bloque.querySelector('.h-fin')?.value;
+        const horaIniRaw = bloque.querySelector('.h-ini')?.value;
+        const horaFinRaw = bloque.querySelector('.h-fin')?.value;
+
+        // 👀 ¡MIRA ESTO! Vamos a ver qué trae exactamente el input de la hora de fin
+        console.log("🕵️‍♂️ [VALOR CRUDO H-FIN DEL HTML]:", horaFinRaw);
+
+        let inicio = convertirA24Horas(horaIniRaw);
+        let fin = convertirA24Horas(horaFinRaw);
 
         if (seleccion && inicio && fin) {
             if (seleccion.includes("Lunes a Viernes") || seleccion === "LV") {
@@ -1315,6 +1347,7 @@ document.getElementById('formConfigInicial')?.addEventListener('submit', async (
         if (error) throw error;
 
         alert("¡CONFIGURACIÓN DE ESTA SEDE GUARDADA CON ÉXITO! 🩺🚀");
+
         document.getElementById('modalConfigInicial').style.display = 'none';
         location.reload();
 
