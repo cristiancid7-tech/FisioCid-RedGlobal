@@ -811,12 +811,12 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                 if (typeof cancelarCitaEnGoogle === 'function') {
                     try {
                         await cancelarCitaEnGoogle(idCita);
-                        console.log("✅ Evento cancelado/eliminado de Google Calendar");
+                      //  console.log("✅ Evento cancelado/eliminado de Google Calendar");
                     } catch (errGoogle) {
                         console.warn("⚠️ No se pudo eliminar de Google Calendar:", errGoogle);
                     }
                 } else {
-                    console.error("❌ La función cancelarCitaEnGoogle no está disponible.");
+ //                   console.error("❌ La función cancelarCitaEnGoogle no está disponible.");
                 }
             }
 
@@ -1303,7 +1303,7 @@ document.getElementById('formConfigInicial')?.addEventListener('submit', async (
         const horaFinRaw = bloque.querySelector('.h-fin')?.value;
 
         // 👀 ¡MIRA ESTO! Vamos a ver qué trae exactamente el input de la hora de fin
-        console.log("🕵️‍♂️ [VALOR CRUDO H-FIN DEL HTML]:", horaFinRaw);
+       // console.log("🕵️‍♂️ [VALOR CRUDO H-FIN DEL HTML]:", horaFinRaw);
 
         let inicio = convertirA24Horas(horaIniRaw);
         let fin = convertirA24Horas(horaFinRaw);
