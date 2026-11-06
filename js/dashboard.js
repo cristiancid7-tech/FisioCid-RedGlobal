@@ -2075,6 +2075,26 @@ const cargarEstadisticas = async () => {
     }
 };
 
+
+// 🕒 Función auxiliar global para transformar "06:00 PM" a "18:00:00" de forma segura
+const convertirA24Hrs = (str12) => {
+    if (!str12) return "09:00:00";
+    // Si ya viene en formato de 24 horas (ej. "18:00" o "18:00:00"), lo devolvemos limpio
+    if (!str12.toUpperCase().includes('AM') && !str12.toUpperCase().includes('PM')) {
+        return str12.length === 5 ? `${str12}:00` : str12;
+    }
+
+    const [time, modifier] = str12.trim().toUpperCase().split(/\s+/);
+    let [hours, minutes] = time.split(':');
+    let h = parseInt(hours, 10);
+    let m = minutes || '00';
+
+    if (modifier === 'PM' && h < 12) h += 12;
+    if (modifier === 'AM' && h === 12) h = 0;
+
+    return `${String(h).padStart(2, '0')}:${m}:00`;
+};
+
 // 🛠️ Función auxiliar segura para sincronizar con Google Calendar
 const ejecutarSyncCalendar = async (citaObj, nombrePaciente, esExpress = false) => {
     const funcionSync = typeof sincronizarConGoogleCalendar === 'function' 
@@ -2213,12 +2233,15 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             idPacienteFinal = nPac.id;
         }
 
+        // 🕒 Convertimos la hora a formato 24 horas antes de insertar
+        const horaFormateada24 = convertirA24Hrs(sol.hora_cita);
+
         const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
             id_paciente: idPacienteFinal,
             id_profesional: user.id,
             id_clinica: clinicaId,
             fecha: sol.fecha_cita,
-            hora_inicio_cita: sol.hora_cita,
+            hora_inicio_cita: horaFormateada24, // 👈 Hora corregida (ej. 18:00:00)
             modalidad: 'CONSULTORIO',
             estatus: 'PENDIENTE',
             estado: 'ACTIVO'
@@ -2250,7 +2273,7 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         }).eq('telefono_paciente', sol.telefono);
     } catch (botErr) {}
 
-    // 📱 DISPARO DEL WHATSAPP DE ACEPTACIÓN (Con formato limpio y palomita verde)
+    // 📱 DISPARO DEL WHATSAPP DE ACEPTACIÓN
     try {
         if (sol.telefono) {
             const nombrePacienteMsg = sol.nombre || 'Paciente';
