@@ -2109,18 +2109,12 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. Por favor intenta eligiendo otra opción o fecha.`;
 
-                const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                await fisioNet.functions.invoke('send-whatsapp', {
                     body: { to: sol.telefono, message: mensajeRechazo }
                 });
-
-                if (fnError) {
-                    console.error("❌ Error en invoke send-whatsapp (Rechazo):", fnError);
-                    alert("⚠️ La cita se rechazó, pero falló el WhatsApp: " + (fnError.message || JSON.stringify(fnError)));
-                }
             }
         } catch (whatsappErr) {
-            console.error("⚠️ Excepción al enviar el WhatsApp de rechazo:", whatsappErr);
-            alert("⚠️ Excepción al enviar WhatsApp: " + whatsappErr.message);
+            console.warn("⚠️ Error al enviar WhatsApp de rechazo:", whatsappErr);
         }
 
         cargarSalaEspera();
@@ -2218,7 +2212,7 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         // 1. Actualizamos la solicitud a CONFIRMADO
         await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
         
-        // 2. 🛡️ LIMPIEZA CLAVE DEL BOT: Descongelamos al paciente y lo regresamos a 'INICIO'
+        // 2. 🛡️ LIMPIEZA CLAVE DEL BOT
         try {
             await fisioNet.from('sesiones_whatsapp_bot').update({
                 estado_conversacion: 'INICIO',
@@ -2236,29 +2230,24 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-     // 3. 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN USANDO EL CLIENTE OFICIAL DE SUPABASE
+        // 3. 📱 DISPARO INMEDIATO DE WHATSAPP (Usando exactamente la misma sintaxis que tu función de proponer horario)
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
-                // Llamada oficial y nativa mediante el cliente de Supabase
-                const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
-                    body: { 
-                        to: sol.telefono, 
-                        message: mensajeAceptacion 
-                    }
+                const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { to: sol.telefono, message: mensajeAceptacion }
                 });
 
                 if (fnError) {
-                    console.error("❌ Error devuelto por la Edge Function:", fnError);
-                    alert("⚠️ La cita se guardó, pero hubo un error al disparar el WhatsApp: " + (fnError.message || JSON.stringify(fnError)));
+                    console.error("❌ Error en invoke send-whatsapp (Aceptación):", fnError);
                 } else {
-                    console.log("📤 WhatsApp enviado con éxito:", fnData);
+                    console.log("✅ WhatsApp de aceptación enviado correctamente.");
                 }
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ Excepción crítica al invocar el WhatsApp:", whatsappErr);
+            console.warn("⚠️ Excepción al enviar WhatsApp de aceptación:", whatsappErr);
         }
 
         alert("✅ PROCESO COMPLETADO Y BOT DESCONGELADO");
@@ -2268,6 +2257,7 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         alert("Error al insertar en agenda: " + (eAg?.message || 'Error desconocido'));
     }
 };
+
 window.abrirModalConvenio = () => {
     const modal = document.getElementById('modalConvenios');
     if (modal) { modal.style.display = 'flex'; }
