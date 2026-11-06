@@ -2075,8 +2075,21 @@ const cargarEstadisticas = async () => {
     }
 };
 
+// 🛠️ Función auxiliar segura para sincronizar con Google Calendar
+const ejecutarSyncCalendar = async (citaObj, nombrePaciente, esExpress = false) => {
+    const funcionSync = typeof sincronizarConGoogleCalendar === 'function' 
+        ? sincronizarConGoogleCalendar
+        : (typeof window.sincronizarConGoogleCalendar === 'function' ? window.sincronizarConGoogleCalendar : null);
+
+    if (funcionSync) {
+        await funcionSync(citaObj, nombrePaciente, esExpress);
+    } else {
+        console.warn("⚠️ La función sincronizarConGoogleCalendar no se encontró en el ámbito global.");
+    }
+};
+
 window.procesarSolicitud = async (idSolicitud, accion) => {
-    console.log(`🚀 [WEB] Iniciando procesarSolicitud para ID: ${idSolicitud} con acción: ${accion}`);
+    // console.log(`🚀 [WEB] Iniciando procesarSolicitud para ID: ${idSolicitud} con acción: ${accion}`);
     
     const { data: { user }, error: authError } = await fisioNet.auth.getUser();
     if (authError || !user) {
@@ -2100,25 +2113,20 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         return;
     }
 
-    console.log("📄 [WEB] Solicitud cargada con éxito:", sol);
-
     // 🛡️ Manejo de RECHAZO
     if (accion === 'RECHAZAR') {
         if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
         
-        console.log("🚫 [WEB] Rechazando solicitud...");
         await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
 
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
-                const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. Por favor intenta eligiendo otra opción o fecha.`;
-
-                console.log(`📤 [WEB] Invocando WhatsApp de rechazo para: ${sol.telefono}`);
-                const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. ¿Gustas intentar de nuevo para elegir otra opción o fecha? Responde con cualquier mensaje para reiniciar el proceso.`;
+                
+                await fisioNet.functions.invoke('send-whatsapp', {
                     body: { to: sol.telefono, message: mensajeRechazo }
                 });
-                console.log("📥 [WEB] Respuesta Edge Function (Rechazo):", { fnData, fnError });
             }
         } catch (whatsappErr) {
             console.error("⚠️ [WEB] Excepción en WhatsApp de rechazo:", whatsappErr);
@@ -2132,10 +2140,9 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
     // 🔀 DISTINCIÓN DE CAMINOS (App vs Bot)
     // =================================================================================
     let idPacienteFinal = null;
-    let esFlujoPesadoApp = true; // Mantén tu lógica intacta o pon una bandera si viene del bot
+    let esFlujoPesadoApp = true; 
 
     if (esFlujoPesadoApp) {
-        console.log("⚙️ [WEB] Ejecutando Camino 1: Motor Maestro de Pacientes (App)...");
         const nomS = sol.nombre.toUpperCase().trim();
         const apePS = sol.apellido_p.toUpperCase().trim();
         const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
@@ -2194,7 +2201,7 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
                 } else { return; } 
             }
         }
-       
+        
         if (!idPacienteFinal) {
             const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
                 nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
@@ -2206,7 +2213,6 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             idPacienteFinal = nPac.id;
         }
 
-        console.log("🚀 [WEB] Insertando en agenda_maestra para paciente ID:", idPacienteFinal);
         const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
             id_paciente: idPacienteFinal,
             id_profesional: user.id,
@@ -2223,45 +2229,40 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             return alert("Error al insertar en agenda: " + eAg.message);
         }
 
+        // 📅 Sincronización Segura con Google Calendar
         try {
             const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
-            await sincronizarConGoogleCalendar(nuevaCita, nombreCompleto.trim());
+            await ejecutarSyncCalendar(nuevaCita, nombreCompleto.trim(), false);
         } catch (syncErr) {
             console.warn("⚠️ [WEB] Advertencia al sincronizar con Google Calendar:", syncErr);
         }
     }
 
     // --- ACCIÓN COMÚN: Actualizar solicitud a CONFIRMADO ---
-    console.log("📝 [WEB] Actualizando solicitud a CONFIRMADO...");
     await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
     
     // Limpieza del bot
     try {
-        console.log("🧹 [WEB] Limpiando sesión en sesiones_whatsapp_bot para:", sol.telefono);
         await fisioNet.from('sesiones_whatsapp_bot').update({
             estado_conversacion: 'INICIO',
             fecha_temporal: null,
             dato_temporal: null
         }).eq('telefono_paciente', sol.telefono);
-    } catch (botErr) {
-        console.warn("⚠️ [WEB] No se pudo limpiar la sesión del bot:", botErr);
-    }
+    } catch (botErr) {}
 
-    // 📱 DISPARO DEL WHATSAPP DE ACEPTACIÓN
+    // 📱 DISPARO DEL WHATSAPP DE ACEPTACIÓN (Con formato limpio y palomita verde)
     try {
         if (sol.telefono) {
             const nombrePacienteMsg = sol.nombre || 'Paciente';
-            const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
+            const horaLimpia = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '';
+            const mensajeAceptacion = `✅ ¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${horaLimpia}*. ¡Te esperamos!`;
 
-            console.log(`📤 [WEB] Invocando Edge Function 'send-whatsapp' con número: ${sol.telefono}`);
             const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
                 body: { to: sol.telefono, message: mensajeAceptacion }
             });
 
             if (fnError) {
                 console.error("❌ [WEB] Error retornado por invoke('send-whatsapp'):", fnError);
-            } else {
-                console.log("✅ [WEB] Respuesta exitosa de invoke('send-whatsapp'):", fnData);
             }
         }
     } catch (whatsappErr) {
@@ -3042,7 +3043,7 @@ async function cargarSolicitudesRecibidas() {
                             <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
                         </div>
                       <div style="display: flex; gap: 5px;">
-    <button onclick="procesarSolicitud('${sol.id}', 'CONFIRMAR)" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
+    <button onclick="procesarSolicitud('${sol.id}', 'CONFIRMAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
     <!-- 🔄 Botón Azul: Proponer Nuevo Horario -->
                     <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
     <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
