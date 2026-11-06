@@ -2409,12 +2409,14 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
     let telefonoPaciente = '';
     let nombrePaciente = '';
     let idProfSolicitado = '';
+
     try {
         const { data: solData } = await fisioNet
             .from('solicitudes_citas')
             .select('telefono, nombre, id_profesional_solicitado')
             .eq('id', idSolicitud)
             .single();
+
         if (solData) {
             telefonoPaciente = solData.telefono || '';
             nombrePaciente = solData.nombre || 'Paciente';
@@ -2425,18 +2427,20 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
     }
 
     let modalReagendar = document.getElementById('modalProponerHorario');
+
     if (!modalReagendar) {
         modalReagendar = document.createElement('div');
         modalReagendar.id = 'modalProponerHorario';
         modalReagendar.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+            background: rgba(0,0,0,0.5); display: flex; justifyContent: center;
             align-items: center; z-index: 9999; backdrop-filter: blur(2px);
         `;
         document.body.appendChild(modalReagendar);
     }
 
     const fechaHoy = new Date().toISOString().split('T')[0];
+
     modalReagendar.innerHTML = `
         <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
             <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Proponer Nuevo Horario</h3>
@@ -2511,64 +2515,68 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                 btnHora.innerText = hora;
                 btnHora.style.cssText = "background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
 
-              btnHora.onclick = async () => { modalReagendar.remove();
-    try {
-        // 0. Opcional de seguridad: Cancelar cualquier otra solicitud duplicada o vieja de este paciente con este doctor
-        if (telefonoPaciente && idProfSolicitado) {
-            await fisioNet.from('solicitudes_citas')
-                .update({ estado: 'CANCELADO' })
-                .eq('telefono', telefonoPaciente)
-                .eq('id_profesional_solicitado', idProfSolicitado)
-                .eq('estado', 'PENDIENTE')
-                .neq('id', idSolicitud); // Excluimos la actual para actualizarla limpiamente
-        }
+                btnHora.onclick = async () => { 
+                    modalReagendar.remove();
+                    try {
+                        // 0. Cancelar cualquier otra solicitud duplicada o vieja de este paciente
+                        if (telefonoPaciente && idProfSolicitado) {
+                            await fisioNet.from('solicitudes_citas')
+                                .update({ estado: 'CANCELADO' })
+                                .eq('telefono', telefonoPaciente)
+                                .eq('id_profesional_solicitado', idProfSolicitado)
+                                .eq('estado', 'PENDIENTE')
+                                .neq('id', idSolicitud);
+                        }
 
-        // 1. Actualizar la solicitud actual con la nueva fecha y hora
-        const { error } = await fisioNet.from('solicitudes_citas')
-            .update({ 
-                fecha_cita: fechaElegida, 
-                hora_cita: hora, 
-                estado: 'PENDIENTE' 
-            })
-            .eq('id', idSolicitud);
+                        // 🕒 Asegurar formato 24 horas (por si acaso se inyecta con sufijo o formato distinto)
+                        const horaFormateada24 = typeof convertirA24Hrs === 'function' ? convertirA24Hrs(hora) : `${hora}:00`;
 
-        if (error) throw error;
+                        // 1. Actualizar la solicitud actual con la nueva fecha y hora en formato 24h
+                        const { error } = await fisioNet.from('solicitudes_citas')
+                            .update({ 
+                                fecha_cita: fechaElegida, 
+                                hora_cita: horaFormateada24, 
+                                estado: 'PENDIENTE' 
+                            })
+                            .eq('id', idSolicitud);
 
-        // 2. Cambiar la sesión del bot de este paciente a ESPERANDO_CONFIRMACION_CAMBIO
-        if (telefonoPaciente) {
-            await fisioNet.from('sesiones_whatsapp_bot').upsert({
-                telefono_paciente: telefonoPaciente,
-                id_profesional: idProfSolicitado,
-                estado_conversacion: 'ESPERANDO_CONFIRMACION_CAMBIO',
-                fecha_temporal: fechaElegida,
-                dato_temporal: hora
-            }, { onConflict: 'telefono_paciente' });
+                        if (error) throw error;
 
-            // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VÍA WHATSAPP
-            const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
+                        // 2. Cambiar la sesión del bot a ESPERANDO_CONFIRMACION_CAMBIO
+                        if (telefonoPaciente) {
+                            await fisioNet.from('sesiones_whatsapp_bot').upsert({
+                                telefono_paciente: telefonoPaciente,
+                                id_profesional: idProfSolicitado,
+                                estado_conversacion: 'ESPERANDO_CONFIRMACION_CAMBIO',
+                                fecha_temporal: fechaElegida,
+                                dato_temporal: hora
+                            }, { onConflict: 'telefono_paciente' });
 
-            const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
-                body: { 
-                    to: telefonoPaciente, 
-                    message: mensajeTexto 
-                }
-            });
+                            // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VÍA WHATSAPP
+                            const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
 
-            if (fnError) {
-                console.error("Error al disparar el mensaje de WhatsApp:", fnError);
-            }
-        }
+                            const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                                body: { 
+                                    to: telefonoPaciente, 
+                                    message: mensajeTexto 
+                                }
+                            });
 
-        alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
+                            if (fnError) {
+                                console.error("Error al disparar el mensaje de WhatsApp:", fnError);
+                            }
+                        }
 
-        if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
-        if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+                        alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
 
-    } catch (err) {
-        console.error("Error al actualizar nuevo horario:", err);
-        alert("Hubo un error al actualizar el horario.");
-    }
-};
+                        if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
+                        if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+
+                    } catch (err) {
+                        console.error("Error al actualizar nuevo horario:", err);
+                        alert("Hubo un error al actualizar el horario.");
+                    }
+                };
 
                 gridHorarios.appendChild(btnHora);
             });
