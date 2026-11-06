@@ -2121,141 +2121,150 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         return;
     }
 
-    // 🛡️ Manejo de CONFIRMACIÓN (Aceptar)
-    const nomS = sol.nombre.toUpperCase().trim();
-    const apePS = sol.apellido_p.toUpperCase().trim();
-    const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
-    const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
-    const raizN = nomS.substring(0, 4);
-    const raizA = apePS.substring(0, 4);
+    // =================================================================================
+    // 🔀 DISTINCIÓN DE CAMINOS: 
+    // ¿Cómo sabemos si viene de la App o del Bot? 
+    // (Por ejemplo, las de la app suelen tener datos más completos como CURP, correo o un origen específico, 
+    // o si prefieres evaluar alguna bandera. Aquí mantenemos tu lógica intacta para cuando sea un paciente de clínica).
+    // =================================================================================
     
-    let filtrosOr = `telefono.eq.${sol.telefono},and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%),and(nombre.ilike.%${raizN}%,apellido_materno.ilike.%${raizA}%)`;
-    if (curpS) filtrosOr += `,curp.eq.${curpS}`;
-    
-    let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
     let idPacienteFinal = null;
-    
-    if (coincidencias && coincidencias.length > 0) {
-        let pMatch = null;
-        if (curpS) pMatch = coincidencias.find(p => p.curp === curpS);
-    
-        if (!pMatch) {
-            pMatch = coincidencias.find(p => {
-                const nomDB = p.nombre ? p.nombre.toUpperCase() : '';
-                const apPDB = p.apellido_paterno ? p.apellido_paterno.toUpperCase() : '';
-                const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
-                const checkPaterno = apPDB.includes(raizA);
-                const coincideConMaterno = apMDB.includes(raizA);
-                const checkNombre = nomDB.includes(raizN);
-                return checkNombre && (checkPaterno || coincideConMaterno);
-            });
-        }
+    let esFlujoPesadoApp = true; // Cambia esto si tienes una forma de detectar que viene directo del bot (ej. sol.origen === 'whatsapp')
 
-        if (!pMatch) pMatch = coincidencias.find(p => p.telefono === sol.telefono) || coincidencias[0];
-    
-        const nomEnBase = `${pMatch.nombre} ${pMatch.apellido_paterno}`;
-        const esMismo = confirm(`🕵️ COINCIDENCIA DETECTADA\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar / Cancelar = Familiar nuevo)`);
-    
-        if (esMismo) {
-            idPacienteFinal = pMatch.id;
-            const updates = {};
-            if (curpS && pMatch.curp !== curpS) updates.curp = curpS;
-            if (correoS && pMatch.correo_electronico !== correoS) updates.correo_electronico = correoS;
-            if (sol.telefono && pMatch.telefono !== sol.telefono) updates.telefono = sol.telefono;
-            if (nomS.length > pMatch.nombre.length) updates.nombre = nomS;
-    
-            if (Object.keys(updates).length > 0) {
-                await fisioNet.from('pacientes_maestros').update(updates).eq('id', idPacienteFinal);
-            }
-        } else if (pMatch.telefono === sol.telefono) {
-            const esFam = confirm(`👥 ¿NUEVO FAMILIAR?\n\n¿Deseas crear un expediente separado para ${nomS}?`);
-            if (esFam) {
-                const { data: nFam, error: errFam } = await fisioNet.from('pacientes_maestros').insert({
-                    nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
-                    telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
-                    id_clinica: clinicaId, creado_por: user.id
-                }).select().single();
-    
-                if (errFam) {
-                    alert(`Supabase rechazó el registro: ${errFam.message}`);
-                    return; 
-                }
-                idPacienteFinal = nFam.id;
-            } else { return; } 
-        }
-    }
-   
-    if (!idPacienteFinal) {
-        const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
-            nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
-            telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
-            id_clinica: clinicaId, creado_por: user.id
-        }).select().single();
-    
-        if (eP) return alert("Error al crear paciente nuevo: " + eP.message);
-        idPacienteFinal = nPac.id;
-    }
-
-    // 🚀 Insertamos en agenda maestra
-    const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
-        id_paciente: idPacienteFinal,
-        id_profesional: user.id,
-        id_clinica: clinicaId,
-        fecha: sol.fecha_cita,
-        hora_inicio_cita: sol.hora_cita,
-        modalidad: 'CONSULTORIO',
-        estatus: 'PENDIENTE',
-        estado: 'ACTIVO'
-    }).select().single();
-   
-    if (!eAg && nuevaCita) {
-        // 1. Actualizamos la solicitud a CONFIRMADO
-        await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
+    if (esFlujoPesadoApp) {
+        // --- CAMINO 1: Tu motor maestro (FisioCid App - Cruce de pacientes, Agenda Maestra y Google Calendar) ---
+        const nomS = sol.nombre.toUpperCase().trim();
+        const apePS = sol.apellido_p.toUpperCase().trim();
+        const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
+        const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
+        const raizN = nomS.substring(0, 4);
+        const raizA = apePS.substring(0, 4);
         
-        // 2. 🛡️ LIMPIEZA CLAVE DEL BOT
-        try {
-            await fisioNet.from('sesiones_whatsapp_bot').update({
-                estado_conversacion: 'INICIO',
-                fecha_temporal: null,
-                dato_temporal: null
-            }).eq('telefono_paciente', sol.telefono);
-        } catch (botErr) {
-            console.warn("⚠️ No se pudo limpiar la sesión del bot:", botErr);
+        let filtrosOr = `telefono.eq.${sol.telefono},and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%),and(nombre.ilike.%${raizN}%,apellido_materno.ilike.%${raizA}%)`;
+        if (curpS) filtrosOr += `,curp.eq.${curpS}`;
+        
+        let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
+        
+        if (coincidencias && coincidencias.length > 0) {
+            let pMatch = null;
+            if (curpS) pMatch = coincidencias.find(p => p.curp === curpS);
+        
+            if (!pMatch) {
+                pMatch = coincidencias.find(p => {
+                    const nomDB = p.nombre ? p.nombre.toUpperCase() : '';
+                    const apPDB = p.apellido_paterno ? p.apellido_paterno.toUpperCase() : '';
+                    const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
+                    return nomDB.includes(raizN) && (apPDB.includes(raizA) || apMDB.includes(raizA));
+                });
+            }
+
+            if (!pMatch) pMatch = coincidencias.find(p => p.telefono === sol.telefono) || coincidencias[0];
+        
+            const nomEnBase = `${pMatch.nombre} ${pMatch.apellido_paterno}`;
+            const esMismo = confirm(`🕵️ COINCIDENCIA DETECTADA\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar / Cancelar = Familiar nuevo)`);
+        
+            if (esMismo) {
+                idPacienteFinal = pMatch.id;
+                const updates = {};
+                if (curpS && pMatch.curp !== curpS) updates.curp = curpS;
+                if (correoS && pMatch.correo_electronico !== correoS) updates.correo_electronico = correoS;
+                if (sol.telefono && pMatch.telefono !== sol.telefono) updates.telefono = sol.telefono;
+                if (nomS.length > pMatch.nombre.length) updates.nombre = nomS;
+        
+                if (Object.keys(updates).length > 0) {
+                    await fisioNet.from('pacientes_maestros').update(updates).eq('id', idPacienteFinal);
+                }
+            } else if (pMatch.telefono === sol.telefono) {
+                const esFam = confirm(`👥 ¿NUEVO FAMILIAR?\n\n¿Deseas crear un expediente separado para ${nomS}?`);
+                if (esFam) {
+                    const { data: nFam, error: errFam } = await fisioNet.from('pacientes_maestros').insert({
+                        nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
+                        telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
+                        id_clinica: clinicaId, creado_por: user.id
+                    }).select().single();
+        
+                    if (errFam) {
+                        alert(`Supabase rechazó el registro: ${errFam.message}`);
+                        return; 
+                    }
+                    idPacienteFinal = nFam.id;
+                } else { return; } 
+            }
+        }
+       
+        if (!idPacienteFinal) {
+            const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
+                nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
+                telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
+                id_clinica: clinicaId, creado_por: user.id
+            }).select().single();
+        
+            if (eP) return alert("Error al crear paciente nuevo: " + eP.message);
+            idPacienteFinal = nPac.id;
         }
 
+        // Insertamos en agenda maestra
+        const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
+            id_paciente: idPacienteFinal,
+            id_profesional: user.id,
+            id_clinica: clinicaId,
+            fecha: sol.fecha_cita,
+            hora_inicio_cita: sol.hora_cita,
+            modalidad: 'CONSULTORIO',
+            estatus: 'PENDIENTE',
+            estado: 'ACTIVO'
+        }).select().single();
+
+        if (eAg) {
+            return alert("Error al insertar en agenda: " + eAg.message);
+        }
+
+        // Sincronizar Google Calendar si existe
         try {
             const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
             await sincronizarConGoogleCalendar(nuevaCita, nombreCompleto.trim());
         } catch (syncErr) {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
-
-        // 3. 📱 DISPARO INMEDIATO DE WHATSAPP (Usando exactamente la misma sintaxis que tu función de proponer horario)
-        try {
-            if (sol.telefono) {
-                const nombrePacienteMsg = sol.nombre || 'Paciente';
-                const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
-
-                const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
-                    body: { to: sol.telefono, message: mensajeAceptacion }
-                });
-
-                if (fnError) {
-                    console.error("❌ Error en invoke send-whatsapp (Aceptación):", fnError);
-                } else {
-                    console.log("✅ WhatsApp de aceptación enviado correctamente.");
-                }
-            }
-        } catch (whatsappErr) {
-            console.warn("⚠️ Excepción al enviar WhatsApp de aceptación:", whatsappErr);
-        }
-
-        alert("✅ PROCESO COMPLETADO Y BOT DESCONGELADO");
-        cargarSalaEspera();
-        if (typeof cargarAgenda === 'function') cargarAgenda('semana');
-    } else {
-        alert("Error al insertar en agenda: " + (eAg?.message || 'Error desconocido'));
     }
+
+    // --- ACCIÓN COMÚN PARA AMBOS (Actualizar la solicitud a CONFIRMADO) ---
+    await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
+    
+    // Limpieza clave del bot de WhatsApp para destrabarlo
+    try {
+        await fisioNet.from('sesiones_whatsapp_bot').update({
+            estado_conversacion: 'INICIO',
+            fecha_temporal: null,
+            dato_temporal: null
+        }).eq('telefono_paciente', sol.telefono);
+    } catch (botErr) {
+        console.warn("⚠️ No se pudo limpiar la sesión del bot:", botErr);
+    }
+
+    // 📱 DISPARO INMEDIATO DEL WHATSAPP DE CONFIRMACIÓN
+    try {
+        if (sol.telefono) {
+            const nombrePacienteMsg = sol.nombre || 'Paciente';
+            const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
+
+            const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                body: { to: sol.telefono, message: mensajeAceptacion }
+            });
+
+            if (fnError) {
+                console.error("❌ Error en invoke send-whatsapp (Aceptación):", fnError);
+            } else {
+                console.log("✅ WhatsApp de aceptación enviado correctamente.");
+            }
+        }
+    } catch (whatsappErr) {
+        console.warn("⚠️ Excepción al enviar WhatsApp de aceptación:", whatsappErr);
+    }
+
+    alert("✅ PROCESO COMPLETADO Y WHATSAPP ENVIADO");
+    cargarSalaEspera();
+    if (typeof cargarAgenda === 'function') cargarAgenda('semana');
 };
 
 window.abrirModalConvenio = () => {
