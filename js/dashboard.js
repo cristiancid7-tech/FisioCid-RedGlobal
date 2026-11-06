@@ -2215,8 +2215,20 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
     }).select().single();
    
     if (!eAg && nuevaCita) {
+        // 1. Actualizamos la solicitud a CONFIRMADO
         await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
         
+        // 2. 🛡️ LIMPIEZA CLAVE DEL BOT: Descongelamos al paciente y lo regresamos a 'INICIO'
+        try {
+            await fisioNet.from('sesiones_whatsapp_bot').update({
+                estado_conversacion: 'INICIO',
+                fecha_temporal: null,
+                dato_temporal: null
+            }).eq('telefono_paciente', sol.telefono);
+        } catch (botErr) {
+            console.warn("⚠️ No se pudo limpiar la sesión del bot:", botErr);
+        }
+
         try {
             const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
             await sincronizarConGoogleCalendar(nuevaCita, nombreCompleto.trim());
@@ -2224,27 +2236,26 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-        // 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN
+        // 3. 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN DIRECTO A TU WEBHOOK/EDGE FUNCTION
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
+                // Usamos la misma Edge Function que atiende todo (ej. tu webhook único)
                 const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
                     body: { to: sol.telefono, message: mensajeAceptacion }
                 });
 
                 if (fnError) {
-                    console.error("❌ Error en invoke send-whatsapp (Aceptación):", fnError);
-                    alert("⚠️ La cita se aceptó y guardó, pero falló el envío de WhatsApp: " + (fnError.message || JSON.stringify(fnError)));
+                    console.error("❌ Error al disparar el WhatsApp:", fnError);
                 }
             }
         } catch (whatsappErr) {
-            console.error("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
-            alert("⚠️ Excepción al enviar WhatsApp de aceptación: " + whatsappErr.message);
+            console.warn("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
         }
 
-        alert("✅ PROCESO COMPLETADO");
+        alert("✅ PROCESO COMPLETADO Y BOT DESCONGELADO");
         cargarSalaEspera();
         if (typeof cargarAgenda === 'function') cargarAgenda('semana');
     } else {
