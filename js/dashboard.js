@@ -1941,47 +1941,46 @@ async function ejecutarIngreso(idBox, idPaciente, idCita) {
 async function cargarSalaEspera() {
     const lista = document.getElementById('listaEsperaReferidos');
     const badge = document.getElementById('badgeSolicitudes');
+ 
     if (!lista) return;
-
+ 
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
-
+ 
         const clinicaId = localStorage.getItem('id_clinica_activa');
         if (!clinicaId) {
             lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">⚠️ Selecciona una clínica activa.</p>`;
             return;
         }
-
+ 
         const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
         const esPersonalAdministrativo = ['ADMIN_SISTEMA', 'ADMINISTRATIVO'].includes(miRolSistema);
-
-        // 🛡️ Consulta blindada por clínica activa
+ 
         let queryCitas = fisioNet
             .from('solicitudes_citas')
             .select('*')
             .eq('estado', 'PENDIENTE')
-            .eq('id_clinica_solicitada', clinicaId); // 🔒 Aislamiento por sede
-
-        // Si es terapeuta de planta (STAFF_CLINICO / OPERATIVO), solo ve sus citas solicitadas
+            .eq('id_clinica_solicitada', clinicaId);
+ 
         if (!esPersonalAdministrativo) {
-            queryCitas = queryCitas.eq('id_profesional_solicitado', user.id); // 🔒 Aislamiento por doctor
+            queryCitas = queryCitas.eq('id_profesional_solicitado', user.id);
         }
-
+ 
         const { data: solicitudes, error } = await queryCitas.order('creado_el', { ascending: false });
-
+ 
         if (error) {
             console.error("❌ ERROR DE SUPABASE EN SALA DE ESPERA:", error);
             return;
         }
-
+ 
         if (badge) badge.innerText = solicitudes?.length || 0;
         
         if (!solicitudes || solicitudes.length === 0) {
             lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">Sin solicitudes nuevas en esta sede.</p>`;
             return;
         }
-
+ 
         lista.innerHTML = solicitudes.map(sol => {
             const nombreFull = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`.trim().toUpperCase();
             const horaFormateada = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '--:--';
@@ -1994,9 +1993,15 @@ async function cargarSalaEspera() {
                         <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-top: 5px;">${nombreFull}</strong>
                         <small style="color: #64748b;">📅 ${sol.fecha_cita} ⏰ ${horaFormateada}</small>
                     </div>
-                    <div style="display: flex; gap: 5px;">
-                        <button onclick="confirmarHorarioEnSala('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅ Aprobar</button>
-                        <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Rechazar">🗑️</button>
+                    <div style="display: flex; gap: 4px;">
+                        <!-- Botón Aprobar -->
+                        <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Aprobar y Confirmar">✅</button>
+                        
+                        <!-- Botón Azul: Proponer Nuevo Horario -->
+                        <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
+                        
+                        <!-- Botón Rechazar -->
+                        <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Rechazar">🗑️</button>
                     </div>
                 </div>
                 <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold; text-align: left;">
@@ -2069,6 +2074,7 @@ const cargarEstadisticas = async () => {
         console.error("❌ Error en estadísticas FisioCid:", error);
     }
 };
+
 window.procesarSolicitud = async (idSolicitud, accion) => {
    
     // 🛡️ 1. Validar sesión activa antes de hacer nada
@@ -2337,6 +2343,171 @@ async function inicializarFormularioConvenio() {
     }
 }
 
+window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
+    if (!idSolicitud || idSolicitud === 'undefined') return;
+
+    // Obtener datos del paciente para la notificación
+    let telefonoPaciente = '';
+    let nombrePaciente = '';
+    let idProfSolicitado = '';
+    try {
+        const { data: solData } = await fisioNet
+            .from('solicitudes_citas')
+            .select('telefono, nombre, id_profesional_solicitado')
+            .eq('id', idSolicitud)
+            .single();
+        if (solData) {
+            telefonoPaciente = solData.telefono || '';
+            nombrePaciente = solData.nombre || 'Paciente';
+            idProfSolicitado = solData.id_profesional_solicitado || '';
+        }
+    } catch (e) {
+        console.warn("Error al obtener datos de la solicitud:", e);
+    }
+
+    let modalReagendar = document.getElementById('modalProponerHorario');
+    if (!modalReagendar) {
+        modalReagendar = document.createElement('div');
+        modalReagendar.id = 'modalProponerHorario';
+        modalReagendar.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+            align-items: center; z-index: 9999; backdrop-filter: blur(2px);
+        `;
+        document.body.appendChild(modalReagendar);
+    }
+
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    modalReagendar.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
+            <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Proponer Nuevo Horario</h3>
+            <label style="font-size: 0.75rem; font-weight: 700; color: #475569;">SELECCIONA LA NUEVA FECHA:</label>
+            <input type="date" id="inputNuevaFechaPropuesta" value="${fechaHoy}" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+            <button id="btnConsultarDispoPropuesta" style="background: #3b82f6; color: white; border: none; padding: 9px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">🔍 Consultar Horarios Disponibles</button>
+            <div id="contenedorHorariosLibresPropuesta" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 5px;">
+                <span style="font-size: 0.75rem; color: #94a3b8; text-align: center;">Elige una fecha y presiona consultar.</span>
+            </div>
+            <button onclick="document.getElementById('modalProponerHorario').remove();" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
+        </div>
+    `;
+
+    document.getElementById('btnConsultarDispoPropuesta').onclick = async () => {
+        const fechaElegida = document.getElementById('inputNuevaFechaPropuesta').value;
+        const contenedor = document.getElementById('contenedorHorariosLibresPropuesta');
+        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        if (!fechaElegida || !clinicaId || !user) {
+            alert("Faltan datos de clínica o sesión de usuario.");
+            return;
+        }
+
+        contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#3b82f6; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
+
+        try {
+            const [ocupadasRes, perfilRes] = await Promise.all([
+                fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
+                fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita, nombre_completo').eq('id', user.id).single()
+            ]);
+
+            const ocupadas = ocupadasRes.data;
+            const perfil = perfilRes.data;
+
+            if (!perfil?.horario_atencion) {
+                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
+                return;
+            }
+
+            const config = JSON.parse(perfil.horario_atencion);
+            const intervalo = parseInt(perfil.intervalo_cita) || 30;
+            const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+            const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
+
+            const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
+            const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
+
+            let espaciosDisponibles = [];
+            bloquesHoy.forEach(bloque => {
+                let inicio = aMin(bloque.inicio);
+                let fin = aMin(bloque.fin);
+                while (inicio + intervalo <= fin) {
+                    const horaGen = minToH(inicio);
+                    const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
+                    if (!estaOcupada) espaciosDisponibles.push(horaGen);
+                    inicio += intervalo;
+                }
+            });
+
+            if (espaciosDisponibles.length === 0) {
+                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
+                return;
+            }
+
+            contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #1e3a8a;">Selecciona el nuevo horario (${espaciosDisponibles.length} libres):</span>`;
+            const gridHorarios = document.createElement('div');
+            gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
+
+            espaciosDisponibles.forEach(hora => {
+                const btnHora = document.createElement('button');
+                btnHora.innerText = hora;
+                btnHora.style.cssText = "background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
+
+               btnHora.onclick = async () => {
+                  modalReagendar.remove();
+                  try {
+                      // 1. Actualizar la solicitud en la base de datos
+                      const { error } = await fisioNet.from('solicitudes_citas')
+                          .update({ fecha_cita: fechaElegida, hora_cita: hora, estado: 'PENDIENTE' })
+                          .eq('id', idSolicitud);
+
+                      if (error) throw error;
+
+                      // 2. Cambiar la sesión del bot de este paciente a ESPERANDO_CONFIRMACION_CAMBIO
+                      if (telefonoPaciente) {
+                          await fisioNet.from('sesiones_whatsapp_bot').upsert({
+                              telefono_paciente: telefonoPaciente,
+                              id_profesional: idProfSolicitado,
+                              estado_conversacion: 'ESPERANDO_CONFIRMACION_CAMBIO',
+                              fecha_temporal: fechaElegida,
+                              dato_temporal: hora
+                          }, { onConflict: 'telefono_paciente' });
+
+                          // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VIA WHATSAPP
+                          const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
+
+                          const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                              body: { 
+                                  to: telefonoPaciente, 
+                                  message: mensajeTexto 
+                              }
+                          });
+
+                          if (fnError) {
+                              console.error("Error al disparar el mensaje de WhatsApp:", fnError);
+                          }
+                      }
+
+                      alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
+
+                      if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
+                      if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+                  } catch (err) {
+                      console.error("Error al actualizar nuevo horario:", err);
+                      alert("Hubo un error al actualizar el horario.");
+                  }
+              };
+              
+                gridHorarios.appendChild(btnHora);
+            });
+
+            contenedor.appendChild(gridHorarios);
+        } catch (err) {
+            console.error("Error consultando disponibilidad:", err);
+            contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Error al sincronizar horarios.</p>`;
+        }
+    };
+};
+
 async function verificarDisponibilidadReal() {
     const fechaElegida = document.getElementById('fechaCita').value;
     const contenedor = document.getElementById('gridHorariosDisponibles');
@@ -2569,6 +2740,8 @@ async function cargarSolicitudesRedPendientes() {
                             </div>
                             <div style="display:flex; gap:6px;">
                                 <button onclick="responderSolicitudRed('${sol.id}', 'ACTIVO', 'RED')" style="background:#10b981; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">✅ Aceptar</button>
+                                <!-- 🔄 Botón Azul: Proponer Nuevo Horario -->
+                    <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
                                 <button onclick="responderSolicitudRed('${sol.id}', 'RECHAZADO', 'RED')" style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">❌</button>
                             </div>
                         </div>`;
@@ -2821,6 +2994,8 @@ async function cargarSolicitudesRecibidas() {
                         </div>
                       <div style="display: flex; gap: 5px;">
     <button onclick="confirmarHorarioEnSala('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
+    <!-- 🔄 Botón Azul: Proponer Nuevo Horario -->
+                    <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
     <button onclick="confirmarHorarioEnSala('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
 </div>
                     </div>
@@ -3091,7 +3266,7 @@ const { data: { session } } = await fisioNet.auth.getSession();
 
         const { data: perfilProf } = await fisioNet
             .from('perfiles_profesionales')
-            .select('nombre_completo, insignia_especial')
+            .select('nombre_completo, insignia_especial, telefono_contacto')
             .eq('id', user.id)
             .maybeSingle();
 
@@ -3099,6 +3274,10 @@ const { data: { session } } = await fisioNet.auth.getSession();
         
         localStorage.setItem('nombre_completo', nombreReal);
         localStorage.setItem('usuarioId', user.id);
+     // 2. Valida y guarda el teléfono en el localStorage usando el nombre sin acento
+        if (perfilProf?.telefono_contacto) {
+            localStorage.setItem('telefono_contacto', perfilProf.telefono_contacto);
+        }
 
         const txtSaludo = document.getElementById('txtSaludo');
         if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
@@ -4493,6 +4672,57 @@ window.guardarComoNuevoPaciente = async () => {
         if (typeof cargarCitas === 'function') cargarCitas();
     }
 };
+
+// Número central de tu bot de Meta
+const NUMERO_CENTRAL_META = "5215662971816"; 
+
+function abrirModalWhatsApp() {
+    const modal = document.getElementById('whatsappModal');
+    modal.style.display = 'flex';
+ 
+    const idProf = localStorage.getItem('usuarioId') || '';
+    const nombreDoc = localStorage.getItem('nombre_completo') || 'Doctor/a';
+    
+    if (!idProf) {
+        alert('Por favor, inicia sesión correctamente para generar tu enlace de WhatsApp.');
+        return;
+    }
+ 
+    // 💡 Generamos un código corto y elegante al vuelo basado en el UUID (ej. "A82F9")
+    const tokenLimpio = btoa(idProf).replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toUpperCase();
+ 
+    // Mensaje estético, amigable y limpio para el paciente
+    const textoMensaje = `Hola, quisiera agendar una cita con ${nombreDoc}. (Ref #${tokenLimpio})`;
+ 
+    const enlaceWp = `https://wa.me/5215662971816?text=${encodeURIComponent(textoMensaje)}`;
+ 
+    document.getElementById('inputEnlaceWp').value = enlaceWp;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(enlaceWp)}`;
+    document.getElementById('qrEnlaceDoctor').src = qrUrl;
+}
+ 
+function cerrarModalWhatsApp() {
+    const modal = document.getElementById('whatsappModal');
+    modal.style.display = 'none';
+    const copiadoMsg = document.getElementById('copiadoMsg');
+    if (copiadoMsg) copiadoMsg.style.display = 'none';
+}
+ 
+window.copiarEnlaceWhatsapp = function() {
+    const inputEnlace = document.getElementById('inputEnlaceWp'); 
+    if (!inputEnlace) return;
+ 
+    navigator.clipboard.writeText(inputEnlace.value || inputEnlace.innerText)
+        .then(() => {
+            alert('¡Enlace copiado al portapapeles!');
+        })
+        .catch(err => {
+            console.error('Error al copiar: ', err);
+        });
+};
+
+window.abrirModalWhatsApp = abrirModalWhatsApp;
+window.cerrarModalWhatsApp = cerrarModalWhatsApp;
 window.abrirModalNuevaSede = abrirModalNuevaSede;
 window.cerrarModalNuevaSede = cerrarModalNuevaSede;
 window.lanzarLaboratorioGeneral = lanzarLaboratorioGeneral;
