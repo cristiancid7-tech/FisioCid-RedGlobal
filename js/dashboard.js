@@ -2107,21 +2107,28 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         
         await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
 
-        // 📱 ENVIAR WHATSAPP DE RECHAZO
+        // 📱 ENVIAR WHATSAPP DE RECHAZO CON CONTROL DE ERRORES
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. Por favor intenta eligiendo otra opción o fecha.`;
 
-                await fisioNet.functions.invoke('send-whatsapp', {
+                console.log(`📤 [PANEL] Enviando WhatsApp de rechazo a ${sol.telefono}...`);
+                const { data: resWp, error: errWp } = await fisioNet.functions.invoke('send-whatsapp', {
                     body: { 
                         to: sol.telefono, 
                         message: mensajeRechazo 
                     }
                 });
+
+                if (errWp) {
+                    console.error("❌ Error devuelto por send-whatsapp:", errWp);
+                } else {
+                    console.log("✅ WhatsApp de rechazo enviado con éxito:", resWp);
+                }
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ No se pudo enviar el WhatsApp de rechazo:", whatsappErr);
+            console.warn("⚠️ Excepción al enviar el WhatsApp de rechazo:", whatsappErr);
         }
 
         cargarSalaEspera();
@@ -2244,21 +2251,28 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-        // 📱 ENVIAR WHATSAPP DE ACEPTACIÓN / CONFIRMACIÓN
+        // 📱 ENVIAR WHATSAPP DE ACEPTACIÓN / CONFIRMACIÓN CON CONTROL DE ERRORES
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
-                await fisioNet.functions.invoke('send-whatsapp', {
+                console.log(`📤 [PANEL] Enviando WhatsApp de aceptación a ${sol.telefono}...`);
+                const { data: resWp, error: errWp } = await fisioNet.functions.invoke('send-whatsapp', {
                     body: { 
                         to: sol.telefono, 
                         message: mensajeAceptacion 
                     }
                 });
+
+                if (errWp) {
+                    console.error("❌ Error devuelto por send-whatsapp:", errWp);
+                } else {
+                    console.log("✅ WhatsApp de aceptación enviado con éxito:", resWp);
+                }
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
+            console.warn("⚠️ Excepción al enviar el WhatsApp de aceptación:", whatsappErr);
         }
 
         alert("✅ PROCESO COMPLETADO EXITOSAMENTE Y NOTIFICADO POR WHATSAPP");
