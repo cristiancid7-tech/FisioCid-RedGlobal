@@ -1941,46 +1941,46 @@ async function ejecutarIngreso(idBox, idPaciente, idCita) {
 async function cargarSalaEspera() {
     const lista = document.getElementById('listaEsperaReferidos');
     const badge = document.getElementById('badgeSolicitudes');
- 
+  
     if (!lista) return;
- 
+  
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user) return;
- 
+  
         const clinicaId = localStorage.getItem('id_clinica_activa');
         if (!clinicaId) {
             lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">⚠️ Selecciona una clínica activa.</p>`;
             return;
         }
- 
+  
         const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
         const esPersonalAdministrativo = ['ADMIN_SISTEMA', 'ADMINISTRATIVO'].includes(miRolSistema);
- 
+  
         let queryCitas = fisioNet
             .from('solicitudes_citas')
             .select('*')
             .eq('estado', 'PENDIENTE')
             .eq('id_clinica_solicitada', clinicaId);
- 
+  
         if (!esPersonalAdministrativo) {
             queryCitas = queryCitas.eq('id_profesional_solicitado', user.id);
         }
- 
+  
         const { data: solicitudes, error } = await queryCitas.order('creado_el', { ascending: false });
- 
+  
         if (error) {
             console.error("❌ ERROR DE SUPABASE EN SALA DE ESPERA:", error);
             return;
         }
- 
+  
         if (badge) badge.innerText = solicitudes?.length || 0;
-        
+  
         if (!solicitudes || solicitudes.length === 0) {
             lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">Sin solicitudes nuevas en esta sede.</p>`;
             return;
         }
- 
+  
         lista.innerHTML = solicitudes.map(sol => {
             const nombreFull = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`.trim().toUpperCase();
             const horaFormateada = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '--:--';
@@ -1994,8 +1994,8 @@ async function cargarSalaEspera() {
                         <small style="color: #64748b;">📅 ${sol.fecha_cita} ⏰ ${horaFormateada}</small>
                     </div>
                     <div style="display: flex; gap: 4px;">
-                        <!-- Botón Aprobar -->
-                        <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Aprobar y Confirmar">✅</button>
+                        <!-- Botón Confirmar (Cambiado a 'CONFIRMAR' para que coincida con la lógica) -->
+                        <button onclick="procesarSolicitud('${sol.id}', 'CONFIRMAR')" style="background: #10b981; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Aprobar y Confirmar">✅</button>
                         
                         <!-- Botón Azul: Proponer Nuevo Horario -->
                         <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
@@ -2076,113 +2076,92 @@ const cargarEstadisticas = async () => {
 };
 
 window.procesarSolicitud = async (idSolicitud, accion) => {
-    
-    // 🛡️ 1. Validar sesión activa antes de hacer nada
     const { data: { user }, error: authError } = await fisioNet.auth.getUser();
-  
+    
     if (authError || !user) {
         alert("⚠️ Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.");
         location.reload();
         return;
     }
-  
-    // 🛡️ 2. Validar clínica activa
+
     const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
     if (!clinicaId) {
         alert("⚠️ Error: No hay una clínica activa seleccionada en esta sesión.");
         return;
     }
 
-    // 🔍 Obtener datos de la solicitud antes de procesar
     const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
-  
+    
     if (!sol) {
         alert("⚠️ No se encontró la información de esta solicitud.");
         return;
     }
 
-    // 🛡️ 3. Manejo de RECHAZO (Con notificación de WhatsApp)
+    // 🛡️ Manejo de RECHAZO
     if (accion === 'RECHAZAR') {
         if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
         
         await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
 
-        // 📱 ENVIAR WHATSAPP DE RECHAZO CON CONTROL DE ERRORES
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. Por favor intenta eligiendo otra opción o fecha.`;
 
-                console.log(`📤 [PANEL] Enviando WhatsApp de rechazo a ${sol.telefono}...`);
-                const { data: resWp, error: errWp } = await fisioNet.functions.invoke('send-whatsapp', {
-                    body: { 
-                        to: sol.telefono, 
-                        message: mensajeRechazo 
-                    }
+                const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { to: sol.telefono, message: mensajeRechazo }
                 });
 
-                if (errWp) {
-                    console.error("❌ Error devuelto por send-whatsapp:", errWp);
-                } else {
-                    console.log("✅ WhatsApp de rechazo enviado con éxito:", resWp);
+                if (fnError) {
+                    console.error("❌ Error en invoke send-whatsapp (Rechazo):", fnError);
+                    alert("⚠️ La cita se rechazó, pero falló el WhatsApp: " + (fnError.message || JSON.stringify(fnError)));
                 }
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ Excepción al enviar el WhatsApp de rechazo:", whatsappErr);
+            console.error("⚠️ Excepción al enviar el WhatsApp de rechazo:", whatsappErr);
+            alert("⚠️ Excepción al enviar WhatsApp: " + whatsappErr.message);
         }
 
         cargarSalaEspera();
         return;
     }
-  
+
+    // 🛡️ Manejo de CONFIRMACIÓN (Aceptar)
     const nomS = sol.nombre.toUpperCase().trim();
     const apePS = sol.apellido_p.toUpperCase().trim();
     const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
     const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
     const raizN = nomS.substring(0, 4);
     const raizA = apePS.substring(0, 4);
-    const raizMaterno = sol.apellido_m ? sol.apellido_m.toUpperCase().trim().substring(0, 4) : '';
-  
-    // 🚀 MEJORA: Buscamos el apellido en el PATERNO o en el MATERNO
+    
     let filtrosOr = `telefono.eq.${sol.telefono},and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%),and(nombre.ilike.%${raizN}%,apellido_materno.ilike.%${raizA}%)`;
     if (curpS) filtrosOr += `,curp.eq.${curpS}`;
-  
+    
     let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
-  
     let idPacienteFinal = null;
-  
+    
     if (coincidencias && coincidencias.length > 0) {
         let pMatch = null;
-  
         if (curpS) pMatch = coincidencias.find(p => p.curp === curpS);
-  
+    
         if (!pMatch) {
             pMatch = coincidencias.find(p => {
                 const nomDB = p.nombre ? p.nombre.toUpperCase() : '';
                 const apPDB = p.apellido_paterno ? p.apellido_paterno.toUpperCase() : '';
                 const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
-                
                 const checkPaterno = apPDB.includes(raizA);
                 const coincideConMaterno = apMDB.includes(raizA);
                 const checkNombre = nomDB.includes(raizN);
-  
                 return checkNombre && (checkPaterno || coincideConMaterno);
             });
         }
 
         if (!pMatch) pMatch = coincidencias.find(p => p.telefono === sol.telefono) || coincidencias[0];
-  
+    
         const nomEnBase = `${pMatch.nombre} ${pMatch.apellido_paterno}`;
-        
-        let titulo = "🕵️ POSIBLE COINCIDENCIA DETECTADA";
-        if (curpS && pMatch.curp === curpS) {
-            titulo = "🆔 IDENTIDAD CONFIRMADA POR CURP";
-        } else if (pMatch.nombre.toUpperCase().includes(raizN) && pMatch.apellido_paterno.toUpperCase().includes(raizA)) {
-            titulo = "🎯 IDENTIDAD CONFIRMADA POR NOMBRE Y APELLIDOS";
-        }
-
-        const esMismo = confirm(`${titulo}\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar sus datos / Cancelar = Es un familiar)`);
-  
+        const esMismo = confirm(`🕵️ COINCIDENCIA DETECTADA\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar / Cancelar = Familiar nuevo)`);
+    
         if (esMismo) {
             idPacienteFinal = pMatch.id;
             const updates = {};
@@ -2190,43 +2169,37 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             if (correoS && pMatch.correo_electronico !== correoS) updates.correo_electronico = correoS;
             if (sol.telefono && pMatch.telefono !== sol.telefono) updates.telefono = sol.telefono;
             if (nomS.length > pMatch.nombre.length) updates.nombre = nomS;
-  
+    
             if (Object.keys(updates).length > 0) {
                 await fisioNet.from('pacientes_maestros').update(updates).eq('id', idPacienteFinal);
             }
         } else if (pMatch.telefono === sol.telefono) {
-            const esFam = confirm(`👥 ¿NUEVO FAMILIAR?\n\n¿Deseas crear un expediente SEPARADO para ${nomS} compartiendo el teléfono de ${pMatch.nombre}?`);
+            const esFam = confirm(`👥 ¿NUEVO FAMILIAR?\n\n¿Deseas crear un expediente separado para ${nomS}?`);
             if (esFam) {
                 const { data: nFam, error: errFam } = await fisioNet.from('pacientes_maestros').insert({
                     nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
                     telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
                     id_clinica: clinicaId, creado_por: user.id
                 }).select().single();
-  
+    
                 if (errFam) {
-                    alert(`¡Alto ahí!\nSupabase rechazó el registro.\nMotivo: ${errFam.message}`);
+                    alert(`Supabase rechazó el registro: ${errFam.message}`);
                     return; 
                 }
                 idPacienteFinal = nFam.id;
-                if (typeof window.crearVinculoInicial === 'function') {
-                    await window.crearVinculoInicial(idPacienteFinal, user.id, clinicaId);
-                }
             } else { return; } 
         }
     }
-  
+   
     if (!idPacienteFinal) {
         const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
             nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
             telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
             id_clinica: clinicaId, creado_por: user.id
         }).select().single();
-  
+    
         if (eP) return alert("Error al crear paciente nuevo: " + eP.message);
         idPacienteFinal = nPac.id;
-        if (typeof window.crearVinculoInicial === 'function') {
-            await window.crearVinculoInicial(idPacienteFinal, user.id, clinicaId);
-        }
     }
 
     // 🚀 Insertamos en agenda maestra
@@ -2240,7 +2213,7 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         estatus: 'PENDIENTE',
         estado: 'ACTIVO'
     }).select().single();
-  
+   
     if (!eAg && nuevaCita) {
         await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
         
@@ -2251,38 +2224,33 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-        // 📱 ENVIAR WHATSAPP DE ACEPTACIÓN / CONFIRMACIÓN CON CONTROL DE ERRORES
+        // 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
-                console.log(`📤 [PANEL] Enviando WhatsApp de aceptación a ${sol.telefono}...`);
-                const { data: resWp, error: errWp } = await fisioNet.functions.invoke('send-whatsapp', {
-                    body: { 
-                        to: sol.telefono, 
-                        message: mensajeAceptacion 
-                    }
+                const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { to: sol.telefono, message: mensajeAceptacion }
                 });
 
-                if (errWp) {
-                    console.error("❌ Error devuelto por send-whatsapp:", errWp);
-                } else {
-                    console.log("✅ WhatsApp de aceptación enviado con éxito:", resWp);
+                if (fnError) {
+                    console.error("❌ Error en invoke send-whatsapp (Aceptación):", fnError);
+                    alert("⚠️ La cita se aceptó y guardó, pero falló el envío de WhatsApp: " + (fnError.message || JSON.stringify(fnError)));
                 }
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ Excepción al enviar el WhatsApp de aceptación:", whatsappErr);
+            console.error("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
+            alert("⚠️ Excepción al enviar WhatsApp de aceptación: " + whatsappErr.message);
         }
 
-        alert("✅ PROCESO COMPLETADO EXITOSAMENTE Y NOTIFICADO POR WHATSAPP");
+        alert("✅ PROCESO COMPLETADO");
         cargarSalaEspera();
         if (typeof cargarAgenda === 'function') cargarAgenda('semana');
     } else {
         alert("Error al insertar en agenda: " + (eAg?.message || 'Error desconocido'));
     }
 };
-
 window.abrirModalConvenio = () => {
     const modal = document.getElementById('modalConvenios');
     if (modal) { modal.style.display = 'flex'; }
