@@ -2076,32 +2076,37 @@ const cargarEstadisticas = async () => {
 };
 
 window.procesarSolicitud = async (idSolicitud, accion) => {
-    const { data: { user }, error: authError } = await fisioNet.auth.getUser();
+    console.log(`🚀 [WEB] Iniciando procesarSolicitud para ID: ${idSolicitud} con acción: ${accion}`);
     
+    const { data: { user }, error: authError } = await fisioNet.auth.getUser();
     if (authError || !user) {
+        console.error("❌ [WEB] Error de autenticación:", authError);
         alert("⚠️ Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.");
         location.reload();
         return;
     }
 
     const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-
     if (!clinicaId) {
+        console.error("❌ [WEB] No hay clínica activa en localStorage.");
         alert("⚠️ Error: No hay una clínica activa seleccionada en esta sesión.");
         return;
     }
 
-    const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
-    
-    if (!sol) {
+    const { data: sol, error: solError } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
+    if (solError || !sol) {
+        console.error("❌ [WEB] No se encontró la solicitud:", solError);
         alert("⚠️ No se encontró la información de esta solicitud.");
         return;
     }
+
+    console.log("📄 [WEB] Solicitud cargada con éxito:", sol);
 
     // 🛡️ Manejo de RECHAZO
     if (accion === 'RECHAZAR') {
         if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
         
+        console.log("🚫 [WEB] Rechazando solicitud...");
         await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
 
         try {
@@ -2109,12 +2114,14 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. Por favor intenta eligiendo otra opción o fecha.`;
 
-                await fisioNet.functions.invoke('send-whatsapp', {
+                console.log(`📤 [WEB] Invocando WhatsApp de rechazo para: ${sol.telefono}`);
+                const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
                     body: { to: sol.telefono, message: mensajeRechazo }
                 });
+                console.log("📥 [WEB] Respuesta Edge Function (Rechazo):", { fnData, fnError });
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ Error al enviar WhatsApp de rechazo:", whatsappErr);
+            console.error("⚠️ [WEB] Excepción en WhatsApp de rechazo:", whatsappErr);
         }
 
         cargarSalaEspera();
@@ -2122,17 +2129,13 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
     }
 
     // =================================================================================
-    // 🔀 DISTINCIÓN DE CAMINOS: 
-    // ¿Cómo sabemos si viene de la App o del Bot? 
-    // (Por ejemplo, las de la app suelen tener datos más completos como CURP, correo o un origen específico, 
-    // o si prefieres evaluar alguna bandera. Aquí mantenemos tu lógica intacta para cuando sea un paciente de clínica).
+    // 🔀 DISTINCIÓN DE CAMINOS (App vs Bot)
     // =================================================================================
-    
     let idPacienteFinal = null;
-    let esFlujoPesadoApp = true; // Cambia esto si tienes una forma de detectar que viene directo del bot (ej. sol.origen === 'whatsapp')
+    let esFlujoPesadoApp = true; // Mantén tu lógica intacta o pon una bandera si viene del bot
 
     if (esFlujoPesadoApp) {
-        // --- CAMINO 1: Tu motor maestro (FisioCid App - Cruce de pacientes, Agenda Maestra y Google Calendar) ---
+        console.log("⚙️ [WEB] Ejecutando Camino 1: Motor Maestro de Pacientes (App)...");
         const nomS = sol.nombre.toUpperCase().trim();
         const apePS = sol.apellido_p.toUpperCase().trim();
         const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
@@ -2203,7 +2206,7 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             idPacienteFinal = nPac.id;
         }
 
-        // Insertamos en agenda maestra
+        console.log("🚀 [WEB] Insertando en agenda_maestra para paciente ID:", idPacienteFinal);
         const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
             id_paciente: idPacienteFinal,
             id_profesional: user.id,
@@ -2216,50 +2219,53 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         }).select().single();
 
         if (eAg) {
+            console.error("❌ [WEB] Error al insertar en agenda_maestra:", eAg);
             return alert("Error al insertar en agenda: " + eAg.message);
         }
 
-        // Sincronizar Google Calendar si existe
         try {
             const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
             await sincronizarConGoogleCalendar(nuevaCita, nombreCompleto.trim());
         } catch (syncErr) {
-            console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
+            console.warn("⚠️ [WEB] Advertencia al sincronizar con Google Calendar:", syncErr);
         }
     }
 
-    // --- ACCIÓN COMÚN PARA AMBOS (Actualizar la solicitud a CONFIRMADO) ---
+    // --- ACCIÓN COMÚN: Actualizar solicitud a CONFIRMADO ---
+    console.log("📝 [WEB] Actualizando solicitud a CONFIRMADO...");
     await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
     
-    // Limpieza clave del bot de WhatsApp para destrabarlo
+    // Limpieza del bot
     try {
+        console.log("🧹 [WEB] Limpiando sesión en sesiones_whatsapp_bot para:", sol.telefono);
         await fisioNet.from('sesiones_whatsapp_bot').update({
             estado_conversacion: 'INICIO',
             fecha_temporal: null,
             dato_temporal: null
         }).eq('telefono_paciente', sol.telefono);
     } catch (botErr) {
-        console.warn("⚠️ No se pudo limpiar la sesión del bot:", botErr);
+        console.warn("⚠️ [WEB] No se pudo limpiar la sesión del bot:", botErr);
     }
 
-    // 📱 DISPARO INMEDIATO DEL WHATSAPP DE CONFIRMACIÓN
+    // 📱 DISPARO DEL WHATSAPP DE ACEPTACIÓN
     try {
         if (sol.telefono) {
             const nombrePacienteMsg = sol.nombre || 'Paciente';
             const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
-            const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+            console.log(`📤 [WEB] Invocando Edge Function 'send-whatsapp' con número: ${sol.telefono}`);
+            const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
                 body: { to: sol.telefono, message: mensajeAceptacion }
             });
 
             if (fnError) {
-                console.error("❌ Error en invoke send-whatsapp (Aceptación):", fnError);
+                console.error("❌ [WEB] Error retornado por invoke('send-whatsapp'):", fnError);
             } else {
-                console.log("✅ WhatsApp de aceptación enviado correctamente.");
+                console.log("✅ [WEB] Respuesta exitosa de invoke('send-whatsapp'):", fnData);
             }
         }
     } catch (whatsappErr) {
-        console.warn("⚠️ Excepción al enviar WhatsApp de aceptación:", whatsappErr);
+        console.error("⚠️ [WEB] Excepción crítica al invocar WhatsApp de aceptación:", whatsappErr);
     }
 
     alert("✅ PROCESO COMPLETADO Y WHATSAPP ENVIADO");
@@ -3036,10 +3042,10 @@ async function cargarSolicitudesRecibidas() {
                             <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
                         </div>
                       <div style="display: flex; gap: 5px;">
-    <button onclick="confirmarHorarioEnSala('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
+    <button onclick="procesarSolicitud('${sol.id}', 'CONFIRMAR)" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
     <!-- 🔄 Botón Azul: Proponer Nuevo Horario -->
                     <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
-    <button onclick="confirmarHorarioEnSala('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
+    <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
 </div>
                     </div>
                     <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold; text-align: left;">
