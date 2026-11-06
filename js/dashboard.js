@@ -2236,20 +2236,29 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-        // 3. 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN DIRECTO A TU WEBHOOK/EDGE FUNCTION
+     // 3. 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN DIRECTO A LA EDGE FUNCTION
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
-                // Usamos la misma Edge Function que atiende todo (ej. tu webhook único)
-                const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
-                    body: { to: sol.telefono, message: mensajeAceptacion }
+                // URL directa de tu Edge Function en Supabase
+                const edgeFunctionUrl = 'https://wboknacojtrfehlwswhh.supabase.co/functions/v1/send-whatsapp';
+
+                const wpDirectRes = await fetch(edgeFunctionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${fisioNet.supabaseKey || ''}` // O tu anon key
+                    },
+                    body: JSON.stringify({
+                        to: sol.telefono,
+                        message: mensajeAceptacion
+                    })
                 });
 
-                if (fnError) {
-                    console.error("❌ Error al disparar el WhatsApp:", fnError);
-                }
+                const wpResult = await wpDirectRes.json();
+                console.log("📤 Respuesta del envío de WhatsApp:", wpResult);
             }
         } catch (whatsappErr) {
             console.warn("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
