@@ -2236,32 +2236,29 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-     // 3. 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN DIRECTO A LA EDGE FUNCTION
+     // 3. 📱 ENVIAR WHATSAPP DE CONFIRMACIÓN USANDO EL CLIENTE OFICIAL DE SUPABASE
         try {
             if (sol.telefono) {
                 const nombrePacienteMsg = sol.nombre || 'Paciente';
                 const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
 
-                // URL directa de tu Edge Function en Supabase
-                const edgeFunctionUrl = 'https://wboknacojtrfehlwswhh.supabase.co/functions/v1/send-whatsapp';
-
-                const wpDirectRes = await fetch(edgeFunctionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${fisioNet.supabaseKey || ''}` // O tu anon key
-                    },
-                    body: JSON.stringify({
-                        to: sol.telefono,
-                        message: mensajeAceptacion
-                    })
+                // Llamada oficial y nativa mediante el cliente de Supabase
+                const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { 
+                        to: sol.telefono, 
+                        message: mensajeAceptacion 
+                    }
                 });
 
-                const wpResult = await wpDirectRes.json();
-                console.log("📤 Respuesta del envío de WhatsApp:", wpResult);
+                if (fnError) {
+                    console.error("❌ Error devuelto por la Edge Function:", fnError);
+                    alert("⚠️ La cita se guardó, pero hubo un error al disparar el WhatsApp: " + (fnError.message || JSON.stringify(fnError)));
+                } else {
+                    console.log("📤 WhatsApp enviado con éxito:", fnData);
+                }
             }
         } catch (whatsappErr) {
-            console.warn("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
+            console.warn("⚠️ Excepción crítica al invocar el WhatsApp:", whatsappErr);
         }
 
         alert("✅ PROCESO COMPLETADO Y BOT DESCONGELADO");
