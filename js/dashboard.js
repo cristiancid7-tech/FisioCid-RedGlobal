@@ -2076,15 +2076,16 @@ const cargarEstadisticas = async () => {
 };
 
 window.procesarSolicitud = async (idSolicitud, accion) => {
-   
+    
     // 🛡️ 1. Validar sesión activa antes de hacer nada
     const { data: { user }, error: authError } = await fisioNet.auth.getUser();
+  
     if (authError || !user) {
         alert("⚠️ Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.");
         location.reload();
         return;
     }
-
+  
     // 🛡️ 2. Validar clínica activa
     const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
     if (!clinicaId) {
@@ -2092,44 +2093,62 @@ window.procesarSolicitud = async (idSolicitud, accion) => {
         return;
     }
 
-    // 🛡️ 3. Manejo de rechazo
-    if (accion === 'RECHAZAR') {
-        if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
-        await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
-        cargarSalaEspera();
-        return;
-    }
-
-    // 🔍 Obtener datos de la solicitud
+    // 🔍 Obtener datos de la solicitud antes de procesar
     const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
+  
     if (!sol) {
         alert("⚠️ No se encontró la información de esta solicitud.");
         return;
     }
-    
-    // ⚠️ NOTA: Eliminamos las redeclaraciones de 'clinicaId' y 'user' porque ya viven en el scope superior de la función.
 
+    // 🛡️ 3. Manejo de RECHAZO (Con notificación de WhatsApp)
+    if (accion === 'RECHAZAR') {
+        if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
+        
+        await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
+
+        // 📱 ENVIAR WHATSAPP DE RECHAZO
+        try {
+            if (sol.telefono) {
+                const nombrePacienteMsg = sol.nombre || 'Paciente';
+                const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. Por favor intenta eligiendo otra opción o fecha.`;
+
+                await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { 
+                        to: sol.telefono, 
+                        message: mensajeRechazo 
+                    }
+                });
+            }
+        } catch (whatsappErr) {
+            console.warn("⚠️ No se pudo enviar el WhatsApp de rechazo:", whatsappErr);
+        }
+
+        cargarSalaEspera();
+        return;
+    }
+  
     const nomS = sol.nombre.toUpperCase().trim();
     const apePS = sol.apellido_p.toUpperCase().trim();
     const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
     const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
-
-const raizN = nomS.substring(0, 4);
+    const raizN = nomS.substring(0, 4);
     const raizA = apePS.substring(0, 4);
     const raizMaterno = sol.apellido_m ? sol.apellido_m.toUpperCase().trim().substring(0, 4) : '';
-
+  
     // 🚀 MEJORA: Buscamos el apellido en el PATERNO o en el MATERNO
     let filtrosOr = `telefono.eq.${sol.telefono},and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%),and(nombre.ilike.%${raizN}%,apellido_materno.ilike.%${raizA}%)`;
     if (curpS) filtrosOr += `,curp.eq.${curpS}`;
-
+  
     let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
+  
     let idPacienteFinal = null;
-
+  
     if (coincidencias && coincidencias.length > 0) {
         let pMatch = null;
-
+  
         if (curpS) pMatch = coincidencias.find(p => p.curp === curpS);
-
+  
         if (!pMatch) {
             pMatch = coincidencias.find(p => {
                 const nomDB = p.nombre ? p.nombre.toUpperCase() : '';
@@ -2137,17 +2156,15 @@ const raizN = nomS.substring(0, 4);
                 const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
                 
                 const checkPaterno = apPDB.includes(raizA);
-                // También verificamos si el apellido que nos dieron por teléfono coincide con su materno real
-                const coincideConMaterno = apMDB.includes(raizA); 
+                const coincideConMaterno = apMDB.includes(raizA);
                 const checkNombre = nomDB.includes(raizN);
-
-                // Si el nombre coincide, y el apellido dado coincide ya sea con el paterno o el materno
+  
                 return checkNombre && (checkPaterno || coincideConMaterno);
             });
         }
 
         if (!pMatch) pMatch = coincidencias.find(p => p.telefono === sol.telefono) || coincidencias[0];
-
+  
         const nomEnBase = `${pMatch.nombre} ${pMatch.apellido_paterno}`;
         
         let titulo = "🕵️ POSIBLE COINCIDENCIA DETECTADA";
@@ -2158,16 +2175,15 @@ const raizN = nomS.substring(0, 4);
         }
 
         const esMismo = confirm(`${titulo}\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar sus datos / Cancelar = Es un familiar)`);
-
+  
         if (esMismo) {
             idPacienteFinal = pMatch.id;
-            
             const updates = {};
             if (curpS && pMatch.curp !== curpS) updates.curp = curpS;
             if (correoS && pMatch.correo_electronico !== correoS) updates.correo_electronico = correoS;
             if (sol.telefono && pMatch.telefono !== sol.telefono) updates.telefono = sol.telefono;
             if (nomS.length > pMatch.nombre.length) updates.nombre = nomS;
-
+  
             if (Object.keys(updates).length > 0) {
                 await fisioNet.from('pacientes_maestros').update(updates).eq('id', idPacienteFinal);
             }
@@ -2179,7 +2195,7 @@ const raizN = nomS.substring(0, 4);
                     telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
                     id_clinica: clinicaId, creado_por: user.id
                 }).select().single();
-
+  
                 if (errFam) {
                     alert(`¡Alto ahí!\nSupabase rechazó el registro.\nMotivo: ${errFam.message}`);
                     return; 
@@ -2191,14 +2207,14 @@ const raizN = nomS.substring(0, 4);
             } else { return; } 
         }
     }
-
+  
     if (!idPacienteFinal) {
         const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
             nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
             telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
             id_clinica: clinicaId, creado_por: user.id
         }).select().single();
-
+  
         if (eP) return alert("Error al crear paciente nuevo: " + eP.message);
         idPacienteFinal = nPac.id;
         if (typeof window.crearVinculoInicial === 'function') {
@@ -2206,7 +2222,7 @@ const raizN = nomS.substring(0, 4);
         }
     }
 
-    // 🚀 1. Insertamos en agenda maestra y pedimos de vuelta el registro creado (.select().single())
+    // 🚀 Insertamos en agenda maestra
     const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
         id_paciente: idPacienteFinal,
         id_profesional: user.id,
@@ -2217,12 +2233,10 @@ const raizN = nomS.substring(0, 4);
         estatus: 'PENDIENTE',
         estado: 'ACTIVO'
     }).select().single();
-
+  
     if (!eAg && nuevaCita) {
-        // Actualizamos la solicitud a APROBADO en la sala de espera
-        await fisioNet.from('solicitudes_citas').update({ estado: 'APROBADO' }).eq('id', idSolicitud);
+        await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
         
-        // 🚀 2. Sincronización automática con Google Calendar / iPhone
         try {
             const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
             await sincronizarConGoogleCalendar(nuevaCita, nombreCompleto.trim());
@@ -2230,7 +2244,24 @@ const raizN = nomS.substring(0, 4);
             console.warn("⚠️ Advertencia al sincronizar con Google Calendar:", syncErr);
         }
 
-        alert("✅ PROCESO COMPLETADO EXITOSAMENTE Y SINCRONIZADO");
+        // 📱 ENVIAR WHATSAPP DE ACEPTACIÓN / CONFIRMACIÓN
+        try {
+            if (sol.telefono) {
+                const nombrePacienteMsg = sol.nombre || 'Paciente';
+                const mensajeAceptacion = `¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${sol.hora_cita}*. ¡Te esperamos!`;
+
+                await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { 
+                        to: sol.telefono, 
+                        message: mensajeAceptacion 
+                    }
+                });
+            }
+        } catch (whatsappErr) {
+            console.warn("⚠️ No se pudo enviar el WhatsApp de aceptación:", whatsappErr);
+        }
+
+        alert("✅ PROCESO COMPLETADO EXITOSAMENTE Y NOTIFICADO POR WHATSAPP");
         cargarSalaEspera();
         if (typeof cargarAgenda === 'function') cargarAgenda('semana');
     } else {
@@ -2452,51 +2483,65 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                 btnHora.innerText = hora;
                 btnHora.style.cssText = "background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
 
-               btnHora.onclick = async () => {
-                  modalReagendar.remove();
-                  try {
-                      // 1. Actualizar la solicitud en la base de datos
-                      const { error } = await fisioNet.from('solicitudes_citas')
-                          .update({ fecha_cita: fechaElegida, hora_cita: hora, estado: 'PENDIENTE' })
-                          .eq('id', idSolicitud);
+              btnHora.onclick = async () => { modalReagendar.remove();
+    try {
+        // 0. Opcional de seguridad: Cancelar cualquier otra solicitud duplicada o vieja de este paciente con este doctor
+        if (telefonoPaciente && idProfSolicitado) {
+            await fisioNet.from('solicitudes_citas')
+                .update({ estado: 'CANCELADO' })
+                .eq('telefono', telefonoPaciente)
+                .eq('id_profesional_solicitado', idProfSolicitado)
+                .eq('estado', 'PENDIENTE')
+                .neq('id', idSolicitud); // Excluimos la actual para actualizarla limpiamente
+        }
 
-                      if (error) throw error;
+        // 1. Actualizar la solicitud actual con la nueva fecha y hora
+        const { error } = await fisioNet.from('solicitudes_citas')
+            .update({ 
+                fecha_cita: fechaElegida, 
+                hora_cita: hora, 
+                estado: 'PENDIENTE' 
+            })
+            .eq('id', idSolicitud);
 
-                      // 2. Cambiar la sesión del bot de este paciente a ESPERANDO_CONFIRMACION_CAMBIO
-                      if (telefonoPaciente) {
-                          await fisioNet.from('sesiones_whatsapp_bot').upsert({
-                              telefono_paciente: telefonoPaciente,
-                              id_profesional: idProfSolicitado,
-                              estado_conversacion: 'ESPERANDO_CONFIRMACION_CAMBIO',
-                              fecha_temporal: fechaElegida,
-                              dato_temporal: hora
-                          }, { onConflict: 'telefono_paciente' });
+        if (error) throw error;
 
-                          // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VIA WHATSAPP
-                          const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
+        // 2. Cambiar la sesión del bot de este paciente a ESPERANDO_CONFIRMACION_CAMBIO
+        if (telefonoPaciente) {
+            await fisioNet.from('sesiones_whatsapp_bot').upsert({
+                telefono_paciente: telefonoPaciente,
+                id_profesional: idProfSolicitado,
+                estado_conversacion: 'ESPERANDO_CONFIRMACION_CAMBIO',
+                fecha_temporal: fechaElegida,
+                dato_temporal: hora
+            }, { onConflict: 'telefono_paciente' });
 
-                          const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
-                              body: { 
-                                  to: telefonoPaciente, 
-                                  message: mensajeTexto 
-                              }
-                          });
+            // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VÍA WHATSAPP
+            const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
 
-                          if (fnError) {
-                              console.error("Error al disparar el mensaje de WhatsApp:", fnError);
-                          }
-                      }
+            const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                body: { 
+                    to: telefonoPaciente, 
+                    message: mensajeTexto 
+                }
+            });
 
-                      alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
+            if (fnError) {
+                console.error("Error al disparar el mensaje de WhatsApp:", fnError);
+            }
+        }
 
-                      if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
-                      if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
-                  } catch (err) {
-                      console.error("Error al actualizar nuevo horario:", err);
-                      alert("Hubo un error al actualizar el horario.");
-                  }
-              };
-              
+        alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
+
+        if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
+        if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+
+    } catch (err) {
+        console.error("Error al actualizar nuevo horario:", err);
+        alert("Hubo un error al actualizar el horario.");
+    }
+};
+
                 gridHorarios.appendChild(btnHora);
             });
 
