@@ -649,116 +649,120 @@ botonAccion = `<button onclick="abrirFiltroLimpieza('${cita.id_cita}', 'solicitu
 
 window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) => {
     if (!idCita || idCita === 'undefined') return;
-
-    // 🟢 FORZAR A BOOLEANO REAL
-    const esProspectoBool = esProspecto === true || esProspecto === 'true';
-
-    try {
-        if (nuevoEstatus === 'REAGENDADO') {
+ 
+  // 🟢 FORZAR A BOOLEANO REAL
+  const esProspectoBool = esProspecto === true || esProspecto === 'true';
+ 
+  try {
+      if (nuevoEstatus === 'REAGENDADO') {
             // 1. Crear el modal flotante
             let modalReagendar = document.getElementById('modalReagendarCita');
-            if (!modalReagendar) {
-                modalReagendar = document.createElement('div');
-                modalReagendar.id = 'modalReagendarCita';
-                modalReagendar.style.cssText = `
-                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                    background: rgba(0,0,0,0.5); display: flex; justify-content: center;
-                    align-items: center; z-index: 9999; backdrop-filter: blur(2px);
-                `;
-                document.body.appendChild(modalReagendar);
-            }
+ 
+          if (!modalReagendar) {
+              modalReagendar = document.createElement('div');
+              modalReagendar.id = 'modalReagendarCita';
+              modalReagendar.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+                align-items: center; z-index: 9999; backdrop-filter: blur(2px);
+              `;
+              document.body.appendChild(modalReagendar);
+          }
+ 
+          const fechaHoy = new Date().toISOString().split('T')[0];
+ 
+          modalReagendar.innerHTML = `
+              <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
+                  <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Reagendar Cita</h3>
+                  
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #475569;">SELECCIONA LA NUEVA FECHA:</label>
+                  <input type="date" id="inputNuevaFechaCita" value="${fechaHoy}" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+                  
+                  <button id="btnConsultarDispoModal" style="background: #0f172a; color: white; border: none; padding: 9px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">🔍 Consultar Horarios Disponibles</button>
+                  
+                  <div id="contenedorHorariosLibresModal" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 5px;">
+                      <span style="font-size: 0.75rem; color: #94a3b8; text-align: center;">Elige una fecha y presiona consultar.</span>
+                  </div>
 
-            const fechaHoy = new Date().toISOString().split('T')[0];
-
-            modalReagendar.innerHTML = `
-                <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
-                    <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Reagendar Cita</h3>
-                    
-                    <label style="font-size: 0.75rem; font-weight: 700; color: #475569;">SELECCIONA LA NUEVA FECHA:</label>
-                    <input type="date" id="inputNuevaFechaCita" value="${fechaHoy}" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
-                    
-                    <button id="btnConsultarDispoModal" style="background: #0f172a; color: white; border: none; padding: 9px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">🔍 Consultar Horarios Disponibles</button>
-                    
-                    <div id="contenedorHorariosLibresModal" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 5px;">
-                        <span style="font-size: 0.75rem; color: #94a3b8; text-align: center;">Elige una fecha y presiona consultar.</span>
-                    </div>
-
-                    <button onclick="document.getElementById('modalReagendarCita').remove(); cargarAgenda(document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia');" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
-                </div>
+                  <button onclick="document.getElementById('modalReagendarCita').remove(); cargarAgenda(document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia');" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
+              </div>
             `;
-
+ 
             // 2. Consulta de disponibilidad real
             document.getElementById('btnConsultarDispoModal').onclick = async () => {
                 const fechaElegida = document.getElementById('inputNuevaFechaCita').value;
                 const contenedor = document.getElementById('contenedorHorariosLibresModal');
                 const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-                const { data: { user } } = await fisioNet.auth.getUser();
-
-                if (!fechaElegida || !clinicaId || !user) {
-                    alert("Faltan datos de clínica o sesión de usuario.");
+ 
+              const { data: { user } } = await fisioNet.auth.getUser();
+ 
+              if (!fechaElegida || !clinicaId || !user) {
+                  alert("Faltan datos de clínica o sesión de usuario.");
+                  return;
+              }
+ 
+              contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#10b981; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
+ 
+              try {
+                  const [ocupadasRes, perfilRes] = await Promise.all([
+                      fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
+                      // 🟢 CAMBIADO: Ahora consulta 'colaboradores_clinica' usando id_profesional e id_clinica
+                      fisioNet.from('colaboradores_clinica').select('horario_atencion, intervalo_cita').eq('id_profesional', user.id).eq('id_clinica', clinicaId).single()
+                  ]);
+ 
+                const ocupadas = ocupadasRes.data;
+                const perfil = perfilRes.data;
+ 
+                if (!perfil?.horario_atencion) {
+                    contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
                     return;
                 }
-
-                contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#10b981; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
-
-                try {
-                    const [ocupadasRes, perfilRes] = await Promise.all([
-                        fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
-                        fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita').eq('id', user.id).single()
-                    ]);
-
-                    const ocupadas = ocupadasRes.data;
-                    const perfil = perfilRes.data;
-
-                    if (!perfil?.horario_atencion) {
-                        contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
-                        return;
-                    }
-
-                    const config = JSON.parse(perfil.horario_atencion);
-                    const intervalo = parseInt(perfil.intervalo_cita) || 30;
-                    const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
-                    const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
-
-                    const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
-                    const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
-
-                    let espaciosDisponibles = [];
-
-                    bloquesHoy.forEach(bloque => {
-                        let inicio = aMin(bloque.inicio);
-                        let fin = aMin(bloque.fin);
-
-                        while (inicio + intervalo <= fin) {
-                            const horaGen = minToH(inicio);
-                            const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
-                            
-                            if (!estaOcupada) {
-                                espaciosDisponibles.push(horaGen);
-                            }
-                            inicio += intervalo;
-                        }
-                    });
-
-                    if (espaciosDisponibles.length === 0) {
-                        contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
-                        return;
-                    }
-
-                    contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #166534;">Selecciona la nueva hora (${espaciosDisponibles.length} libres):</span>`;
-                    
-                    const gridHorarios = document.createElement('div');
-                    gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
-
-                    espaciosDisponibles.forEach(hora => {
-                        const btnHora = document.createElement('button');
-                        btnHora.innerText = hora;
-                        btnHora.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
+ 
+                const config = JSON.parse(perfil.horario_atencion);
+                const intervalo = parseInt(perfil.intervalo_cita) || 30;
+                const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+ 
+                  const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
+ 
+                  const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
+                  const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
+ 
+                  let espaciosDisponibles = [];
+ 
+                bloquesHoy.forEach(bloque => {
+                    let inicio = aMin(bloque.inicio);
+                    let fin = aMin(bloque.fin);
+ 
+                    while (inicio + intervalo <= fin) {
+                        const horaGen = minToH(inicio);
+                        const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
                         
-                        btnHora.onclick = async () => {
-                            modalReagendar.remove();
-
-                            if (esProspecto) {
+                        if (!estaOcupada) {
+                            espaciosDisponibles.push(horaGen);
+                        }
+                        inicio += intervalo;
+                    }
+                });
+ 
+                if (espaciosDisponibles.length === 0) {
+                    contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
+                    return;
+                }
+ 
+                contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #166534;">Selecciona la nueva hora (${espaciosDisponibles.length} libres):</span>`;
+                
+                const gridHorarios = document.createElement('div');
+                  gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
+ 
+                  espaciosDisponibles.forEach(hora => {
+                      const btnHora = document.createElement('button');
+                      btnHora.innerText = hora;
+                      btnHora.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
+                      
+                      btnHora.onclick = async () => {
+                          modalReagendar.remove();
+ 
+                          if (esProspecto) {
                                 const { error } = await fisioNet.from('solicitudes_citas')
                                     .update({ fecha_cita: fechaElegida, hora_cita: hora, estado: 'PENDIENTE' })
                                     .eq('id', idCita);
@@ -768,64 +772,63 @@ window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) =>
                                     .update({ fecha: fechaElegida, hora_inicio_cita: hora, estatus: 'PENDIENTE' })
                                     .eq('id_cita', idCita);
                                 if (error) throw error;
-
+                                
                                 // 🟢 CORREGIDO: Se homologó el nombre a actualizarCitaEnGoogle
                                 if (typeof actualizarCitaEnGoogle === 'function') {
                                     await actualizarCitaEnGoogle(idCita, fechaElegida, hora, "Paciente FisioCid");
                                 }
                             }
-
+ 
                             alert(`✅ Cita reagendada con éxito para el ${fechaElegida} a las ${hora}.`);
                             
                             const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
                             if (typeof cargarAgenda === 'function') cargarAgenda(modoActual);
                         };
-
+                        
                         gridHorarios.appendChild(btnHora);
-                    });
+                });
+ 
+                  contenedor.appendChild(gridHorarios);
+ 
+              } catch (err) {
+                  console.error("Error consultando disponibilidad en modal:", err);
+                  contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Error al sincronizar horarios.</p>`;
+              }
+          };
+ 
+      } else {
+          // 1. Actualizamos en Supabase
+          if (esProspectoBool) {
+              const { error } = await fisioNet.from('solicitudes_citas')
+                  .update({ estado: nuevoEstatus })
+                  .eq('id', idCita);
+              if (error) throw error;
+          } else {
+              const { error } = await fisioNet.from('agenda_maestra')
+                  .update({ estatus: nuevoEstatus })
+                  .eq('id_cita', idCita);
+              if (error) throw error;
+          }
 
-                    contenedor.appendChild(gridHorarios);
+          // 2. 🟢 ELIMINAR/CANCELAR EN GOOGLE CALENDAR
+          if (nuevoEstatus === 'CANCELADO' && !esProspectoBool) {
+              if (typeof cancelarCitaEnGoogle === 'function') {
+                  try {
+                      await cancelarCitaEnGoogle(idCita);
+                  } catch (errGoogle) {
+                      console.warn("⚠️ No se pudo eliminar de Google Calendar:", errGoogle);
+                  }
+              } else {
+                  console.error("❌ La función cancelarCitaEnGoogle no está disponible.");
+              }
+          }
 
-                } catch (err) {
-                    console.error("Error consultando disponibilidad en modal:", err);
-                    contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Error al sincronizar horarios.</p>`;
-                }
-            };
-
-        } else {
-            // 1. Actualizamos en Supabase
-            if (esProspectoBool) {
-                const { error } = await fisioNet.from('solicitudes_citas')
-                    .update({ estado: nuevoEstatus })
-                    .eq('id', idCita);
-                if (error) throw error;
-            } else {
-                const { error } = await fisioNet.from('agenda_maestra')
-                    .update({ estatus: nuevoEstatus })
-                    .eq('id_cita', idCita);
-                if (error) throw error;
-            }
-
-            // 2. 🟢 ELIMINAR/CANCELAR EN GOOGLE CALENDAR
-            if (nuevoEstatus === 'CANCELADO' && !esProspectoBool) {
-                if (typeof cancelarCitaEnGoogle === 'function') {
-                    try {
-                        await cancelarCitaEnGoogle(idCita);
-                      //  console.log("✅ Evento cancelado/eliminado de Google Calendar");
-                    } catch (errGoogle) {
-                        console.warn("⚠️ No se pudo eliminar de Google Calendar:", errGoogle);
-                    }
-                } else {
- //                   console.error("❌ La función cancelarCitaEnGoogle no está disponible.");
-                }
-            }
-
-            // 3. Recargamos la vista de la agenda
-            const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
-            if (typeof cargarAgenda === 'function') {
-                await cargarAgenda(modoActual);
-            }
-        }
+          // 3. Recargamos la vista de la agenda
+          const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
+          if (typeof cargarAgenda === 'function') {
+              await cargarAgenda(modoActual);
+          }
+      }
     } catch (err) {
         console.error("Error al cambiar estatus de cita:", err);
         alert("No se pudo cambiar el estatus: " + err.message);
@@ -2403,9 +2406,10 @@ async function inicializarFormularioConvenio() {
 }
 
 window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
-    if (!idSolicitud || idSolicitud === 'undefined') return;
-
-    // Obtener datos del paciente para la notificación
+ 
+  if (!idSolicitud || idSolicitud === 'undefined') return;
+ 
+  // Obtener datos del paciente para la notificación
     let telefonoPaciente = '';
     let nombrePaciente = '';
     let idProfSolicitado = '';
@@ -2416,7 +2420,7 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
             .select('telefono, nombre, id_profesional_solicitado')
             .eq('id', idSolicitud)
             .single();
-
+ 
         if (solData) {
             telefonoPaciente = solData.telefono || '';
             nombrePaciente = solData.nombre || 'Paciente';
@@ -2425,22 +2429,22 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
     } catch (e) {
         console.warn("Error al obtener datos de la solicitud:", e);
     }
-
+ 
     let modalReagendar = document.getElementById('modalProponerHorario');
-
+ 
     if (!modalReagendar) {
         modalReagendar = document.createElement('div');
         modalReagendar.id = 'modalProponerHorario';
         modalReagendar.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: flex; justifyContent: center;
+            background: rgba(0,0,0,0.5); display: flex; justify-content: center;
             align-items: center; z-index: 9999; backdrop-filter: blur(2px);
         `;
         document.body.appendChild(modalReagendar);
     }
-
+ 
     const fechaHoy = new Date().toISOString().split('T')[0];
-
+ 
     modalReagendar.innerHTML = `
         <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
             <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Proponer Nuevo Horario</h3>
@@ -2453,42 +2457,43 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
             <button onclick="document.getElementById('modalProponerHorario').remove();" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
         </div>
     `;
-
+ 
     document.getElementById('btnConsultarDispoPropuesta').onclick = async () => {
         const fechaElegida = document.getElementById('inputNuevaFechaPropuesta').value;
         const contenedor = document.getElementById('contenedorHorariosLibresPropuesta');
         const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
         const { data: { user } } = await fisioNet.auth.getUser();
-
+ 
         if (!fechaElegida || !clinicaId || !user) {
             alert("Faltan datos de clínica o sesión de usuario.");
             return;
         }
-
+ 
         contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#3b82f6; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
-
+ 
         try {
             const [ocupadasRes, perfilRes] = await Promise.all([
                 fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
-                fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita, nombre_completo').eq('id', user.id).single()
+                // 🟢 CAMBIADO: Ahora consulta 'colaboradores_clinica' filtrando por id_profesional e id_clinica
+                fisioNet.from('colaboradores_clinica').select('horario_atencion, intervalo_cita').eq('id_profesional', user.id).eq('id_clinica', clinicaId).single()
             ]);
-
+ 
             const ocupadas = ocupadasRes.data;
             const perfil = perfilRes.data;
-
+ 
             if (!perfil?.horario_atencion) {
-                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
+                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil o configuración de colaborador primero.</p>`;
                 return;
             }
-
+ 
             const config = JSON.parse(perfil.horario_atencion);
             const intervalo = parseInt(perfil.intervalo_cita) || 30;
             const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
             const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
-
+ 
             const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
             const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
-
+ 
             let espaciosDisponibles = [];
             bloquesHoy.forEach(bloque => {
                 let inicio = aMin(bloque.inicio);
@@ -2500,21 +2505,21 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                     inicio += intervalo;
                 }
             });
-
+ 
             if (espaciosDisponibles.length === 0) {
                 contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
                 return;
             }
-
+ 
             contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #1e3a8a;">Selecciona el nuevo horario (${espaciosDisponibles.length} libres):</span>`;
             const gridHorarios = document.createElement('div');
             gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
-
+ 
             espaciosDisponibles.forEach(hora => {
                 const btnHora = document.createElement('button');
                 btnHora.innerText = hora;
                 btnHora.style.cssText = "background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
-
+ 
                 btnHora.onclick = async () => { 
                     modalReagendar.remove();
                     try {
@@ -2527,21 +2532,21 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                                 .eq('estado', 'PENDIENTE')
                                 .neq('id', idSolicitud);
                         }
-
-                        // 🕒 Asegurar formato 24 horas (por si acaso se inyecta con sufijo o formato distinto)
+ 
+                        // 🕒 Asegurar formato 24 horas
                         const horaFormateada24 = typeof convertirA24Hrs === 'function' ? convertirA24Hrs(hora) : `${hora}:00`;
-
+ 
                         // 1. Actualizar la solicitud actual con la nueva fecha y hora en formato 24h
                         const { error } = await fisioNet.from('solicitudes_citas')
                             .update({ 
-                                fecha_cita: fechaElegida, 
-                                hora_cita: horaFormateada24, 
+                                fecha_cita: fechaElegida,
+                                hora_cita: horaFormateada24,
                                 estado: 'PENDIENTE' 
                             })
                             .eq('id', idSolicitud);
-
+ 
                         if (error) throw error;
-
+ 
                         // 2. Cambiar la sesión del bot a ESPERANDO_CONFIRMACION_CAMBIO
                         if (telefonoPaciente) {
                             await fisioNet.from('sesiones_whatsapp_bot').upsert({
@@ -2551,36 +2556,36 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                                 fecha_temporal: fechaElegida,
                                 dato_temporal: hora
                             }, { onConflict: 'telefono_paciente' });
-
+ 
                             // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VÍA WHATSAPP
                             const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
-
+ 
                             const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
                                 body: { 
-                                    to: telefonoPaciente, 
-                                    message: mensajeTexto 
+                                    to: telefonoPaciente,
+                                    message: mensajeTexto
                                 }
                             });
-
+ 
                             if (fnError) {
                                 console.error("Error al disparar el mensaje de WhatsApp:", fnError);
                             }
                         }
-
+ 
                         alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
-
+ 
                         if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
                         if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
-
+ 
                     } catch (err) {
                         console.error("Error al actualizar nuevo horario:", err);
                         alert("Hubo un error al actualizar el horario.");
                     }
                 };
-
+ 
                 gridHorarios.appendChild(btnHora);
             });
-
+ 
             contenedor.appendChild(gridHorarios);
         } catch (err) {
             console.error("Error consultando disponibilidad:", err);

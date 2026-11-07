@@ -3,15 +3,89 @@
 // ==========================================
 
 async function obtenerIdClinicaReal(userId) {
-    // 1. Busqueda: ¿Es el dueño directo?
-    let { data: clinica } = await fisioNet
-        .from('clinicas')
-        .select('id, nombre_clinica, dominio_corporativo')
-        .eq('id_dueno', userId)
-        .maybeSingle();
+    try {
+        // 1. Prioridad absoluta: ¿El usuario seleccionó una sucursal activa en la interfaz (multisede)?
+        const idClinicaLocalStorage = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
+        
+        if (idClinicaLocalStorage && idClinicaLocalStorage !== "null" && idClinicaLocalStorage !== "undefined" && idClinicaLocalStorage.length >= 10) {
+            // Verificamos que esa clínica realmente exista y traemos sus datos
+            const { data: clinicaSede } = await fisioNet
+                .from('clinicas')
+                .select('id, nombre_clinica, dominio_corporativo')
+                .eq('id', idClinicaLocalStorage)
+                .maybeSingle();
 
-    // 2. Busqueda: Si no es el dueño, ¿es un colaborador activo?
-    if (!clinica) {
+            if (clinicaSede) {
+                return { 
+                    id: clinicaSede.id, 
+                    nombre: clinicaSede.nombre_clinica, 
+                    dominio: clinicaSede.dominio_corporativo || 'fisiocid.com' 
+                };
+            }
+        }
+
+        // 2. Segunda opción: ¿Tiene una clínica principal asignada en su perfil (perfiles o perfiles_profesionales)?
+        const { data: perfilUsuario } = await fisioNet
+            .from('perfiles')
+            .select('id_clinica_principal')
+            .eq('id', userId)
+            .maybeSingle();
+
+        let idClinicaPerfil = perfilUsuario?.id_clinica_principal;
+
+        if (!idClinicaPerfil) {
+            const { data: perfilProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('id_clinica_padre')
+                .eq('id', userId)
+                .maybeSingle();
+            
+            idClinicaPerfil = perfilProf?.id_clinica_padre;
+        }
+
+        if (idClinicaPerfil) {
+            const { data: clinicaPerfil } = await fisioNet
+                .from('clinicas')
+                .select('id, nombre_clinica, dominio_corporativo')
+                .eq('id', idClinicaPerfil)
+                .maybeSingle();
+
+            if (clinicaPerfil) {
+                // Sincronizamos LocalStorage para que el multisede se entere
+                localStorage.setItem('id_clinica_activa', clinicaPerfil.id);
+                localStorage.setItem('id_clinica_actual', clinicaPerfil.id);
+                localStorage.setItem('nombre_clinica', clinicaPerfil.nombre_clinica);
+                localStorage.setItem('clinica_dominio', clinicaPerfil.dominio_corporativo || 'fisiocid.com');
+
+                return { 
+                    id: clinicaPerfil.id, 
+                    nombre: clinicaPerfil.nombre_clinica, 
+                    dominio: clinicaPerfil.dominio_corporativo || 'fisiocid.com' 
+                };
+            }
+        }
+
+        // 3. Tercera opción: ¿Es el dueño directo de alguna clínica?
+        let { data: clinicaDueño } = await fisioNet
+            .from('clinicas')
+            .select('id, nombre_clinica, dominio_corporativo')
+            .eq('id_dueno', userId)
+            .maybeSingle();
+
+        if (clinicaDueño) {
+            localStorage.setItem('id_clinica_activa', clinicaDueño.id);
+            localStorage.setItem('id_clinica_actual', clinicaDueño.id);
+            localStorage.setItem('nombre_clinica', clinicaDueño.nombre_clinica);
+            localStorage.setItem('clinica_dominio', clinicaDueño.dominio_corporativo || 'fisiocid.com');
+
+            return { 
+                id: clinicaDueño.id, 
+                nombre: clinicaDueño.nombre_clinica, 
+                dominio: clinicaDueño.dominio_corporativo || 'fisiocid.com' 
+            };
+        }
+
+        // 4. Cuarta opción: ¿Es colaborador activo en alguna clínica?
         const { data: colab } = await fisioNet
             .from('colaboradores_clinica')
             .select('id_clinica')
@@ -26,24 +100,25 @@ async function obtenerIdClinicaReal(userId) {
                 .eq('id', colab.id_clinica)
                 .maybeSingle();
             
-            clinica = clinicaColab;
+            if (clinicaColab) {
+                localStorage.setItem('id_clinica_activa', clinicaColab.id);
+                localStorage.setItem('id_clinica_actual', clinicaColab.id);
+                localStorage.setItem('nombre_clinica', clinicaColab.nombre_clinica);
+                localStorage.setItem('clinica_dominio', clinicaColab.dominio_corporativo || 'fisiocid.com');
+
+                return { 
+                    id: clinicaColab.id, 
+                    nombre: clinicaColab.nombre_clinica, 
+                    dominio: clinicaColab.dominio_corporativo || 'fisiocid.com' 
+                };
+            }
         }
-    }
 
-    if (clinica) {
-        const id = clinica.id;
-        const nombre = clinica.nombre_clinica;
-        const dominio = clinica.dominio_corporativo || 'fisiocid.com';
+        // Si llegamos aquí, de verdad no hay clínica asociada de forma legítima
+        throw new Error("No se encontró una clínica activa o vinculada a tu sesión actual. Selecciona una sucursal en el menú.");
 
-        // Sincronizamos LocalStorage para el resto del sistema
-        localStorage.setItem('id_clinica_activa', id);
-        localStorage.setItem('id_clinica_actual', id);
-        localStorage.setItem('nombre_clinica', nombre);
-        localStorage.setItem('clinica_dominio', dominio);
-
-        return { id, nombre, dominio };
-    } else {
-        console.error("❌ No se encontró ninguna clínica vinculada a esta cuenta.");
+    } catch (err) {
+        console.error("❌ Error crítico obteniendo clínica real:", err);
         return { id: null, nombre: null, dominio: 'fisiocid.com' };
     }
 }

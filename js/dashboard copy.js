@@ -1,18 +1,314 @@
-// 1. Al cargar el Dashboard, lo primero es saber qué se eligió
-const sedeElegidaID = localStorage.getItem('id_clinica_activa');
-const sedeElegidaNombre = localStorage.getItem('nombre_clinica');
+
+import { 
+    cargarAgenda, 
+    sincronizarConGoogleCalendar, 
+    actualizarCitaEnGoogle, 
+    cancelarCitaEnGoogle,
+    reconectarGoogleCalendar
+} from './agenda.js';   
+
+// Agrega esta línea justo después de tus imports:
+let sedesDisponibles = window.sedesDisponibles || [];
+
+if (typeof window.sedesDisponibles === 'undefined') {
+    window.sedesDisponibles = [];
+}
+
+async function validarEstadoPagoSede(idUsuario) {
+    try {
+        if (!idUsuario) return { pagado: true };
+
+        // Consultamos directo en perfiles_profesionales
+        const { data: perfil, error } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('suscripcion_activa, nivel_suscripcion, fecha_expiracion')
+            .eq('id', idUsuario)
+            .maybeSingle();
+
+        if (error) {
+            console.error("❌ Error en Supabase al consultar suscripción:", error);
+            return { pagado: true }; // Manejo de falla por red/conexion
+        }
+
+        if (!perfil) {
+            console.warn("⚠️ No se encontró el perfil profesional ID:", idUsuario);
+            return { pagado: true };
+        }
+
+        // 1. Verificación directa por bandera booleana
+        if (perfil.suscripcion_activa === false) {
+            return {
+                pagado: false,
+                motivo: 'SUSCRIPCION_INACTIVA',
+                fechaCorte: perfil.fecha_expiracion
+            };
+        }
+
+        // 2. Verificación por nivel de suscripción
+        const nivel = (perfil.nivel_suscripcion || '').toLowerCase().trim();
+        if (nivel === 'vencido' || nivel === 'suspendido' || nivel === 'cancelado') {
+            return {
+                pagado: false,
+                motivo: 'SUSCRIPCION_VENCIDA',
+                fechaCorte: perfil.fecha_expiracion
+            };
+        }
+
+        // 3. Verificación por fecha de expiración
+        if (perfil.fecha_expiracion) {
+            const hoy = new Date();
+            const fechaExpiracion = new Date(perfil.fecha_expiracion);
+
+            if (hoy > fechaExpiracion) {
+                return {
+                    pagado: false,
+                    motivo: 'FECHA_EXPIRADA',
+                    fechaCorte: perfil.fecha_expiracion
+                };
+            }
+        }
+
+        return { pagado: true, nivel: perfil.nivel_suscripcion };
+
+    } catch (e) {
+        console.error("❌ Error inesperado validando cuenta:", e);
+        return { pagado: true };
+    }
+}
+
+function bloquearDashboardPorFaltaDePago(datosPago) {
+    // Si ya existe el modal, no lo duplicamos
+    if (document.getElementById('modalBloqueoPago')) return;
+
+    const fechaFormateada = datosPago.fechaCorte 
+        ? new Date(datosPago.fechaCorte).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) 
+        : 'Reciente';
+
+    const htmlModal = `
+    <div id="modalBloqueoPago" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px); z-index: 999999; display: flex; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: #ffffff; width: 100%; max-width: 480px; border-radius: 20px; padding: 35px 25px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 2px solid #ef4444; animation: popIn 0.3s ease-out;">
+            <div style="width: 70px; height: 70px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;">
+                <i class="fas fa-lock" style="font-size: 2rem; color: #dc2626;"></i>
+            </div>
+            
+            <h2 style="margin: 0 0 10px 0; font-size: 1.4rem; color: #0f172a; font-weight: 900; text-transform: uppercase;">
+                Suscripción Requerida
+            </h2>
+            
+            <p style="color: #64748b; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px;">
+                El periodo de acceso de esta sede venció el <strong>${fechaFormateada}</strong>. Para continuar agendando citas y consultando expedientes, renueva tu suscripción a FisioCid.
+            </p>
+
+            <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 15px; margin-bottom: 25px; text-align: left;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #475569; margin-bottom: 5px;">
+                    <span>Estatus del servicio:</span>
+                    <strong style="color: #dc2626;">🔴 SUSPENDIDO TEMPORALMENTE</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #475569;">
+                    <span>Tus datos y expedientes:</span>
+                    <strong style="color: #166534;">🔒 100% SEGUROS</strong>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button onclick="window.location.href='suscripcion.html'" style="background: #2563eb; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                    💳 RENOVAR SUSCRIPCIÓN AHORA
+                </button>
+                <button onclick="document.getElementById('btnCerrarSesion')?.click()" style="background: transparent; color: #64748b; border: none; padding: 10px; font-size: 0.85rem; font-weight: 700; cursor: pointer;">
+                    👋 Cerrar Sesión
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes popIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', htmlModal);
+}
+
+async function verificarSesionSegura() {
+    // Ocultar elementos de entrada por seguridad mientras responde la BD
+    evaluarAccesoElementosUI(false);
+
+    try {
+        // 1. Verificar sesión activa con Supabase
+        const { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
+        const clinicaActiva = localStorage.getItem('id_clinica_activa');
+
+        if (sessionError || !session || !clinicaActiva) {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.replace("login.html");
+            return;
+        }
+
+        const userId = session.user.id;
+
+        // 2. Consultar únicamente el perfil profesional principal
+        const { data: perfil, error: perfilError } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('id, tipo_perfil')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (perfilError) throw perfilError;
+
+        let tienePermisoEspecial = false;
+        let tipoPerfil = '';
+        let rolSistema = '';
+
+        if (perfil) {
+            tipoPerfil = (perfil.tipo_perfil || '').toUpperCase();
+
+            // 👑 REGLA MAESTRA 1: Si es DUENO o DUEÑO -> ACCESO PERMITIDO DIRECTO
+            if (tipoPerfil === 'DUENO' || tipoPerfil === 'DUEÑO') {
+                tienePermisoEspecial = true;
+            } 
+            // ⛔ REGLA MAESTRA 2: Si es INDEPENDIENTE -> DENEGADO DIRECTO
+            else if (tipoPerfil === 'INDEPENDIENTE') {
+                tienePermisoEspecial = false;
+            } 
+            // 👥 REGLA AUXILIAR: Para STAFF u otros, se valida su rol en colaboradores_clinica
+            else {
+                const { data: colaborador, error: colabError } = await fisioNet
+                    .from('colaboradores_clinica')
+                    .select('rol_sistema')
+                    .eq('id_profesional', perfil.id)
+                    .eq('id_clinica', clinicaActiva)
+                    .maybeSingle();
+
+                if (!colabError && colaborador) {
+                    rolSistema = (colaborador.rol_sistema || '').toUpperCase();
+                    if (
+                        rolSistema === 'ADMINISTRADOR' || 
+                        rolSistema === 'ADMINISTRATIVO' || 
+                        rolSistema === 'ADMIN_SISTEMA' ||
+                        rolSistema === 'ADMIN'
+                    ) {
+                        tienePermisoEspecial = true;
+                    }
+                }
+            }
+        }
+
+      //  console.log("🔍 TIPO PERFIL EN PERFILES_PROFESIONALES:", tipoPerfil);
+       // console.log("👔 ROL EN COLABORADORES (Si aplico):", rolSistema || "N/A");
+       // console.log("🔓 ¿TIENE PERMISO ESPECIAL?:", tienePermisoEspecial);
+
+        // 3. Aplicar visibilidad en la interfaz
+        evaluarAccesoElementosUI(tienePermisoEspecial);
+
+    } catch (err) {
+        console.error("Error verificando permisos de acceso:", err);
+        evaluarAccesoElementosUI(false);
+    }
+}
+
+
+// Ejecutar verificación de inmediato
+verificarSesionSegura();
+
+
+async function comprobarConfiguracionInicialRequerida() {
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+
+        const modal = document.getElementById('modalConfigInicial');
+        if (!modal) return;
+
+        const clinicaActiva = localStorage.getItem('id_clinica_activa');
+        if (!clinicaActiva) return;
+
+        // 🛡️ Consulta la configuración del profesional ESPECÍFICAMENTE en la clínica activa
+        const { data: colab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('rol_sistema, costo_consulta_base, horario_atencion')
+            .eq('id_profesional', user.id)
+            .eq('id_clinica', clinicaActiva)
+            .maybeSingle();
+
+        // Si no es ADMIN_SISTEMA en esta sede, no le pedimos configurar la sucursal
+        if (colab && colab.rol_sistema && colab.rol_sistema !== 'ADMIN_SISTEMA') {
+            modal.remove();
+            return;
+        }
+
+        // 🔍 Validar si en ESTA SEDE ya configuró precios y horarios
+        const tieneCostoValido = colab && colab.costo_consulta_base !== null && colab.costo_consulta_base !== undefined;
+        
+        let tieneHorariosValidos = false;
+        if (colab && colab.horario_atencion) {
+            try {
+                const horarios = typeof colab.horario_atencion === 'string' 
+                    ? JSON.parse(colab.horario_atencion) 
+                    : colab.horario_atencion;
+                tieneHorariosValidos = Array.isArray(horarios) && horarios.length > 0;
+            } catch (e) {
+                tieneHorariosValidos = false;
+            }
+        }
+
+        // Si falta la tarifa o los horarios para ESTA clínica, mostramos el modal
+        if (!colab || !tieneCostoValido || !tieneHorariosValidos) {
+            modal.style.display = 'flex';
+        } else {
+            modal.style.display = 'none';
+        }
+    } catch (err) {
+        console.error("❌ Error verificando configuración de sede:", err);
+    }
+}
 
 async function actualizarInterfazSede() {
-    const labelSede = document.getElementById('sedeActivaTexto') || document.getElementById('txtSedeActual'); 
-    const sedeElegidaNombre = localStorage.getItem('nombre_clinica');
-    const usuarioId = localStorage.getItem('usuarioId');
-    const clinicaId = localStorage.getItem('id_clinica_activa');
+    // 🎯 1. Buscar todos los posibles contenedores del badge de la sede activa
+    const labelSede = document.getElementById('badgeSedeActiva') || 
+                      document.getElementById('txtSedeActual') || 
+                      document.getElementById('sedeActivaTexto') ||
+                      document.querySelector('.badge-sede-activa');
 
-    // 1. Identidad Visual de la Sede (Nombre y Color)
-    if (sedeElegidaNombre && labelSede) {
-        labelSede.innerText = `SEDE ACTIVA: ${sedeElegidaNombre.toUpperCase()}`;
+    const txtEspUI = document.getElementById('txtEspecialidadUsuario');
+    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+    // 🎯 2. Consultar directamente a Supabase la clínica activa para garantizar el nombre exacto
+    if (clinicaId) {
+        try {
+            const { data: clinicaData } = await fisioNet
+                .from('clinicas')
+                .select('nombre_clinica, color_institucional')
+                .eq('id', clinicaId)
+                .maybeSingle();
+
+            if (clinicaData) {
+                // Actualizamos localStorage con los datos reales
+                localStorage.setItem('nombre_clinica', clinicaData.nombre_clinica);
+                
+                if (labelSede) {
+                    labelSede.innerHTML = `<i class="fas fa-hospital"></i> SEDE ACTIVA: ${clinicaData.nombre_clinica.toUpperCase()}`;
+                }
+
+                if (clinicaData.color_institucional) {
+                    localStorage.setItem('clinica_color', clinicaData.color_institucional);
+                    document.documentElement.style.setProperty('--primary', clinicaData.color_institucional);
+                }
+            }
+        } catch (e) {
+            console.warn("No se pudo refrescar la clínica desde la BD, usando respaldo local:", e);
+        }
     }
 
+    // Fallback con localStorage por si falla la red
+    const sedeElegidaNombre = localStorage.getItem('nombre_clinica');
+    if (sedeElegidaNombre && labelSede && labelSede.innerText.includes('CARGANDO')) {
+        labelSede.innerHTML = `<i class="fas fa-hospital"></i> SEDE ACTIVA: ${sedeElegidaNombre.toUpperCase()}`;
+    }
+
+    // Aplicar color a los botones principales
     const colorSede = localStorage.getItem('clinica_color');
     if (colorSede) {
         document.querySelectorAll('.btn-principal').forEach(btn => {
@@ -20,175 +316,62 @@ async function actualizarInterfazSede() {
         });
     }
 
-    // 🚀 2. Sincronización PROFESIONAL Inteligente (Tu idea estrella)
-    localStorage.removeItem('especialidadUsuario');
-
-    if (usuarioId) {
-        console.log("🔍 Sincronizando rol clínico/operativo del profesional activo...");
+    try {
+        // 🎯 3. Obtener el usuario y actualizar la especialidad o cargo clínico
+        const { data: { user } } = await fisioNet.auth.getUser();
         
-        // Intento A: Buscar en perfiles profesionales
-        const { data: perfil, error } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('especialidad') 
-            .eq('id', usuarioId)
-            .maybeSingle();
+        if (user) {
+            localStorage.setItem('usuarioId', user.id);
 
-        if (perfil && perfil.especialidad) {
-            const especialidadReal = perfil.especialidad
-                .toUpperCase()
-                .trim()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "");
+            const { data: perfil, error: errPerfil } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('especialidad') 
+                .eq('id', user.id)
+                .maybeSingle();
 
-            localStorage.setItem('especialidadUsuario', especialidadReal);
-            
-            // Pintar en el HTML si existe el elemento
-            const txtEspUI = document.getElementById('txtEspecialidadUsuario');
-            if (txtEspUI) txtEspUI.innerText = especialidadReal;
-            
-            console.log(`🎯 FisioCid: Especialidad médica detectada -> [${especialidadReal}]`);
-        } else {
-            // 🔥 Intento B (Tu Idea): No es médico, es Staff. Buscamos su cargo operativo.
-            console.log("👥 No se detectó especialidad médica. Buscando cargo operativo en Staff...");
-            
-            if (clinicaId) {
+            if (errPerfil) console.error("Error al consultar especialidad:", errPerfil);
+
+            if (perfil && perfil.especialidad) {
+                const especialidadReal = perfil.especialidad.toUpperCase().trim();
+                localStorage.setItem('especialidadUsuario', especialidadReal);
+                if (txtEspUI) txtEspUI.innerText = especialidadReal;
+            } else if (clinicaId) {
                 const { data: colaborador } = await fisioNet
                     .from('colaboradores_clinica')
                     .select('cargo_clinico')
-                    .eq('id_profesional', usuarioId)
+                    .eq('id_profesional', user.id)
                     .eq('id_clinica', clinicaId)
                     .maybeSingle();
 
                 const cargoFinal = colaborador?.cargo_clinico 
                     ? colaborador.cargo_clinico.toUpperCase().trim() 
-                    : "PERSONAL DE APOYO";
+                    : "ESPECIALISTA";
 
                 localStorage.setItem('especialidadUsuario', cargoFinal);
-                
-                const txtEspUI = document.getElementById('txtEspecialidadUsuario');
-                if (txtEspUI) txtEspUI.innerText = cargoFinal; // 👈 Rellena la especialidad con su cargo
-                
-                console.log(`🎯 FisioCid: Cargo operativo asignado como especialidad -> [${cargoFinal}]`);
-            } else {
-                localStorage.setItem('especialidadUsuario', 'STAFF OPERATIVO');
+                if (txtEspUI) txtEspUI.innerText = cargoFinal;
             }
         }
+    } catch (err) {
+        console.error("❌ Error al recuperar especialidad en dashboard:", err);
     }
 }
-// Llamamos a la función al cargar
-document.addEventListener('DOMContentLoaded', () => {
-    actualizarInterfazSede();
-    inicializarRedFisioCid();
-    cargarAgenda(); 
 
-});
 
-function procesarNombreMexicano(textoCompleto) {
-    const conectores = ["DE", "DEL", "LA", "LAS", "LOS", "SAN", "SANTA"];
-    let palabras = textoCompleto.toUpperCase().trim().split(/\s+/);
-    let piezas = [];
-    for (let i = 0; i < palabras.length; i++) {
-        if (conectores.includes(palabras[i]) && i + 1 < palabras.length) {
-            piezas.push(palabras[i] + " " + palabras[i + 1]);
-            i++;
-        } else { piezas.push(palabras[i]); }
-    }
-    let nombre = "", paterno = "", materno = "";
-    const n = piezas.length;
-    if (n >= 3) {
-        materno = piezas[n - 1]; paterno = piezas[n - 2];
-        nombre = piezas.slice(0, n - 2).join(" ");
-    } else if (n === 2) {
-        nombre = piezas[0]; paterno = piezas[1];
-    } else { nombre = piezas[0] || ""; }
-    return { nombre, paterno, materno };
-}
 
-function formatearFechaCorta(fechaStr) {
-    return new Date(fechaStr + "T00:00:00").toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
-}
 
-const cargarEstadisticas = async () => {
-    const clinicaId = localStorage.getItem('id_clinica_activa'); 
-    if (!clinicaId) return;
-
-    const hoy = new Date().toISOString().split('T')[0];
-    
-    try {
-        // 1. Total de Expedientes Únicos en la clínica
-        // Filtramos por id_clinica para tener el total global de tu sede
-        const { count: totalPacientes } = await fisioNet
-            .from('vinculos_clinicos')
-            .select('*', { count: 'exact', head: true })
-            .eq('id_clinica', clinicaId); // Cambiado para contar todos los de la clínica
-
-        // 2. Citas del día (Excluyendo las canceladas para ser exactos)
-        const { count: citasHoy } = await fisioNet
-            .from('agenda_maestra')
-            .select('*', { count: 'exact', head: true })
-            .eq('id_clinica', clinicaId)
-            .eq('fecha', hoy)
-            .neq('estado', 'CANCELADO'); // Filtro extra para realismo profesional
-
-        // 3. Inventario (Este bloque está excelente, solo asegúrate de los IDs)
-        const { data: insumos } = await fisioNet
-            .from('inventario_insumos')
-            .select('precio_costo, cantidad_actual, stock_minimo')
-            .eq('id_clinica', clinicaId);
-
-        let inversionTotal = 0;
-        let contadorCriticos = 0;
-
-        if (insumos) {
-            insumos.forEach(item => {
-                inversionTotal += (Number(item.precio_costo) || 0) * (Number(item.cantidad_actual) || 0);
-                if (Number(item.cantidad_actual) <= Number(item.stock_minimo)) contadorCriticos++;
-            });
-        }
-
-        // 🎨 Renderizado en UI con validación de existencia de elementos
-        if (document.getElementById('totalExpedientes')) { // Revisa si el ID es totalPacientes o totalExpedientes
-            document.getElementById('totalExpedientes').innerText = totalPacientes || 0;
-        }
-        
-        if (document.getElementById('citasHoy')) {
-            document.getElementById('citasHoy').innerText = citasHoy || 0;
-        }
-
-        if (document.getElementById('totalInversion')) {
-            document.getElementById('totalInversion').innerText = new Intl.NumberFormat('es-MX', { 
-                style: 'currency', 
-                currency: 'MXN' 
-            }).format(inversionTotal);
-        }
-
-        if (document.getElementById('insumosBajos')) {
-            const el = document.getElementById('insumosBajos');
-            el.innerText = contadorCriticos;
-            el.style.color = contadorCriticos > 0 ? '#ef4444' : '#64748b';
-        }
-
-    } catch (error) {
-        console.error("❌ Error en estadísticas FisioCid:", error);
-    }
-};
 
 async function aplicarIdentidadVisual() {
-    // 🚩 CORRECCIÓN 1: Definir usuarioId desde el inicio
     let clinicaId = localStorage.getItem('id_clinica_activa');
-    let usuarioId = localStorage.getItem('usuarioId'); 
-    
     let colorClinica = localStorage.getItem('clinica_color');
     let nombreClinica = localStorage.getItem('nombre_clinica');
     let logoClinica = localStorage.getItem('clinica_logo');
 
-    // 1. Recuperación de datos de la CLÍNICA (Estética)
     if (clinicaId && (!colorClinica || colorClinica === 'null' || !logoClinica)) {
         const { data: clinica } = await fisioNet
             .from('clinicas')
             .select('color_institucional, nombre_clinica, logo_url')
             .eq('id', clinicaId)
-            .single();
+            .maybeSingle();
 
         if (clinica) {
             colorClinica = clinica.color_institucional;
@@ -201,7 +384,6 @@ async function aplicarIdentidadVisual() {
         }
     }
 
-    // 2. Aplicar Colores Dinámicos (Estética)
     if (colorClinica) {
         document.documentElement.style.setProperty('--medical-blue', colorClinica);
         document.documentElement.style.setProperty('--primary', colorClinica);
@@ -210,13 +392,11 @@ async function aplicarIdentidadVisual() {
         });
     }
 
-    // 3. Actualizar Texto de la Sede
     if (nombreClinica) {
         const txtSede = document.getElementById('txtSedeActual') || document.getElementById('sedeActivaTexto');
         if (txtSede) txtSede.innerText = `SEDE ACTIVA: ${nombreClinica.toUpperCase()}`;
     }
     
-    // 4. Logo de la Clínica
     const imgLogo = document.getElementById('logoClinicaDashboard');
     if (imgLogo) {
         if (logoClinica && logoClinica !== 'null' && logoClinica !== '') {
@@ -227,54 +407,12 @@ async function aplicarIdentidadVisual() {
             imgLogo.style.display = 'none';
         }
     }
-
-    // 🚀 5. IDENTIDAD PROFESIONAL (El Cerebro de FisioCid)
-    // Forzamos la limpieza de la especialidad previa para evitar conflictos de sesión
-    localStorage.removeItem('especialidadUsuario');
-
-    if (usuarioId) {
-        console.log("🔍 Consultando especialidad real del profesional...");
-        
-        const { data: perfil, error } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('especialidad') // 👈 CAMBIADO: Nombre exacto de tu columna
-            .eq('id', usuarioId) // 👈 Verifica si es 'id_usuario' o 'id'
-            .maybeSingle();
-
-        if (error) {
-            console.error("❌ Error al recuperar perfil:", error.message);
-        }
-
-        if (perfil && perfil.especialidad) {
-            // Saneamiento para que coincida con tus llaves de protocolos
-            const especialidadReal = perfil.especialidad
-                .toUpperCase()
-                .trim()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "");
-
-            // Guardamos la especialidad que usará el Botón Dorado
-            localStorage.setItem('especialidadUsuario', especialidadReal);
-            console.log(`👤 Profesional Detectado: [${especialidadReal}]`);
-        } else {
-            console.warn("⚠️ El usuario no tiene una especialidad definida en perfiles_profesionales.");
-        }
-    }
 }
 
-
-function renderizarCitas(citas, modo) {
+export function renderizarCitas(citas, modo) {
     const lista = document.getElementById('listaAgenda');
     if (!lista) return;
     lista.innerHTML = '';
-
-    if (!citas || citas.length === 0) {
-        lista.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1; margin: 10px 0;">
-                <p style="color: #94a3b8; font-size: 0.85rem; font-weight: 600; margin: 0;">📅 No hay citas agendadas para este periodo.</p>
-            </div>`;
-        return;
-    }
 
     const calcularEdadPorCurp = (curp) => {
         if (!curp || curp.length < 10) return "";
@@ -290,130 +428,444 @@ function renderizarCitas(citas, modo) {
             if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < fechaNac.getDate())) {
                 edad--;
             }
-            return isNaN(edad) ? "" : `• 🕒 ${edad} años`;
+            return isNaN(edad) ? "" : `${edad} años`;
         } catch (e) { return ""; }
     };
 
-    let ultimaFecha = "";
-    citas.forEach(cita => {
-        if (modo === 'semana' && cita.fecha !== ultimaFecha) {
-            ultimaFecha = cita.fecha;
-            const divDia = document.createElement('div');
-            divDia.style.cssText = "font-size: 0.75rem; font-weight: 800; color: #64748b; letter-spacing: 0.5px; padding: 12px 5px 6px 5px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #f1f5f9; margin-top: 10px; width: 100%;";
-            divDia.innerHTML = `<i class="far fa-calendar-alt" style="color: var(--primary);"></i> ${new Date(cita.fecha + "T00:00:00").toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}`;
-            lista.appendChild(divDia);
+    // Función auxiliar para determinar el Caso de Uso de la Cita de forma limpia
+    const obtenerDatosCasoDeUso = (cita) => {
+        let nombrePaciente = "";
+        let edadInfo = "";
+        let botonAccion = "";
+        let badgeOrigen = "";
+        let esPendienteRegistro = false;
+
+        const esProspectoBool = Boolean(cita.es_prospecto);
+        const tienePacienteMaestro = Boolean(cita.pacientes_maestros);
+        const tieneIdPaciente = Boolean(cita.id_paciente);
+
+        // =========================================================================
+        // 🟢 CASO DE USO 1: PACIENTE REGISTRADO EN SISTEMA (Expediente Activo)
+        // =========================================================================
+        if ((tieneIdPaciente || tienePacienteMaestro) && !esProspectoBool) {
+            const p = cita.pacientes_maestros || {};
+            const nombreBase = `${p.nombre || cita.paciente_nombre_tmp || 'PACIENTE'} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+            
+            nombrePaciente = nombreBase.toUpperCase();
+            edadInfo = calcularEdadPorCurp(p.curp);
+            
+            const idParaExpediente = p.id || cita.id_paciente;
+            botonAccion = `<button onclick="irAHistoria('${idParaExpediente}')" title="Ver Expediente" style="background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; transition: 0.2s;">→</button>`;
+            esPendienteRegistro = false;
+
+        // =========================================================================
+        // 🟡 CASO DE USO 2: PROSPECTO (Agendado Express / Sala de Espera)
+        // =========================================================================
+        } else if (esProspectoBool) {
+            const p = cita.pacientes_maestros || {};
+            const nombreBase = `${p.nombre || cita.paciente_nombre_tmp || 'PROSPECTO'} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}`.trim();
+            
+            nombrePaciente = nombreBase.toUpperCase();
+            edadInfo = calcularEdadPorCurp(p.curp);
+            
+          // CASO DE USO 2: PROSPECTO (Agendado Express / Sala de Espera)
+botonAccion = `<button onclick="abrirFiltroLimpieza('${cita.id_cita}', 'solicitud')" title="Completar Expediente" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`;
+ esPendienteRegistro = true;
+
+    // =========================================================================
+// 📱 CASO DE USO 3: REGISTRO MANUAL / GOOGLE CALENDAR / CELULAR
+// =========================================================================
+} else {
+    // Si no tiene paciente_maestro ni id_paciente, extraemos el texto de notas_logistica
+    const tituloGoogle = cita.notas_logistica 
+        ? cita.notas_logistica.replace("Evento desde celular: ", "") 
+        : "AGENDADO DESDE CELULAR";
+    
+    nombrePaciente = `📱 ${tituloGoogle.toUpperCase()}`;
+    badgeOrigen = `<span style="background: #fef3c7; color: #b45309; font-size: 0.6rem; font-weight: 800; padding: 2px 5px; border-radius: 4px; display: inline-block; margin-top: 2px;">REGISTRO PRIVADO</span>`;
+    
+    botonAccion = `<button onclick="abrirFiltroLimpieza('${cita.id_cita}')" title="Completar Expediente" style="background: #fef08a; border: 1px solid #fde047; color: #854d0e; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 0.65rem; font-weight: 900;">✍️ REGISTRAR</button>`;
+    esPendienteRegistro = true;
+}
+
+        return { nombrePaciente, edadInfo, botonAccion, badgeOrigen, esPendienteRegistro, esProspectoBool };
+    };
+
+    // --- RENDEREADO DE VISTA SEMANAL ---
+    if (modo === 'semana') {
+        const fechaInput = document.getElementById('filtroFechaAgenda')?.value || new Date().toISOString().split('T')[0];
+        const fechaBase = new Date(fechaInput + "T00:00:00");
+
+        let diasSemana = [];
+        for (let i = 0; i < 6; i++) {
+            const d = new Date(fechaBase);
+            d.setDate(fechaBase.getDate() + i);
+            diasSemana.push(d.toISOString().split('T')[0]);
         }
 
-        const p = cita.pacientes_maestros;
-        const nombreCompletoPaciente = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim().toUpperCase();
-        const etiquetaEdad = calcularEdadPorCurp(p.curp);
-
-        const esConsultorio = cita.modalidad === 'CONSULTORIO';
-        const colorLateral = esConsultorio ? '#10b981' : '#3b82f6';
-        const fondoBadge = esConsultorio ? '#e6f4ea' : '#e8f0fe';
-        
-        const montoBaseCita = cita.monto_total || 800;
-        const conceptoCita = `CONSULTA DE ${cita.modalidad || 'CONSULTORIO'}`;
-
-        // 🛡️ EL CANDADO DE CONTROL DE CAJA DEFINITIVO:
-        const citaYaPagada = cita.pago_status === 'PAGADO';
-
-        const divCita = document.createElement('div');
-        divCita.className = "cita-card-hub animate__animated animate__fadeInUp";
-        
-        divCita.style.cssText = `
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-left: 5px solid ${colorLateral};
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 14px;
-            margin-bottom: 6px;
+        const gridSemanal = document.createElement('div');
+        gridSemanal.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(6, minmax(240px, 1fr));
+            gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 15px;
             width: 100%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.01);
-            transition: all 0.2s ease;
         `;
-        
-        divCita.onmouseenter = () => { divCita.style.background = '#f8fafc'; };
-        divCita.onmouseleave = () => { divCita.style.background = '#ffffff'; };
-        
-        divCita.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
-                <div style="background: #f1f5f9; padding: 6px 10px; border-radius: 8px; text-align: center; min-width: 55px; flex-shrink: 0;">
-                    <span style="font-weight: 800; color: #1e293b; font-size: 0.82rem; letter-spacing: -0.3px;">${cita.hora_inicio_cita.substring(0, 5)}</span>
-                </div>
-                
-                <div style="display: flex; flex-direction: column; text-align: left; gap: 2px; min-width: 0; flex: 1;">
-                    <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${nombreCompletoPaciente}">
-                        ${nombreCompletoPaciente}
-                    </span>
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                        <span style="font-size: 0.6rem; color: ${colorLateral}; background: ${fondoBadge}; padding: 2px 6px; border-radius: 4px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
-                            <i class="fas ${esConsultorio ? 'fa-building' : 'fa-house-user'}"></i> ${cita.modalidad}
-                        </span>
-                        <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">${etiquetaEdad}</span>
-                    </div>
-                </div>
-            </div>
+
+        diasSemana.forEach((fechaStr) => {
+            const citasDelDia = (citas || []).filter(c => c.fecha === fechaStr);
+            const fechaObj = new Date(fechaStr + "T00:00:00");
+            const nombreDia = fechaObj.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
             
-            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 10px;">
-                ${esConsultorio ? `
-                <button class="btn-ingresar-box" onclick="prepararIngreso('${cita.id_cita}', '${p.id}', '${p.nombre}')" title="Asignar Camilla" 
-                        style="background: #ffffff; border: 1px solid #cbd5e1; color: #475569; cursor: pointer; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <i class="fas fa-bed" style="font-size: 0.8rem;"></i>
-                </button>` : ''}
-                
-                ${!citaYaPagada ? `
-                <button class="btn-cobrar-cita" onclick="dispararModalCobroAsistido('${cita.id_cita}', '${p.id}', '${nombreCompletoPaciente}', ${montoBaseCita}, '${conceptoCita}')" title="Registrar Cobro" 
-                        style="background: #fffbeb; border: 1px solid #fde68a; color: #d97706; cursor: pointer; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <i class="fas fa-cash-register" style="font-size: 0.8rem;"></i>
-                </button>
-                ` : ''}
+            const hoyReal = typeof obtenerFechaLocal === 'function' ? obtenerFechaLocal() : new Date().toISOString().split('T')[0];
+            const esHoy = (fechaStr === hoyReal);
+            
+            const columnaDia = document.createElement('div');
+            columnaDia.style.cssText = `
+                background: ${esHoy ? '#f0fdf4' : '#f8fafc'};
+                border: 1px solid ${esHoy ? '#bbf7d0' : '#e2e8f0'};
+                border-radius: 14px;
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                min-height: 450px;
+            `;
 
-                <button class="btn-hub-ver" onclick="irAHistoria('${p.id}')" title="Ver Expediente"
-                        style="background: #f8fafc; border: 1px solid #e2e8f0; color: ${colorLateral}; cursor: pointer; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
-                    <i class="fas fa-chevron-right" style="font-size: 0.8rem; font-weight: 900;"></i>
-                </button>
-            </div>
-        `;
-        lista.appendChild(divCita);
-    });
+            columnaDia.innerHTML = `
+                <div style="text-align: center; padding: 8px; background: ${esHoy ? '#dcfce7' : '#ffffff'}; border-radius: 10px; border: 1px solid ${esHoy ? '#86efac' : '#e2e8f0'}; font-weight: 900; font-size: 0.75rem; color: ${esHoy ? '#166534' : '#0f172a'}; letter-spacing: 0.5px; text-transform: uppercase;">
+                    ${esHoy ? '⭐ HOY - ' : '📅 '} ${nombreDia}
+                    <span style="display: block; font-size: 0.65rem; color: ${esHoy ? '#15803d' : '#64748b'}; font-weight: 600; margin-top: 2px;">${citasDelDia.length} citas</span>
+                </div>
+                <div class="tarjetas-dia-container" style="display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
+            `;
+
+            const contenedorTarjetas = columnaDia.querySelector('.tarjetas-dia-container');
+
+            if (citasDelDia.length === 0) {
+                contenedorTarjetas.innerHTML = `
+                    <div style="text-align: center; padding: 30px 10px; color: #94a3b8; font-size: 0.75rem; font-weight: 600;">
+                        Sin citas
+                    </div>`;
+            } else {
+                citasDelDia.forEach(cita => {
+                    const datos = obtenerDatosCasoDeUso(cita);
+
+                    const bgColor = datos.esPendienteRegistro ? '#fefce8' : '#ffffff';
+                    const borderColor = datos.esPendienteRegistro ? '#fde047' : '#e2e8f0';
+
+                    const tarjeta = document.createElement('div');
+                    tarjeta.style.cssText = `
+                        background: ${bgColor};
+                        border: 1px solid ${borderColor};
+                        border-radius: 8px;
+                        padding: 10px;
+                        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                        display: flex;
+                        flex-direction: column;
+                        gap: 5px;
+                    `;
+
+                    tarjeta.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="font-size: 0.75rem; font-weight: 800; color: #1e293b; line-height: 1.2;">
+                                ${datos.nombrePaciente}
+                                ${datos.badgeOrigen}
+                                ${datos.edadInfo ? `<span style="display: block; font-size: 0.65rem; color: #64748b; font-weight: 600; margin-top: 2px;">${datos.edadInfo}</span>` : ''}
+                            </div>
+                            ${datos.botonAccion}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
+                                ⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : '00:00'}
+                            </span>
+                            <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${datos.esProspectoBool})" style="font-size: 0.7rem; font-weight: bold; padding: 2px 4px; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer;">
+                                <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
+                                <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
+                                <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
+                                <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
+                                <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
+                                <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
+                            </select>
+                        </div>
+                    `;
+                    contenedorTarjetas.appendChild(tarjeta);
+                });
+            }
+            gridSemanal.appendChild(columnaDia);
+        });
+        lista.appendChild(gridSemanal);
+        
+    // --- RENDEREADO DE VISTA DIARIA ---
+    } else if (modo === 'dia') {
+        const fechaInput = document.getElementById('filtroFechaAgenda')?.value || new Date().toISOString().split('T')[0];
+        const citasDelDia = (citas || []).filter(c => c.fecha === fechaInput);
+        
+        if (citasDelDia.length === 0) {
+            lista.innerHTML = '<div style="text-align: center; padding: 30px; color: #94a3b8; font-weight: 600;">Sin citas para este día.</div>';
+            return;
+        }
+
+        const contenedorDia = document.createElement('div');
+        contenedorDia.style.cssText = "display: flex; flex-direction: column; gap: 10px;";
+
+        citasDelDia.forEach(cita => {
+            const datos = obtenerDatosCasoDeUso(cita);
+
+            const selectorEstatus = `
+                <select onchange="cambiarEstatusCita('${cita.id_cita}', this.value, ${datos.esProspectoBool})" style="font-size: 0.75rem; font-weight: bold; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; cursor: pointer;">
+                    <option value="PENDIENTE" ${cita.estatus === 'PENDIENTE' ? 'selected' : ''}>⏳ PENDIENTE</option>
+                    <option value="ATENDIENDO" ${cita.estatus === 'ATENDIENDO' ? 'selected' : ''}>👨‍⚕️ ATENDIENDO</option>
+                    <option value="COMPLETADO" ${cita.estatus === 'COMPLETADO' ? 'selected' : ''}>✅ COMPLETADO</option>
+                    <option value="REAGENDADO" ${cita.estatus === 'REAGENDADO' ? 'selected' : ''}>🔄 REAGENDADO</option>
+                    <option value="CANCELADO" ${cita.estatus === 'CANCELADO' ? 'selected' : ''}>❌ CANCELADO</option>
+                    <option value="NO_ASISTIO" ${cita.estatus === 'NO_ASISTIO' ? 'selected' : ''}>👻 FALTO</option>
+                </select>
+            `;
+
+            const divCita = document.createElement('div');
+            divCita.style.cssText = `
+                background: ${datos.esPendienteRegistro ? '#fefce8' : '#ffffff'};
+                border: 1px solid ${datos.esPendienteRegistro ? '#fde047' : '#e2e8f0'};
+                padding: 15px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            `;
+
+            divCita.innerHTML = `
+                <div>
+                    <div style="font-weight: 800; font-size: 0.9rem; color: #1e293b;">${datos.nombrePaciente}</div>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">⏰ ${cita.hora_inicio_cita ? cita.hora_inicio_cita.substring(0,5) : ''} | Modalidad: ${cita.modalidad || 'CONSULTORIO'}</div>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    ${selectorEstatus}
+                    ${datos.botonAccion}
+                </div>
+            `;
+            contenedorDia.appendChild(divCita);
+        });
+        lista.appendChild(contenedorDia);
+    }
 }
 
-async function inicializarRedFisioCid() {
-    await renderizarTablaEquipo();   
-    await renderizarTablaAlianzas(); 
-}
+window.cambiarEstatusCita = async (idCita, nuevoEstatus, esProspecto = false) => {
+    if (!idCita || idCita === 'undefined') return;
 
-// 1. RENDERIZAR EQUIPO INTERNO
+    // 🟢 FORZAR A BOOLEANO REAL
+    const esProspectoBool = esProspecto === true || esProspecto === 'true';
+
+    try {
+        if (nuevoEstatus === 'REAGENDADO') {
+            // 1. Crear el modal flotante
+            let modalReagendar = document.getElementById('modalReagendarCita');
+            if (!modalReagendar) {
+                modalReagendar = document.createElement('div');
+                modalReagendar.id = 'modalReagendarCita';
+                modalReagendar.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+                    align-items: center; z-index: 9999; backdrop-filter: blur(2px);
+                `;
+                document.body.appendChild(modalReagendar);
+            }
+
+            const fechaHoy = new Date().toISOString().split('T')[0];
+
+            modalReagendar.innerHTML = `
+                <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
+                    <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Reagendar Cita</h3>
+                    
+                    <label style="font-size: 0.75rem; font-weight: 700; color: #475569;">SELECCIONA LA NUEVA FECHA:</label>
+                    <input type="date" id="inputNuevaFechaCita" value="${fechaHoy}" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+                    
+                    <button id="btnConsultarDispoModal" style="background: #0f172a; color: white; border: none; padding: 9px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">🔍 Consultar Horarios Disponibles</button>
+                    
+                    <div id="contenedorHorariosLibresModal" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 5px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; text-align: center;">Elige una fecha y presiona consultar.</span>
+                    </div>
+
+                    <button onclick="document.getElementById('modalReagendarCita').remove(); cargarAgenda(document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia');" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
+                </div>
+            `;
+
+            // 2. Consulta de disponibilidad real
+            document.getElementById('btnConsultarDispoModal').onclick = async () => {
+                const fechaElegida = document.getElementById('inputNuevaFechaCita').value;
+                const contenedor = document.getElementById('contenedorHorariosLibresModal');
+                const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+                const { data: { user } } = await fisioNet.auth.getUser();
+
+                if (!fechaElegida || !clinicaId || !user) {
+                    alert("Faltan datos de clínica o sesión de usuario.");
+                    return;
+                }
+
+                contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#10b981; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
+
+                try {
+                    const [ocupadasRes, perfilRes] = await Promise.all([
+                        fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
+                        fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita').eq('id', user.id).single()
+                    ]);
+
+                    const ocupadas = ocupadasRes.data;
+                    const perfil = perfilRes.data;
+
+                    if (!perfil?.horario_atencion) {
+                        contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
+                        return;
+                    }
+
+                    const config = JSON.parse(perfil.horario_atencion);
+                    const intervalo = parseInt(perfil.intervalo_cita) || 30;
+                    const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+                    const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
+
+                    const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
+                    const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
+
+                    let espaciosDisponibles = [];
+
+                    bloquesHoy.forEach(bloque => {
+                        let inicio = aMin(bloque.inicio);
+                        let fin = aMin(bloque.fin);
+
+                        while (inicio + intervalo <= fin) {
+                            const horaGen = minToH(inicio);
+                            const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
+                            
+                            if (!estaOcupada) {
+                                espaciosDisponibles.push(horaGen);
+                            }
+                            inicio += intervalo;
+                        }
+                    });
+
+                    if (espaciosDisponibles.length === 0) {
+                        contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
+                        return;
+                    }
+
+                    contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #166534;">Selecciona la nueva hora (${espaciosDisponibles.length} libres):</span>`;
+                    
+                    const gridHorarios = document.createElement('div');
+                    gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
+
+                    espaciosDisponibles.forEach(hora => {
+                        const btnHora = document.createElement('button');
+                        btnHora.innerText = hora;
+                        btnHora.style.cssText = "background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
+                        
+                        btnHora.onclick = async () => {
+                            modalReagendar.remove();
+
+                            if (esProspecto) {
+                                const { error } = await fisioNet.from('solicitudes_citas')
+                                    .update({ fecha_cita: fechaElegida, hora_cita: hora, estado: 'PENDIENTE' })
+                                    .eq('id', idCita);
+                                if (error) throw error;
+                            } else {
+                                const { error } = await fisioNet.from('agenda_maestra')
+                                    .update({ fecha: fechaElegida, hora_inicio_cita: hora, estatus: 'PENDIENTE' })
+                                    .eq('id_cita', idCita);
+                                if (error) throw error;
+
+                                // 🟢 CORREGIDO: Se homologó el nombre a actualizarCitaEnGoogle
+                                if (typeof actualizarCitaEnGoogle === 'function') {
+                                    await actualizarCitaEnGoogle(idCita, fechaElegida, hora, "Paciente FisioCid");
+                                }
+                            }
+
+                            alert(`✅ Cita reagendada con éxito para el ${fechaElegida} a las ${hora}.`);
+                            
+                            const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
+                            if (typeof cargarAgenda === 'function') cargarAgenda(modoActual);
+                        };
+
+                        gridHorarios.appendChild(btnHora);
+                    });
+
+                    contenedor.appendChild(gridHorarios);
+
+                } catch (err) {
+                    console.error("Error consultando disponibilidad en modal:", err);
+                    contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Error al sincronizar horarios.</p>`;
+                }
+            };
+
+        } else {
+            // 1. Actualizamos en Supabase
+            if (esProspectoBool) {
+                const { error } = await fisioNet.from('solicitudes_citas')
+                    .update({ estado: nuevoEstatus })
+                    .eq('id', idCita);
+                if (error) throw error;
+            } else {
+                const { error } = await fisioNet.from('agenda_maestra')
+                    .update({ estatus: nuevoEstatus })
+                    .eq('id_cita', idCita);
+                if (error) throw error;
+            }
+
+            // 2. 🟢 ELIMINAR/CANCELAR EN GOOGLE CALENDAR
+            if (nuevoEstatus === 'CANCELADO' && !esProspectoBool) {
+                if (typeof cancelarCitaEnGoogle === 'function') {
+                    try {
+                        await cancelarCitaEnGoogle(idCita);
+                      //  console.log("✅ Evento cancelado/eliminado de Google Calendar");
+                    } catch (errGoogle) {
+                        console.warn("⚠️ No se pudo eliminar de Google Calendar:", errGoogle);
+                    }
+                } else {
+ //                   console.error("❌ La función cancelarCitaEnGoogle no está disponible.");
+                }
+            }
+
+            // 3. Recargamos la vista de la agenda
+            const modoActual = document.querySelector('.btn-filtro.active')?.innerText.toLowerCase() === 'semana' ? 'semana' : 'dia';
+            if (typeof cargarAgenda === 'function') {
+                await cargarAgenda(modoActual);
+            }
+        }
+    } catch (err) {
+        console.error("Error al cambiar estatus de cita:", err);
+        alert("No se pudo cambiar el estatus: " + err.message);
+    }
+};
+// ==========================================
+// RENDEREAR TABLA EQUIPO INTERNO
+// ==========================================
 async function renderizarTablaEquipo() {
     const tbody = document.getElementById('tablaCuerpoEquipo');
     if (!tbody) return;
 
     try {
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
-        if (!idClinica) return console.warn("⚠️ No se encontró ID de clínica activa.");
+        if (!idClinica) return console.warn("⚠️ No se encontro ID de clinica activa.");
 
-        // Consulta directa a colaboradores_clinica
         const { data: colaboradores, error } = await fisioNet
             .from('colaboradores_clinica')
-            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno')
+            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, turno, tipo_vinculo')
             .eq('id_clinica', idClinica)
             .eq('estado', 'ACTIVO');
 
-        if (error) {
-            console.error("❌ Error al consultar colaboradores_clinica:", error);
-            throw error;
-        }
+        if (error) throw error;
 
-        // Filtramos para el Equipo Interno (Staff)
-        const equipoInterno = (colaboradores || []).filter(c => 
-            !c.cargo_clinico?.toUpperCase().includes('EXTERNO') && 
-            !c.cargo_clinico?.toUpperCase().includes('ALIANZA') &&
-            !c.cargo_clinico?.toUpperCase().includes('REFERIDO')
-        );
+        // Filtrado exclusivo para personal interno
+        const equipoInterno = (colaboradores || []).filter(c => {
+            const vinculo = (c.tipo_vinculo || '').toUpperCase();
+            const cargo = (c.cargo_clinico || '').toUpperCase();
+            const rol = (c.rol_sistema || '').toUpperCase();
+
+            const esExterno = vinculo === 'EXTERNO' || 
+                              cargo.includes('EXTERNO') || 
+                              cargo.includes('ALIANZA') || 
+                              cargo.includes('REFERIDO') ||
+                              rol === 'SOCIOS_EXTERNOS';
+
+            return !esExterno;
+        });
+
+        window.totalEquipoInternoNum = equipoInterno.length;
 
         let html = `
             <tr>
@@ -426,46 +878,74 @@ async function renderizarTablaEquipo() {
         if (equipoInterno.length === 0) {
             html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay colaboradores internos registrados.</td></tr>`;
         } else {
-            // Traemos nombres desde perfiles_profesionales
             const idsProf = equipoInterno.map(c => c.id_profesional).filter(Boolean);
             let perfilesMapa = {};
 
             if (idsProf.length > 0) {
-                const { data: perfiles } = await fisioNet
+                const { data: perfilesProf } = await fisioNet
                     .from('perfiles_profesionales')
                     .select('id, nombre_completo, correo_institucional')
                     .in('id', idsProf);
 
-                (perfiles || []).forEach(p => { perfilesMapa[p.id] = p; });
+                (perfilesProf || []).forEach(p => { 
+                    perfilesMapa[p.id] = {
+                        nombre_completo: p.nombre_completo,
+                        correo: p.correo_institucional
+                    }; 
+                });
+
+                const idsFaltantes = idsProf.filter(id => !perfilesMapa[id]);
+                
+                if (idsFaltantes.length > 0) {
+                    const { data: perfilesGen } = await fisioNet
+                        .from('perfiles')
+                        .select('id, nombre_completo, correo_institucional')
+                        .in('id', idsFaltantes);
+
+                    (perfilesGen || []).forEach(p => { 
+                        perfilesMapa[p.id] = {
+                            nombre_completo: p.nombre_completo,
+                            correo: p.correo_institucional || 'Sin correo'
+                        }; 
+                    });
+                }
             }
 
             html += equipoInterno.map(colab => {
-                const perfil = perfilesMapa[colab.id_profesional] || {};
-                const nombre = perfil.nombre_completo || 'Usuario Registrado';
-                const correo = perfil.correo_institucional || 'Sin correo';
+    const perfil = perfilesMapa[colab.id_profesional] || {};
+    const nombre = perfil.nombre_completo || 'USUARIO REGISTRADO';
+    const correo = perfil.correo || 'Sin correo';
+    
+    // Separación clara entre puesto clínico y permisos del sistema
+    const especialidadPuesto = colab.cargo_clinico || 'FISIOTERAPEUTA';
+    const rolSistemaLegible = (colab.rol_sistema || 'STAFF_CLINICO').replace('_', ' ');
 
-                return `
-                <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fcfcfc;">
-                    <td style="padding: 15px;">
-                        <div style="font-weight: 700; color: #1e293b;">${nombre}</div>
-                        <div style="font-size: 0.75rem; color: #3b82f6; font-weight: 600;">${colab.rol_sistema || 'STAFF INTERNO'}</div>
-                    </td>
-                    <td style="padding: 15px; text-align: center;">
-                        <span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
-                            ${colab.cargo_clinico || 'FISIOTERAPEUTA'}
-                        </span>
-                    </td>
-                    <td style="padding: 15px;">
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">Área: ${colab.area_asignada || 'General'}</div>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
-                    </td>
-                    <td style="padding: 15px; text-align: right;">
-                        <button onclick="abrirConfiguracionEquipo('${colab.id}')" title="Configurar" style="border: none; background: #fee2e2; color: #b91c1c; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
-                            ⚙️
-                        </button>
-                    </td>
-                </tr>`;
-            }).join('');
+    return `
+    <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fcfcfc;">
+        <td style="padding: 15px;">
+            <div style="font-weight: 700; color: #1e293b; text-transform: uppercase;">${nombre}</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">✉️ ${correo}</div>
+        </td>
+        <td style="padding: 15px; text-align: center;">
+            <span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; display: block; margin-bottom: 4px;">
+                🎓 ${especialidadPuesto.toUpperCase()}
+            </span>
+            <span style="background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">
+                🔑 ACCESO: ${rolSistemaLegible.toUpperCase()}
+            </span>
+        </td>
+        <td style="padding: 15px;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">Área: ${colab.area_asignada || 'General'}</div>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Turno: ${colab.turno || 'Matutino'}</div>
+        </td>
+        <td style="padding: 15px; text-align: right;">
+            <button onclick="abrirConfiguracionEquipo('${colab.id}')" title="Configurar" style="border: none; background: #f1f5f9; color: #334155; padding: 8px; border-radius: 6px; cursor: pointer;">
+                ⚙️
+            </button>
+        </td>
+    </tr>`;
+}).join('');
+             
         }
 
         tbody.innerHTML = html;
@@ -476,47 +956,123 @@ async function renderizarTablaEquipo() {
 }
 
 
-// 2. RENDERIZAR ALIANZAS Y DOCTORES EXTERNOS (DESDE COLABORADORES_CLINICA)
-// 2. RENDERIZAR ALIANZAS Y DOCTORES EXTERNOS (DESDE COLABORADORES_CLINICA)
+// ==========================================
+// 🟢 RENDEREAR ALIANZAS Y DOCTORES EXTERNOS (CORREGIDO)
+// ==========================================
 async function renderizarTablaAlianzas() {
-    console.log("🔍 [DIAGNÓSTICO] Iniciando renderizarTablaAlianzas...");
     const tbody = document.getElementById('tablaCuerpoAlianzas');
     const contador = document.getElementById('contadorSocios');
-    if (!tbody) {
-        console.error("❌ No se encontró el elemento HTML 'tablaCuerpoAlianzas'");
-        return;
-    }
+    if (!tbody) return;
 
     try {
+        const { data: { user } } = await fisioNet.auth.getUser();
         const idClinica = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica_actual');
-        console.log("🏢 ID de clínica para la consulta:", idClinica);
+        if (!user || !idClinica) return;
 
-        if (!idClinica) return console.warn("⚠️ No se encontró ID de clínica activa.");
+        // 1. Obtener Convenios y Alianzas de red_colaboracion
+        const { data: conveniosRed, error: errRed } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .or(`id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${user.id}`)
+            .eq('estado_conexion', 'ACTIVO');
 
-        // 1. Consultamos los colaboradores de esta clínica
-        const { data: todosColabs, error } = await fisioNet
+        if (errRed) console.error("Error al consultar red_colaboracion:", errRed);
+
+        // 2. Obtener Doctores y Colaboradores Externos de colaboradores_clinica
+        const { data: colabsClinica, error: errColab } = await fisioNet
             .from('colaboradores_clinica')
-            .select('id, id_clinica, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada')
-            .eq('id_clinica', idClinica);
+            .select('id, id_profesional, rol_sistema, cargo_clinico, estado, area_asignada, tipo_vinculo')
+            .eq('id_clinica', idClinica)
+            .eq('estado', 'ACTIVO');
 
-        if (error) {
-            console.error("❌ Error Supabase al consultar colaboradores_clinica:", error);
-            throw error;
+        if (errColab) console.error("Error al consultar colaboradores_clinica:", errColab);
+
+        const doctoresExternos = (colabsClinica || []).filter(c => {
+            const vinculo = (c.tipo_vinculo || '').toUpperCase();
+            const cargo = (c.cargo_clinico || '').toUpperCase();
+            const rol = (c.rol_sistema || '').toUpperCase();
+
+            return vinculo === 'EXTERNO' || 
+                   cargo.includes('EXTERNO') || 
+                   cargo.includes('ALIANZA') || 
+                   cargo.includes('REFERIDO') ||
+                   rol === 'SOCIOS_EXTERNOS';
+        });
+
+        // 3. Mapear IDs de la contraparte para traer perfiles reales
+        let idsAConsultar = new Set();
+
+        (conveniosRed || []).forEach(c => {
+            // Determinar contraparte: Si soy el emisor, la contraparte es el receptor; y viceversa.
+            const idContraparte = (c.id_doctor_emisor === user.id) ? c.id_doctor_receptor : c.id_doctor_emisor;
+            if (idContraparte) idsAConsultar.add(idContraparte);
+        });
+
+        doctoresExternos.forEach(d => {
+            if (d.id_profesional) idsAConsultar.add(d.id_profesional);
+        });
+
+        const arrayIdsProf = Array.from(idsAConsultar);
+        let mapaDoctores = {};
+
+        if (arrayIdsProf.length > 0) {
+            const { data: perfilesProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('id, nombre_completo, correo_institucional, especialidad')
+                .in('id', arrayIdsProf);
+
+            (perfilesProf || []).forEach(p => { mapaDoctores[p.id] = p; });
+
+            const idsFaltantes = arrayIdsProf.filter(id => !mapaDoctores[id]);
+            if (idsFaltantes.length > 0) {
+                const { data: perfilesGen } = await fisioNet
+                    .from('perfiles')
+                    .select('id, nombre_completo, correo')
+                    .in('id', idsFaltantes);
+
+                (perfilesGen || []).forEach(p => { 
+                    mapaDoctores[p.id] = { 
+                        nombre_completo: p.nombre_completo, 
+                        correo_institucional: p.correo 
+                    }; 
+                });
+            }
         }
 
-        console.log("🟢 [DATOS PUROS] Registros recuperados de colaboradores_clinica:", todosColabs);
+        // 4. Consolidar la lista
+        let listaUnificada = [];
 
-        // 🎯 LÓGICA DE FILTRADO:
-        // En la tabla verde de abajo mostramos a todo colaborador que NO sea ADMIN_SISTEMA o DUEÑO
-        const alianzasYStaff = (todosColabs || []).filter(c => 
-            c.rol_sistema !== 'ADMIN_SISTEMA' && c.rol_sistema !== 'DUEÑO'
-        );
+        (conveniosRed || []).forEach(c => {
+            const idContraparte = (c.id_doctor_emisor === user.id) ? c.id_doctor_receptor : c.id_doctor_emisor;
+            const perfilSocio = mapaDoctores[idContraparte] || {};
 
-        console.log("🟢 [FILTRADOS] Registros para la tabla verde de abajo:", alianzasYStaff);
+            listaUnificada.push({
+                id: c.id,
+                origen: 'RED_COLABORACION',
+                nombre: perfilSocio.nombre_completo || c.nombre_entidad || c.contacto_principal || 'EMPRESA / SOCIO',
+                tipo: perfilSocio.especialidad || c.tipo_entidad || 'CONVENIO',
+                beneficio: c.porcentaje_descuento ? `${c.porcentaje_descuento}% DESC` : 'SIN DESC',
+                contacto: `👤 ${perfilSocio.nombre_completo || c.contacto_principal || 'Contacto directo'}`,
+                correo: perfilSocio.correo_institucional || c.email_contacto || 'Sin correo'
+            });
+        });
+
+        doctoresExternos.forEach(d => {
+            const perfil = mapaDoctores[d.id_profesional] || {};
+            listaUnificada.push({
+                id: d.id,
+                origen: 'COLABORADOR_EXTERNO',
+                nombre: perfil.nombre_completo || 'DOCTOR EXTERNO',
+                tipo: d.cargo_clinico || d.rol_sistema || 'MÉDICO INTERCONSULTANTE',
+                beneficio: 'ESPECIALISTA',
+                contacto: `📍 Área: ${d.area_asignada || 'General'}`,
+                correo: perfil.correo_institucional || 'Sin correo'
+            });
+        });
 
         if (contador) {
-            const totalEquipo = document.getElementById('tablaCuerpoEquipo')?.children.length || 0;
-            contador.innerText = `${alianzasYStaff.length + Math.max(0, totalEquipo - 1)} En Red`;
+            const totalInternos = window.totalEquipoInternoNum || 0;
+            contador.innerText = `${listaUnificada.length + totalInternos} En Red`;
         }
 
         let html = `
@@ -527,63 +1083,31 @@ async function renderizarTablaAlianzas() {
             </tr>
         `;
 
-        if (alianzasYStaff.length === 0) {
+        if (listaUnificada.length === 0) {
             html += `<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No hay alianzas ni doctores externos vinculados.</td></tr>`;
         } else {
-            // Traer nombres desde perfiles_profesionales
-            const idsProf = alianzasYStaff.map(a => a.id_profesional).filter(Boolean);
-            let perfilesMapa = {};
-
-            if (idsProf.length > 0) {
-                // Intento 1: Perfiles profesionales
-                const { data: perfilesProf } = await fisioNet
-                    .from('perfiles_profesionales')
-                    .select('id, nombre_completo, correo_institucional, telefono_contacto')
-                    .in('id', idsProf);
-
-                (perfilesProf || []).forEach(p => { perfilesMapa[p.id] = p; });
-
-                // Intento 2: Búsqueda en tabla general de perfiles para IDs no encontrados
-                const idsFaltantes = idsProf.filter(id => !perfilesMapa[id]);
-                if (idsFaltantes.length > 0) {
-                    const { data: perfilesGen } = await fisioNet
-                        .from('perfiles')
-                        .select('id, nombre_completo, correo')
-                        .in('id', idsFaltantes);
-
-                    (perfilesGen || []).forEach(p => { 
-                        perfilesMapa[p.id] = { 
-                            nombre_completo: p.nombre_completo, 
-                            correo_institucional: p.correo 
-                        }; 
-                    });
-                }
-            }
-
-            html += alianzasYStaff.map(item => {
-                const perfil = perfilesMapa[item.id_profesional] || {};
-                const nombre = perfil.nombre_completo || 'COLABORADOR / DOCTOR';
-                const correo = perfil.correo_institucional || 'Sin correo registrado';
-                const telefono = perfil.telefono_contacto || 'N/A';
-                const cargoOrol = item.cargo_clinico || item.rol_sistema || 'STAFF EXTERNO';
+            html += listaUnificada.map(item => {
+                const handlerBoton = item.origen === 'RED_COLABORACION' 
+                    ? `abrirConfiguracionAlianza('${item.id}')` 
+                    : `abrirConfiguracionEquipo('${item.id}')`;
 
                 return `
                 <tr style="border-bottom: 1px solid #f1f5f9; transition: all 0.3s ease;">
                     <td style="padding: 15px;">
-                        <div style="font-weight: 700; color: #1e293b;">${nombre}</div>
-                        <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">${cargoOrol}</div>
+                        <div style="font-weight: 700; color: #1e293b;">${item.nombre}</div>
+                        <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">🤝 ${item.tipo}</div>
                     </td>
                     <td style="padding: 15px; text-align: center;">
-                        <span style="background: #f0fdf4; color: #166534; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
-                            ${item.estado || 'ACTIVO'}
+                        <span style="background: #dcfce7; color: #15803d; padding: 4px 8px; border-radius: 6px; font-weight: 800; font-size: 0.75rem;">
+                            ${item.beneficio}
                         </span>
                     </td>
                     <td style="padding: 15px;">
-                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">📍 Área: ${item.area_asignada || 'General'}</div>
-                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${correo}</div>
+                        <div style="font-size: 0.8rem; font-weight: 600; color: #334155;">${item.contacto}</div>
+                        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">✉️ ${item.correo}</div>
                     </td>
                     <td style="padding: 15px; text-align: right;">
-                        <button onclick="abrirConfiguracionAlianza('${item.id}')" title="Configurar Convenio" style="border: none; background: #f1f5f9; padding: 8px; border-radius: 8px; cursor: pointer;">
+                        <button onclick="${handlerBoton}" title="Configurar" style="border: none; background: #f1f5f9; padding: 8px; border-radius: 8px; cursor: pointer;">
                             ⚙️
                         </button>
                     </td>
@@ -592,19 +1116,13 @@ async function renderizarTablaAlianzas() {
         }
 
         tbody.innerHTML = html;
-        console.log("✅ [ÉXITO] Tabla de alianzas renderizada correctamente.");
 
     } catch (e) {
         console.error("❌ Fallo crítico en renderizarTablaAlianzas:", e);
     }
 }
 
-// ==========================================
-// ⚙️ LÓGICA DEL PANEL DE CONFIGURACIÓN
-// ==========================================
-
 window.abrirConfiguracionEquipo = (idColaborador, nombreColaborador, cargoActual, areaActual, fechaFin, superior, observaciones) => {
-    // 1. Buscamos los nuevos elementos del modal
     const inputId = document.getElementById('idColabActivo');
     const labelNombre = document.getElementById('nombreColabModal');
     const selectCargo = document.getElementById('selectCargoModal');
@@ -614,29 +1132,19 @@ window.abrirConfiguracionEquipo = (idColaborador, nombreColaborador, cargoActual
     const txtObs = document.getElementById('obsModal');
     const modal = document.getElementById('modalConfigEquipo');
 
-    if (!inputId || !modal) {
-        console.error("❌ No se encontraron los elementos del modal en el HTML.");
-        return;
-    }
+    if (!inputId || !modal) return;
 
-    // 2. Llenamos los campos con la información actual
     inputId.value = idColaborador;
-    labelNombre.innerText = nombreColaborador;
-    
-    // Asignamos los valores a los SELECT (deben coincidir con las opciones del HTML)
+    if (labelNombre) labelNombre.innerText = nombreColaborador || "Colaborador";
     if (selectCargo) selectCargo.value = cargoActual || "FISIOTERAPEUTA";
     if (selectArea) selectArea.value = areaActual || "GENERAL";
-    
-    // Campos nuevos
     if (inputFechaFin) inputFechaFin.value = fechaFin || "";
     if (selectSuperior) selectSuperior.value = superior || "";
     if (txtObs) txtObs.value = observaciones || "";
     
-    // 3. Mostramos la ventana
     modal.style.display = 'flex';
 };
 
-// 2. Botón de Cancelar
 window.cerrarModalConfig = () => {
     document.getElementById('modalConfigEquipo').style.display = 'none';
 };
@@ -654,10 +1162,10 @@ window.guardarConfigEquipo = async () => {
             .from('colaboradores_clinica')
             .update({ 
                 cargo_clinico: cargo, 
-                area_ubicacion: area,
+                area_asignada: area,
                 fecha_fin: fechaFin,
                 id_superior_directo: superior,
-                observaciones_historial: obs // Asegúrate de que esta columna exista en tu DB
+                observaciones_historial: obs 
             })
             .eq('id', idColab);
 
@@ -677,26 +1185,25 @@ let idAlianzaGlobal = null;
 async function abrirConfiguracionAlianza(idAlianza) {
     idAlianzaGlobal = idAlianza;
     const modal = document.getElementById('modalConfigAlianza');
+    const clinicaId = localStorage.getItem('id_clinica_activa'); // 🔒 Sede activa
     
     try {
-        // 🔥 CAMBIO CLAVE: Ahora contamos en vinculos_clinicos, no en citas
         const [resAlianza, resConteo] = await Promise.all([
             fisioNet.from('red_colaboracion').select('*').eq('id', idAlianza).single(),
-            fisioNet.from('vinculos_clinicos') // <-- Antes decía 'citas'
+            fisioNet.from('vinculos_clinicos')
                 .select('*', { count: 'exact', head: true })
                 .eq('id_alianza_referido', idAlianza)
+                .eq('id_clinica', clinicaId) // 🔒 Aislamiento estricto por sede activa
         ]);
 
         if (resAlianza.error) throw resAlianza.error;
 
         const a = resAlianza.data;
         
-        // Llenar datos del modal
-        document.getElementById('confAlianzaNombre').innerText = a.nombre_entidad || (a.id_doctor_emisor?.nombre_completo);
+        document.getElementById('confAlianzaNombre').innerText = a.nombre_entidad || "Alianza Estratégica";
         document.getElementById('confAlianzaContador').innerText = resConteo.count || 0;
         document.getElementById('confAlianzaPorcentaje').value = a.porcentaje_descuento || 0;
 
-        // Configurar botón de Pausa/Reinicio
         const btnPausa = document.getElementById('btnPausarAlianza');
         const estaActivo = a.estado_conexion === 'ACTIVO';
         btnPausa.innerHTML = estaActivo ? '⏸️ PAUSAR' : '▶️ REINICIAR';
@@ -709,30 +1216,6 @@ async function abrirConfiguracionAlianza(idAlianza) {
         console.error("❌ Error al abrir config (FisioCid):", err);
     }
 }
-
-// 🔥 LA FUNCIÓN QUE FALTABA
-async function guardarCambiosAlianza() {
-    const nuevoPorcentaje = document.getElementById('confAlianzaPorcentaje').value;
-    
-    const { error } = await fisioNet
-        .from('red_colaboracion')
-        .update({ porcentaje_descuento: nuevoPorcentaje })
-        .eq('id', idAlianzaGlobal);
-
-    if (!error) {
-        alert("✅ Configuración guardada.");
-        document.getElementById('modalConfigAlianza').style.display = 'none';
-        renderizarTablaAlianzas();
-    }
-}
-
-async function alternarEstadoAlianza(id, estadoActual) {
-    const nuevoEstado = estadoActual === 'ACTIVO' ? 'PAUSADO' : 'ACTIVO';
-    await fisioNet.from('red_colaboracion').update({ estado_conexion: nuevoEstado }).eq('id', id);
-    abrirConfiguracionAlianza(id); // Recargamos el modal
-    renderizarTablaAlianzas(); // Recargamos la tabla principal
-}
-
 
 window.alternarEstadoAlianza = async (idAlianza, estadoActual) => {
     const nuevoEstado = estadoActual === 'ACTIVO' ? 'PAUSADO' : 'ACTIVO';
@@ -748,36 +1231,84 @@ window.alternarEstadoAlianza = async (idAlianza, estadoActual) => {
             if (error) throw error;
             
             alert(`Alianza ${nuevoEstado === 'ACTIVO' ? 'activada' : 'pausada'} correctamente.`);
-            renderizarTablaAlianzas(); // Refrescamos la tabla
-            if (document.getElementById('modalConfigAlianza')) {
-                document.getElementById('modalConfigAlianza').style.display = 'none';
-            }
+            if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas();
+            
+            const modal = document.getElementById('modalConfigAlianza');
+            if (modal) modal.style.display = 'none';
         } catch (err) {
             console.error("Error al cambiar estado:", err);
+            alert("No se pudo cambiar el estado: " + err.message);
         }
     }
 };
 
-// --- GUARDADO DE CONFIGURACIÓN ---
+async function guardarCambiosAlianza() {
+    const nuevoPorcentaje = document.getElementById('confAlianzaPorcentaje').value;
+    if (!idAlianzaGlobal) return;
+
+    const { error } = await fisioNet
+        .from('red_colaboracion')
+        .update({ porcentaje_descuento: nuevoPorcentaje })
+        .eq('id', idAlianzaGlobal);
+
+    if (!error) {
+        alert("✅ Configuración guardada.");
+        document.getElementById('modalConfigAlianza').style.display = 'none';
+        await renderizarTablaAlianzas();
+    } else {
+        alert("❌ Error al guardar convenio: " + error.message);
+    }
+}
+
 document.getElementById('formConfigInicial')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) return;
-
-    const nombreEnMemoria = localStorage.getItem('nombre_completo');
-    let nombreParaGuardar = nombreEnMemoria;
-    if (!nombreParaGuardar || nombreParaGuardar === 'null') {
-        const { data: p } = await fisioNet.from('perfiles_profesionales').select('nombre_completo').eq('id', user.id).single();
-        nombreParaGuardar = p?.nombre_completo || "Cristian Miguel Cid Espíndola";
+    const clinicaActiva = localStorage.getItem('id_clinica_activa');
+    
+    if (!user || !clinicaActiva) {
+        alert("⚠️ Error: Sesión o sede activa no encontrada.");
+        return;
     }
 
-    let horariosArray = [];
-    document.querySelectorAll('.bloque-horario').forEach(bloque => {
-        const seleccion = bloque.querySelector('.dia-semana').value.trim();
-        const inicio = bloque.querySelector('.h-ini').value;
-        const fin = bloque.querySelector('.h-fin').value;
+   // 🕒 Función auxiliar blindada para procesar las horas del select
+    function convertirA24Horas(horaStr) {
+        if (!horaStr) return "00:00";
+        let limpio = String(horaStr).trim().toLowerCase();
+        
+        // Si ya viene en formato de 24 horas (ej. "21:00" o "14:00")
+        if (!limpio.includes('p') && !limpio.includes('a')) {
+            const partes = limpio.split(':');
+            let h = parseInt(partes[0]) || 0;
+            let m = partes[1] || '00';
+            return `${String(h).padStart(2, '0')}:${m}`;
+        }
 
-        if (inicio && fin) {
+        const esPM = limpio.includes('p');
+        const soloNumeros = limpio.replace(/[^0-9:]/g, '');
+        const partes = soloNumeros.split(':');
+        let h = parseInt(partes[0]) || 0;
+        let m = partes[1] || '00';
+
+        if (esPM && h < 12) h += 12;
+        if (!esPM && h === 12) h = 0;
+
+        return `${String(h).padStart(2, '0')}:${m}`;
+    }
+
+    // 1. Recolectar bloques de horario
+    let horariosArray = [];
+   document.querySelectorAll('.bloque-horario').forEach(bloque => {
+        const seleccion = bloque.querySelector('.dia-semana')?.value?.trim();
+        const horaIniRaw = bloque.querySelector('.h-ini')?.value;
+        const horaFinRaw = bloque.querySelector('.h-fin')?.value;
+
+        // 👀 ¡MIRA ESTO! Vamos a ver qué trae exactamente el input de la hora de fin
+       // console.log("🕵️‍♂️ [VALOR CRUDO H-FIN DEL HTML]:", horaFinRaw);
+
+        let inicio = convertirA24Horas(horaIniRaw);
+        let fin = convertirA24Horas(horaFinRaw);
+
+        if (seleccion && inicio && fin) {
             if (seleccion.includes("Lunes a Viernes") || seleccion === "LV") {
                 [1, 2, 3, 4, 5].forEach(d => horariosArray.push({ dia: d, inicio, fin }));
             } else if (seleccion.includes("Sábado") || seleccion.includes("Sabado") || seleccion === "6") {
@@ -785,132 +1316,48 @@ document.getElementById('formConfigInicial')?.addEventListener('submit', async (
             } else if (seleccion.includes("Domingo") || seleccion === "0") {
                 horariosArray.push({ dia: 0, inicio, fin });
             } else {
-                const diaNum = parseInt(seleccion);
+                const diaNum = parseInt(seleccion, 10);
                 if (!isNaN(diaNum)) horariosArray.push({ dia: diaNum, inicio, fin });
             }
         }
     });
 
-    const diasConServicio = [...new Set(horariosArray.map(h => Number(h.dia)))];
-    const todosLosDias = [0, 1, 2, 3, 4, 5, 6];
-    const diasDescanso = todosLosDias.filter(d => !diasConServicio.includes(d));
-
-    const updates = {
-        id: user.id,
-        correo_institucional: user.email,
-        nombre_completo: nombreParaGuardar,
-        rol: 'ADMIN_SISTEMA', 
-        costo_consulta_base: parseFloat(document.getElementById('baseConsultorio')?.value) || 0,
-        costo_domicilio_base: parseFloat(document.getElementById('baseDomicilio')?.value) || 0,
-        horario_atencion: JSON.stringify(horariosArray), 
-        intervalo_cita: parseInt(document.getElementById('intervaloCita')?.value) || 30,
-        dias_descanso: diasDescanso, 
-        formato_impresion: document.getElementById('formatoImpresion')?.value || 'CARTA'
-    };
-
-    try {
-        const { error } = await fisioNet.from('perfiles_profesionales').upsert(updates);
-        if (error) throw error;
-
-        localStorage.setItem('nombre_completo', nombreParaGuardar);
-        localStorage.setItem('intervalo_cita', updates.intervalo_cita);
-        localStorage.setItem('horario_atencion', updates.horario_atencion);
-
-        alert("¡CONFIGURACIÓN DE FISIOCID ACTUALIZADA! 🩺🚀");
-        document.getElementById('modalConfigInicial').style.display = 'none';
-        location.reload(); 
-    } catch (error) {
-        console.error("Error al guardar:", error);
-        alert("ERROR AL GUARDAR: " + error.message);
-    }
-});
-
-async function cargarAgenda(modo = 'semana', botonPresionado = null) {
-    const tituloElemento = document.getElementById('tituloAgenda');
-    let fechaInput = document.getElementById('filtroFechaAgenda')?.value;
-    
-    // 1. Manejo de fecha inicial
-    if (!fechaInput) {
-        fechaInput = new Date().toISOString().split('T')[0];
-        if(document.getElementById('filtroFechaAgenda')) {
-            document.getElementById('filtroFechaAgenda').value = fechaInput;
-        }
-    }
-
-    const fechaBase = new Date(fechaInput + "T00:00:00");
-
-    // 2. Estética de los botones de filtro
-    if (botonPresionado) {
-        document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('active'));
-        botonPresionado.classList.add('active');
-    }
-
-    // 3. OBTENER IDENTIDADES (La clave del éxito)
-const { data: { user } } = await fisioNet.auth.getUser();
-const clinicaId = localStorage.getItem('id_clinica_activa'); // 🎯 Asegúrate de usar el mismo nombre que en el login
-
-if (!clinicaId) {
-    console.warn("⚠️ No se detectó contexto de clínica. Regresando al acceso principal...");
-    
-    // Limpiamos por seguridad para que el login fuerce la selección
-    localStorage.clear(); 
-    
-    // Mandamos al login, donde el nuevo motor le pedirá elegir sede
-    window.location.href = 'login.html'; 
-    return; 
-}
-   
-if (!user) return; 
-
-    // 4. CONSTRUIR LA CONSULTA (Filtrada por Profesional Y Clínica)
-    // Esto asegura que Magali vea SUS citas en la CLÍNICA DE CRISTIAN (o la suya)
-    let query = fisioNet
-        .from('agenda_maestra')
-        .select(`
-            id_cita, 
-            fecha, 
-            hora_inicio_cita, 
-            modalidad, 
-            estatus,
-            pago_status,
-            pacientes_maestros (id, nombre, apellido_paterno, apellido_materno)
-        `)
-        .eq('id_profesional', user.id) // Quién atiende
-        .eq('id_clinica', clinicaId);  // En dónde atiende
-
-    // 5. FILTROS DE TIEMPO (Día o Semana)
-    if (modo === 'dia') {
-        tituloElemento.innerText = `CITAS DEL ${formatearFechaCorta(fechaInput).toUpperCase()}`;
-        query = query.eq('fecha', fechaInput);
-    } else {
-        const diaSemana = fechaBase.getDay();
-        const diferenciaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-        const lunes = new Date(fechaBase);
-        lunes.setDate(fechaBase.getDate() + diferenciaLunes);
-        const domingo = new Date(lunes);
-        domingo.setDate(lunes.getDate() + 6);
-
-        const f1 = lunes.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-        const f2 = domingo.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
-        tituloElemento.innerText = `SEMANA: ${f1.toUpperCase()} AL ${f2.toUpperCase()}`;
-
-        query = query
-            .gte('fecha', lunes.toISOString().split('T')[0])
-            .lte('fecha', domingo.toISOString().split('T')[0]);
-    }
-
-    // 6. EJECUTAR Y RENDERIZAR
-    const { data: citas, error } = await query
-        .order('fecha')
-        .order('hora_inicio_cita');
-
-    if (error) {
-        console.error("❌ Error al cargar agenda:", error.message);
+    if (horariosArray.length === 0) {
+        alert("⚠️ Ingresa al menos un bloque de horario válido.");
         return;
     }
 
-    renderizarCitas(citas, modo);
-}
+    const baseConsultorio = parseFloat(document.getElementById('baseConsultorio')?.value) || 0;
+    const baseDomicilio = parseFloat(document.getElementById('baseDomicilio')?.value) || 0;
+    const intervalo = parseInt(document.getElementById('intervaloCita')?.value, 10) || 30;
+
+    try {
+        // 2. Guardar Tarifas y Horarios en la relación de la CLINICA ACTIVA
+        const { error } = await fisioNet
+            .from('colaboradores_clinica')
+            .update({
+                costo_consulta_base: baseConsultorio,
+                costo_domicilio_base: baseDomicilio,
+                horario_atencion: JSON.stringify(horariosArray),
+                intervalo_cita: intervalo
+            })
+            .eq('id_profesional', user.id)
+            .eq('id_clinica', clinicaActiva);
+
+        if (error) throw error;
+
+        alert("¡CONFIGURACIÓN DE ESTA SEDE GUARDADA CON ÉXITO! 🩺🚀");
+
+        document.getElementById('modalConfigInicial').style.display = 'none';
+        location.reload();
+
+    } catch (err) {
+        console.error("Error guardando configuración de la sede:", err);
+        alert("Error al guardar: " + err.message);
+    }
+});
+
+
 
 window.irAHistoria = (idPaciente) => {
     if (!idPaciente) return;
@@ -919,19 +1366,28 @@ window.irAHistoria = (idPaciente) => {
 };
 window.cargarAgenda = cargarAgenda;
 
-// --- BUSCADOR Y REGISTRO RÁPIDO DE PACIENTES ---
 const inputBusqueda = document.getElementById('buscarPacienteInput');
 const listaSugerencias = document.getElementById('sugerenciasPacientes');
+const inputTel = document.getElementById('telefonoExpress'); // Referencia al nuevo campo de teléfono
 
 inputBusqueda?.addEventListener('input', async (e) => {
     e.target.value = e.target.value.toUpperCase();
     const texto = e.target.value.trim();
+    
+    // Si borran el texto, limpiamos el ID seleccionado para evitar errores
+    document.getElementById('idPacienteSeleccionado').value = '';
+    
     if (texto.length < 2) { listaSugerencias.innerHTML = ''; return; }
 
     const { data: { user } } = await fisioNet.auth.getUser();
     const clinicaId = localStorage.getItem('id_clinica_activa');
 
-    const { data: pacientes } = await fisioNet.from('pacientes_maestros').select('id, nombre, apellido_paterno, apellido_materno').or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%`).eq('id_clinica', clinicaId).limit(5);
+    // 🚀 BÚSQUEDA HÍBRIDA: Ahora busca por nombre, apellidos O teléfono
+    const { data: pacientes } = await fisioNet.from('pacientes_maestros')
+        .select('id, nombre, apellido_paterno, apellido_materno, telefono')
+        .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%,telefono.ilike.%${texto}%`)
+        .eq('id_clinica', clinicaId)
+        .limit(5);
 
     listaSugerencias.innerHTML = '';
     
@@ -939,10 +1395,21 @@ inputBusqueda?.addEventListener('input', async (e) => {
         pacientes.forEach(p => {
             const div = document.createElement('div');
             div.className = 'sugerencia-item';
-            div.innerText = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno}`.trim();
+            // Le agregamos un iconito de teléfono para que identifiques rápido
+            const telInfo = p.telefono ? ` <span style="color:#64748b; font-size:0.75rem;">(📞 ${p.telefono})</span>` : '';
+            div.innerHTML = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''} ${telInfo}`.trim();
+            
             div.onclick = () => {
-                inputBusqueda.value = div.innerText;
+                // CASO A: Paciente Existente
+                inputBusqueda.value = `${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.trim();
                 document.getElementById('idPacienteSeleccionado').value = p.id;
+                
+                // Autocompletamos el teléfono y le ponemos un fondito gris para que sepa que ya existe
+                if(inputTel) {
+                    inputTel.value = p.telefono || '';
+                    inputTel.style.background = '#e2e8f0';
+                }
+                
                 listaSugerencias.innerHTML = '';
             };
             listaSugerencias.appendChild(div);
@@ -951,124 +1418,279 @@ inputBusqueda?.addEventListener('input', async (e) => {
         const divNuevo = document.createElement('div');
         divNuevo.className = 'sugerencia-item';
         divNuevo.style.background = '#f0fdf4';
-        divNuevo.innerHTML = `<strong>+ Registrar nuevo: "${texto}"</strong>`;
+        divNuevo.innerHTML = `<strong>+ Preparar prospecto: "${texto}"</strong>`;
 
-        divNuevo.onclick = async () => {
-            const clinicaId = localStorage.getItem('id_clinica_activa');
-            const idSocio = document.getElementById('selectConvenioPaciente')?.value || null;
-
-            const resultado = procesarNombreMexicano(texto); 
-
-            const { data: nuevo, error: errorReg } = await fisioNet.from('pacientes_maestros').insert({ 
-                nombre: resultado.nombre, 
-                apellido_paterno: resultado.paterno, 
-                apellido_materno: resultado.materno, 
-                creado_por: user.id,
-                id_clinica: clinicaId,
-                id_clinica_origen: clinicaId,
-                id_convenio: idSocio
-            }).select().single();
+        divNuevo.onclick = () => {
+            // CASO B: Paciente Nuevo (Prospecto)
+            // YA NO insertamos en base de datos aquí. Solo preparamos el modal.
+            inputBusqueda.value = texto;
+            document.getElementById('idPacienteSeleccionado').value = 'NUEVO_EXPRESS';
+            listaSugerencias.innerHTML = '';
             
-            if (nuevo) {
-                await window.crearVinculoInicial(nuevo.id, user.id, clinicaId);
-                inputBusqueda.value = `${nuevo.nombre} ${nuevo.apellido_paterno} ${nuevo.apellido_materno}`.trim();
-                document.getElementById('idPacienteSeleccionado').value = nuevo.id;
-                listaSugerencias.innerHTML = '';
-                
-                const msgConvenio = idSocio ? "VINCULADO AL CONVENIO 🤝" : "COMO PARTICULAR 👤";
-                alert(`¡${nuevo.nombre} REGISTRADO ${msgConvenio}! ⚡`);
-                
-            } else {
-                console.error("Error registrando:", errorReg);
-                alert("No se pudo registrar al paciente: " + errorReg.message);
+            // Le damos el foco al teléfono automáticamente
+            if(inputTel) {
+                inputTel.value = '';
+                inputTel.style.background = '#ffffff';
+                inputTel.focus(); 
             }
         };
         listaSugerencias.appendChild(divNuevo);
     }
 });
 
-// --- AGENDAR NUEVA CITA (CON VALIDACIÓN DINÁMICA Y CONVENIOS) ---
+
+// Variable global o de ámbito superior para bloquear doble clic
+let guardandoCita = false;
+
 document.getElementById('formNuevaCita')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { data: { user } } = await fisioNet.auth.getUser();
-    
-    const clinicaId = localStorage.getItem('id_clinica_activa');
-    const idPaciente = document.getElementById('idPacienteSeleccionado').value;
-    const modalidad = document.getElementById('modalidadCita').value;
-    const horaElegida = document.getElementById('horaCita').value; 
-    const fechaElegida = document.getElementById('fechaCita').value;
 
-    if (!idPaciente) { alert("Selecciona un paciente."); return; }
-    if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
+    // 🔒 CANDADO: Evitar envíos dobles por clics seguidos
+    if (guardandoCita) return;
+    guardandoCita = true;
 
-    const { data: perfil } = await fisioNet.from('perfiles_profesionales').select('costo_consulta_base, costo_domicilio_base, horario_atencion').eq('id', user.id).single();
+    const btnSubmit = e.target.querySelector('button[type="submit"]') || document.getElementById('btnGuardarCita');
+    if (btnSubmit) btnSubmit.disabled = true;
 
-    if (perfil.horario_atencion) {
-        const horarios = JSON.parse(perfil.horario_atencion);
-        const intervalo = parseInt(localStorage.getItem('intervalo_cita')) || 60; 
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        const clinicaId = localStorage.getItem('id_clinica_activa');
+        const idPaciente = document.getElementById('idPacienteSeleccionado').value;
+        const nombreInput = document.getElementById('buscarPacienteInput').value.trim();
+        const telefonoInput = document.getElementById('telefonoExpress')?.value.trim() || '';
         
-        const fechaObj = new Date(fechaElegida + "T12:00:00");
-        const diaSemana = fechaObj.getDay();
+        const modalidad = document.getElementById('modalidadCita').value; // 'CONSULTORIO' o 'DOMICILIO'
+        const horaElegida = document.getElementById('horaCita').value;
+        const fechaElegida = document.getElementById('fechaCita').value;
 
-        const horarioHoy = horarios.find(h => Number(h.dia) === diaSemana);
+        if (!nombreInput) { alert("Escribe el nombre del paciente."); return; }
+        if (!horaElegida) { alert("Selecciona un horario disponible."); return; }
+        if (!clinicaId) { alert("Error: No hay sede activa seleccionada."); return; }
 
-        if (!horarioHoy) {
-            alert(`❌ DÍA NO LABORABLE: No tienes configurado horario de trabajo para este día.`);
-            return; 
+        // 🎯 Configuración multi-sede del profesional
+        const { data: colab, error: errColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('costo_consulta_base, costo_domicilio_base, horario_atencion, intervalo_cita')
+            .eq('id_profesional', user.id)
+            .eq('id_clinica', clinicaId)
+            .maybeSingle();
+
+        if (errColab || !colab) {
+            alert("Error: No se encontró la configuración del profesional para esta sede.");
+            return;
         }
 
-        const hIni = horarioHoy.inicio; 
-        const hFin = horarioHoy.fin;
+        // 🕒 Validar horario laborable (MULTI-TURNO)
+        if (colab.horario_atencion) {
+            const horarios = typeof colab.horario_atencion === 'string' 
+                ? JSON.parse(colab.horario_atencion)
+                : colab.horario_atencion;
+                
+            const intervalo = parseInt(colab.intervalo_cita) || 30; 
+            const fechaObj = new Date(fechaElegida + "T12:00:00");
+            const diaSemana = fechaObj.getDay();
+            
+            const turnosHoy = horarios.filter(h => Number(h.dia) === diaSemana);
 
-        const [hE, mE] = horaElegida.split(':').map(Number);
-        const [hF, mF] = hFin.split(':').map(Number);
-        
-        const minElegidos = (hE * 60) + mE;
-        const minCierre = (hF * 60) + mF;
+            if (!turnosHoy || turnosHoy.length === 0) {
+                alert(`❌ DÍA NO LABORABLE: No tienes configurado horario de trabajo para este día en esta sede.`);
+                return;
+            }
 
-        if (horaElegida < hIni || (minElegidos + intervalo) > minCierre) {
-            alert(`❌ HORARIO NO DISPONIBLE: Tu hora límite de salida es a las ${hFin}. Selecciona una hora donde te dé tiempo de terminar la consulta.`);
-            return; 
+            const [hE, mE] = horaElegida.split(':').map(Number);
+            const minElegidos = (hE * 60) + mE;
+            
+            let esHorarioValido = false;
+            let ultimaHoraSalida = "00:00";
+
+            for (let turno of turnosHoy) {
+                const [hI, mI] = turno.inicio.split(':').map(Number);
+                const [hF, mF] = turno.fin.split(':').map(Number);
+
+                const minApertura = (hI * 60) + mI;
+                const minCierre = (hF * 60) + mF;
+
+                const [hUlt, mUlt] = ultimaHoraSalida.split(':').map(Number);
+
+                if (minCierre > ((hUlt * 60) + mUlt)) {
+                    ultimaHoraSalida = turno.fin;
+                }
+
+                if (minElegidos >= minApertura && (minElegidos + intervalo) <= minCierre) {
+                    esHorarioValido = true;
+                    break; 
+                }
+            }
+
+            if (!esHorarioValido) {
+                alert(`❌ HORARIO NO DISPONIBLE: La hora seleccionada está fuera de tus turnos de trabajo. (Última hora de salida hoy: ${ultimaHoraSalida}).`);
+                return;
+            }
         }
-    }
 
-    const selectorConvenio = document.getElementById('selectConvenioPaciente');
-    const idConvenio = (selectorConvenio && selectorConvenio.value) ? selectorConvenio.value : null;
-    let porcentaje = 0;
-    
-    if (idConvenio && selectorConvenio.selectedOptions.length > 0) {
-        porcentaje = parseFloat(selectorConvenio.selectedOptions[0].dataset.descuento) || 0;
-    }
+        // 🏷️ Cálculo de Costos y Convenios
+        const selectorConvenio = document.getElementById('selectConvenioPaciente');
+        let idConvenio = null;
+        let porcentaje = 0;
 
-    const precioBase = (modalidad === 'CONSULTORIO') ? perfil.costo_consulta_base : perfil.costo_domicilio_base;
-    const descuentoCalculado = (precioBase * porcentaje) / 100;
-    const precioFinal = precioBase - descuentoCalculado;
+        if (selectorConvenio && selectorConvenio.value && selectorConvenio.value !== "") {
+            idConvenio = selectorConvenio.value;
+            if (selectorConvenio.selectedIndex >= 0) {
+                porcentaje = parseFloat(selectorConvenio.options[selectorConvenio.selectedIndex].dataset.descuento) || 0;
+            }
+        }
 
-    const { error } = await fisioNet.from('agenda_maestra').insert({
-        id_paciente: idPaciente, 
-        id_profesional: user.id, 
-        id_clinica: clinicaId, 
-        fecha: fechaElegida, 
-        hora_inicio_cita: horaElegida,
-        modalidad: modalidad, 
-        id_convenio_aplicado: idConvenio, 
-        descuento_aplicado: descuentoCalculado, 
-        monto_base: precioBase,
-        monto_total: precioFinal, 
-        estatus: 'PENDIENTE', 
-        pago_status: 'PENDIENTE', 
-        estado: 'ACTIVO'
-    });
+        const costoConsultorio = colab.costo_consulta_base !== null ? Number(colab.costo_consulta_base) : 800;
+        const costoDomicilio = colab.costo_domicilio_base !== null ? Number(colab.costo_domicilio_base) : 1200;
+        const precioBase = (modalidad === 'CONSULTORIO') ? costoConsultorio : costoDomicilio;
+        
+        // 🔄 CORREGIDO: Descuento en porcentaje sobre precio base
+        const descuentoCalculado = (precioBase * porcentaje) / 100;
+        const precioFinal = precioBase - descuentoCalculado;
 
-    if (!error) {
-        alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID! 📅✨");
-        document.getElementById('modalCita').style.display = 'none';
+        // Función auxiliar para sincronización con Google Calendar
+        const ejecutarSyncCalendar = async (citaObj, nombrePaciente, esExpress = false) => {
+            const funcionSync = typeof sincronizarConGoogleCalendar === 'function' 
+                ? sincronizarConGoogleCalendar
+                : (typeof window.sincronizarConGoogleCalendar === 'function' ? window.sincronizarConGoogleCalendar : null);
+
+            if (funcionSync) {
+                await funcionSync(citaObj, nombrePaciente, esExpress);
+            } else {
+                console.warn("⚠️ La función sincronizarConGoogleCalendar no se encontró en el ámbito global.");
+            }
+        };
+
+        // =========================================================
+        // 🔀 BIFURCACIÓN: PACIENTE NUEVO VS EXISTENTE
+        // =========================================================
+        
+        if (!idPaciente || idPaciente === 'NUEVO_EXPRESS') {
+            // --- CASO B: PACIENTE NUEVO -> A SALA DE ESPERA ---
+            if (!telefonoInput) {
+                alert("⚠️ Al ser un paciente nuevo, es OBLIGATORIO pedirle su número de teléfono para guardarlo en la Sala de Espera.");
+                document.getElementById('telefonoExpress')?.focus();
+                return;
+            }
+
+            const resultado = typeof procesarNombreMexicano === 'function' 
+                ? procesarNombreMexicano(nombreInput)
+                : { nombre: nombreInput, paterno: '', materno: '' }; 
+
+            const payloadSolicitud = {
+                nombre: resultado.nombre,
+                apellido_p: resultado.paterno,
+                apellido_m: resultado.materno,
+                telefono: telefonoInput,
+                fecha_cita: fechaElegida,
+                hora_cita: horaElegida,
+                estado: 'CONFIRMADO',
+                id_clinica_solicitada: clinicaId,
+                id_profesional_solicitado: user.id
+            };
+
+            // Pasamos modalidad si agregas la columna a la tabla solicitudes_citas
+            if (modalidad) {
+                payloadSolicitud.modalidad = modalidad;
+            }
+
+            const { data: solData, error: errSol } = await fisioNet
+                .from('solicitudes_citas')
+                .insert(payloadSolicitud)
+                .select()
+                .single();
+
+            if (errSol) {
+                alert("Error al enviar a Sala de Espera: " + errSol.message);
+                return;
+            }
+
+            try {
+                const citaExpressSync = {
+                    id: solData?.id,
+                    es_prospecto: true,
+                    fecha: fechaElegida,
+                    hora_inicio_cita: horaElegida,
+                    modalidad: modalidad, // Pasa 'DOMICILIO' o 'CONSULTORIO'
+                    intervalo_cita: colab.intervalo_cita || 30
+                };
+                const nombreCompletoExpress = `${resultado.nombre} ${resultado.paterno} ${resultado.materno || ''}`.trim();
+                await ejecutarSyncCalendar(citaExpressSync, nombreCompletoExpress, true);
+            } catch (syncErr) {
+                console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
+            }
+
+            if (typeof cargarSalaEspera === 'function') {
+                await cargarSalaEspera();
+            }
+
+            alert("¡SOLICITUD EXPRÉS CREADA Y SINCRONIZADA! 📝✨");
+
+        } else {
+            // --- CASO A: PACIENTE EXISTENTE -> AGENDA DIRECTA ---
+            const { data: datosCita, error } = await fisioNet.from('agenda_maestra').insert({
+                id_paciente: idPaciente, 
+                id_profesional: user.id, 
+                id_clinica: clinicaId, 
+                fecha: fechaElegida, 
+                hora_inicio_cita: horaElegida,
+                modalidad: modalidad, 
+                id_convenio_aplicado: idConvenio, 
+                descuento_aplicado: descuentoCalculado, 
+                monto_base: precioBase,
+                monto_total: precioFinal, 
+                estatus: 'PENDIENTE', 
+                pago_status: 'PENDIENTE', 
+                estado: 'ACTIVO'
+            }).select(`*, pacientes_maestros (nombre, apellido_paterno, apellido_materno)`).single();
+
+            if (error) {
+                alert("Error al agendar cita: " + error.message);
+                return;
+            }
+
+            try {
+                let nombrePacienteSync = nombreInput.trim();
+                if (datosCita?.pacientes_maestros?.nombre) {
+                    nombrePacienteSync = `${datosCita.pacientes_maestros.nombre} ${datosCita.pacientes_maestros.apellido_paterno || ''} ${datosCita.pacientes_maestros.apellido_materno || ''}`.trim();
+                }
+
+                const citaParaSync = {
+                    ...datosCita,
+                    fecha: fechaElegida,
+                    hora_inicio_cita: horaElegida,
+                    modalidad: modalidad,
+                    intervalo_cita: colab.intervalo_cita || 30
+                };
+
+                await ejecutarSyncCalendar(citaParaSync, nombrePacienteSync, false);
+            } catch (syncErr) {
+                console.warn("⚠️ Advertencia en sync de Google Calendar:", syncErr);
+            }
+
+            alert("¡CITA AGENDADA CON ÉXITO EN FISIOCID Y SINCRONIZADA! 📅✨");
+        }
+
+        // Limpieza de Modal y Formularios
+        const modalCita = document.getElementById('modalCita');
+        if (modalCita) modalCita.style.display = 'none';
+
         document.getElementById('formNuevaCita').reset();
+        const inputIdPac = document.getElementById('idPacienteSeleccionado');
+        if (inputIdPac) inputIdPac.value = '';
         
+        // Actualización de Paneles
         if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+        if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
         if (typeof cargarEstadisticas === 'function') await cargarEstadisticas();
-    } else {
-        alert("Error al agendar: " + error.message);
+
+    } catch (errGeneral) {
+        console.error("❌ Error crítico procesando cita:", errGeneral);
+        alert("Ocurrió un error inesperado al guardar la cita.");
+    } finally {
+        guardandoCita = false;
+        if (btnSubmit) btnSubmit.disabled = false;
     }
 });
 
@@ -1080,28 +1702,64 @@ document.querySelectorAll('.cerrar-modal').forEach(boton => {
     boton.addEventListener('click', () => { document.getElementById('modalCita').style.display = 'none'; });
 });
 
-document.getElementById('btnCerrarSesion')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (confirm("¿Deseas salir de FisioCid?")) await salir();
-});
+// 🚪 CONTROL DE CIERRE DE SESIÓN BLINDADO FISIOCID
+const btnCerrar = document.getElementById('btnCerrarSesion');
+
+if (btnCerrar) {
+    // 1. Clonamos el botón para LIMPIAR cualquier listener duplicado colgado en memoria
+    const nuevoBtn = btnCerrar.cloneNode(true);
+    btnCerrar.parentNode.replaceChild(nuevoBtn, btnCerrar);
+
+    // 2. Escuchador único de evento
+    nuevoBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation(); // Frena en seco cualquier otra función colgada al clic
+
+        const deseaSalir = confirm("¿Deseas salir de FisioCid?");
+
+        if (deseaSalir) {
+            //console.log("👋 Cerrando sesión de FisioCid...");
+            try {
+                await fisioNet.auth.signOut();
+            } catch (err) {
+                console.error("Error al cerrar sesión en Supabase:", err);
+            }
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.replace("login.html"); // Reemplaza por 'login.html' si así se llama tu archivo
+        } else {
+            //console.log("🛑 Cierre de sesión cancelado. Permanece en el sistema.");
+        }
+    });
+}
 
 document.getElementById('btnAbrirConfig')?.addEventListener('click', async () => {
     const modal = document.getElementById('modalConfigInicial');
     const { data: { user } } = await fisioNet.auth.getUser();
+    const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
-    const { data: perfil } = await fisioNet.from('perfiles_profesionales').select('*').eq('id', user.id).single();
+    if (!user || !clinicaActiva) return;
 
-    if (perfil) {
-        document.getElementById('baseConsultorio').value = perfil.costo_consulta_base;
-        document.getElementById('baseDomicilio').value = perfil.costo_domicilio_base;
+    const { data: colab } = await fisioNet
+        .from('colaboradores_clinica')
+        .select('costo_consulta_base, costo_domicilio_base, horario_atencion, intervalo_cita')
+        .eq('id_profesional', user.id)
+        .eq('id_clinica', clinicaActiva)
+        .maybeSingle();
+
+    if (colab) {
+        if (document.getElementById('baseConsultorio')) {
+            document.getElementById('baseConsultorio').value = colab.costo_consulta_base ?? '';
+        }
+        if (document.getElementById('baseDomicilio')) {
+            document.getElementById('baseDomicilio').value = colab.costo_domicilio_base ?? '';
+        }
         if (document.getElementById('intervaloCita')) {
-            document.getElementById('intervaloCita').value = perfil.intervalo_cita || 30; // 60 min por defecto
+            document.getElementById('intervaloCita').value = colab.intervalo_cita || 30;
         }
-        if (document.getElementById('formatoImpresion')) {
-            document.getElementById('formatoImpresion').value = perfil.formato_impresion || 'CARTA';
-        }
-        if (perfil.horario_atencion) {
-            cargarHorariosEnModal(perfil.horario_atencion);
+        if (colab.horario_atencion) {
+            cargarHorariosEnModal(colab.horario_atencion);
         }
     }
     modal.style.display = 'flex';
@@ -1112,50 +1770,101 @@ window.cargarMonitorBoxes = async () => {
     const contenedor = document.getElementById('monitorBoxes');
     if (!contenedor) return;
 
-    const { data: boxes, error } = await fisioNet.from('boxes_clinica').select(`*, pacientes_maestros(nombre, apellido_paterno)`).eq('id_clinica', clinicaId).order('nombre_box', { ascending: true });
+    try {
+        const { data: boxes, error } = await fisioNet
+            .from('boxes_clinica')
+            .select(`*, pacientes_maestros(nombre, apellido_paterno)`)
+            .eq('id_clinica', clinicaId)
+            .order('nombre_box', { ascending: true });
 
-    if (error) return console.error(error);
+        if (error) throw error;
 
-    if (!boxes || boxes.length === 0) {
-        contenedor.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 30px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;"><p style="color: #64748b; font-size: 0.8rem;">No has configurado tus camillas.</p></div>`;
-        return;
-    }
-
-    contenedor.innerHTML = boxes.map(box => {
-        let bgColor, textColor, borderColor, estadoTexto, botonAccion;
-        let tiempoTexto = "";
-
-        if (box.estado === 'OCUPADO') {
-            bgColor = '#fee2e2'; textColor = '#b91c1c'; borderColor = '#f87171'; estadoTexto = `OCUPADO`;
-            if (box.hora_ingreso) {
-                const inicio = new Date(box.hora_ingreso);
-                const diffMinutos = Math.floor((new Date() - inicio) / 60000);
-                tiempoTexto = `<span style="color: #ef4444; font-size: 0.7rem; font-weight: bold;">⏱️ ${diffMinutos} min</span>`;
-            }
-            botonAccion = `<button onclick="cambiarEstadoBox('${box.id}', 'LIMPIEZA')" style="width: 100%; background: #f59e0b; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-top: 10px; transition: 0.2s;">🧹 PASAR A LIMPIEZA</button>`;
-        } else if (box.estado === 'LIMPIEZA') {
-            bgColor = '#fef3c7'; textColor = '#b45309'; borderColor = '#fbbf24'; estadoTexto = '🧹 EN LIMPIEZA';
-            botonAccion = `<button onclick="cambiarEstadoBox('${box.id}', 'LIBRE')" style="width: 100%; background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem; font-weight: bold; margin-top: 10px; transition: 0.2s;">✅ MARCAR LIBRE</button>`;
-        } else {
-            bgColor = '#f8fafc'; textColor = '#10b981'; borderColor = '#a7f3d0'; estadoTexto = 'LIBRE'; botonAccion = ''; 
+        if (!boxes || boxes.length === 0) {
+            contenedor.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 30px; background: #ffffff; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                    <p style="color: #64748b; font-size: 0.85rem; font-weight: 600; margin-bottom: 10px;">
+                        No hay espacios creados para esta sede.
+                    </p>
+                    <button onclick="window.location.href='gestion-espacios.html'" 
+                            style="background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">
+                        + Ir a Registrar Espacios
+                    </button>
+                </div>`;
+            return;
         }
 
-        const nombrePaciente = (box.estado === 'OCUPADO' && box.pacientes_maestros) ? `${box.pacientes_maestros.nombre} ${box.pacientes_maestros.apellido_paterno}` : (box.estado === 'LIMPIEZA' ? 'MANTENIMIENTO' : 'DISPONIBLE');
+        contenedor.innerHTML = boxes.map(box => {
+            let badgeBg, badgeColor, estadoTexto, botonAccion;
+            let tiempoTexto = "";
 
-        return `
-            <div class="stat-card" style="background: ${bgColor}; border: 2px solid ${borderColor}; padding: 15px; text-align: center; position: relative; border-radius: 12px; min-height: 100px; display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <small style="color: ${textColor}; font-weight: bold; font-size: 0.6rem;">${box.nombre_box.toUpperCase()}</small>${tiempoTexto}
+            if (box.estado === 'OCUPADO') {
+                badgeBg = '#fee2e2'; 
+                badgeColor = '#991b1b'; 
+                estadoTexto = '🔴 OCUPADO';
+
+                if (box.hora_ingreso) {
+                    const inicio = new Date(box.hora_ingreso);
+                    const diffMinutos = Math.floor((new Date() - inicio) / 60000);
+                    tiempoTexto = `<span style="color: #ef4444; font-size: 0.75rem; font-weight: 800;">⏱️ ${diffMinutos} min</span>`;
+                }
+
+                botonAccion = `
+                    <button onclick="cambiarEstadoBox('${box.id}', 'LIMPIEZA')" 
+                            style="width: 100%; background: #f59e0b; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin-top: 12px; transition: 0.2s;">
+                        🧹 PASAR A LIMPIEZA
+                    </button>`;
+
+            } else if (box.estado === 'LIMPIEZA') {
+                badgeBg = '#fef3c7'; 
+                badgeColor = '#92400e'; 
+                estadoTexto = '🧹 LIMPIEZA';
+
+                botonAccion = `
+                    <button onclick="cambiarEstadoBox('${box.id}', 'LIBRE')" 
+                            style="width: 100%; background: #10b981; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 0.75rem; font-weight: bold; margin-top: 12px; transition: 0.2s;">
+                        ✅ MARCAR DISPONIBLE
+                    </button>`;
+
+            } else {
+                badgeBg = '#dcfce7'; 
+                badgeColor = '#166534'; 
+                estadoTexto = '🟢 LIBRE'; 
+                botonAccion = ''; 
+            }
+
+            const nombrePaciente = (box.estado === 'OCUPADO' && box.pacientes_maestros) 
+                ? `${box.pacientes_maestros.nombre} ${box.pacientes_maestros.apellido_paterno}` 
+                : (box.estado === 'LIMPIEZA' ? 'MANTENIMIENTO' : 'DISPONIBLE');
+
+            return `
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 18px; text-align: left; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <!-- Encabezado con badge e indicador de tiempo -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: ${badgeBg}; color: ${badgeColor}; padding: 3px 8px; border-radius: 6px; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.5px;">
+                                ${estadoTexto}
+                            </span>
+                            ${tiempoTexto}
+                        </div>
+
+                        <!-- Nombre del Espacio (Destacado y Grande) -->
+                        <h4 style="margin: 0 0 6px 0; font-size: 1.1rem; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.3px;">
+                            ${box.nombre_box}
+                        </h4>
+
+                        <!-- Paciente / Estado secundario -->
+                        <p style="margin: 0; font-weight: 600; font-size: 0.85rem; color: #64748b;">
+                            ${nombrePaciente.toUpperCase()}
+                        </p>
                     </div>
-                    <p style="margin: 8px 0; font-weight: 800; font-size: 0.85rem; color: ${textColor};">${nombrePaciente.toUpperCase()}</p>
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-                        <span style="width: 7px; height: 7px; border-radius: 50%; background: ${textColor};"></span>
-                        <small style="font-size: 0.7rem; color: ${textColor}; font-weight: bold;">${estadoTexto}</small>
-                    </div>
-                </div>${botonAccion}
-            </div>`;
-    }).join('');
+
+                    ${botonAccion}
+                </div>`;
+        }).join('');
+
+    } catch (err) {
+        console.error("Error cargando boxes:", err);
+    }
 };
 
 setInterval(cargarMonitorBoxes, 60000);
@@ -1178,19 +1887,27 @@ window.configurarBoxes = async () => {
     });
 };
 
-document.getElementById('formNuevoBox')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
-    const nombre = document.getElementById('nombreNuevoBox').value.toUpperCase();
+window.guardarNuevaEstacion = async () => {
+    const clinicaId = localStorage.getItem('id_clinica_activa');
+    const inputNombre = document.getElementById('nombreNuevoBox');
+    const nombre = inputNombre.value.toUpperCase().trim();
 
+    if (!nombre) { alert("Escribe un nombre para la estación."); return; }
     if (!clinicaId) { alert("⚠️ Error: No se encuentra el ID de la clínica."); return; }
 
-    const { error } = await fisioNet.from('boxes_clinica').insert([{ nombre_box: nombre, id_clinica: clinicaId, estado: 'LIBRE' }]).select();
-    if (error) { alert("❌ Error: " + error.message); } else {
-        document.getElementById('nombreNuevoBox').value = '';
+    const { error } = await fisioNet.from('boxes_clinica').insert([{ nombre_box: nombre, id_clinica: clinicaId, estado: 'LIBRE' }]);
+    if (error) { 
+        alert("❌ Error: " + error.message); 
+    } else {
+        inputNombre.value = '';
         await configurarBoxes();
         await cargarMonitorBoxes();
     }
+};
+
+document.getElementById('formNuevoBox')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    guardarNuevaEstacion();
 });
 
 window.eliminarBox = async (id) => {
@@ -1218,206 +1935,422 @@ async function ejecutarIngreso(idBox, idPaciente, idCita) {
     location.reload(); 
 }
 
-// ==========================================
-// 📥 10. SALA DE ESPERA (SEGURIDAD Y REFERIDOS)
-// ==========================================
-
+// ============================================================================
+// 📬 CARGAR SALA DE ESPERA / SOLICITUDES (BLINDADA POR SEDE Y ROL)
+// ============================================================================
 async function cargarSalaEspera() {
     const lista = document.getElementById('listaEsperaReferidos');
     const badge = document.getElementById('badgeSolicitudes');
+  
     if (!lista) return;
-
-    const { data: solicitudes, error } = await fisioNet
-        .from('solicitudes_citas')
-        .select('*')
-        .eq('estado', 'PENDIENTE')
-        .order('creado_el', { ascending: false });
-
-    if (error) {
-        console.error("❌ ERROR DE SUPABASE:", error);
-        return;
-    }
-
-    if (badge) badge.innerText = solicitudes.length;
-    
-    if (!solicitudes || solicitudes.length === 0) {
-        lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">Sin solicitudes nuevas.</p>`;
-        return;
-    }
-
-    lista.innerHTML = solicitudes.map(sol => {
-        const nombreFull = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`.toUpperCase();
-        
-        return `
-        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <strong style="display: block; font-size: 0.85rem; color: #1e293b;">${nombreFull}</strong>
-                    <small style="color: #64748b;">📅 ${sol.fecha_cita} - ⏰ ${sol.hora_cita.substring(0,5)}</small>
+  
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+  
+        const clinicaId = localStorage.getItem('id_clinica_activa');
+        if (!clinicaId) {
+            lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">⚠️ Selecciona una clínica activa.</p>`;
+            return;
+        }
+  
+        const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
+        const esPersonalAdministrativo = ['ADMIN_SISTEMA', 'ADMINISTRATIVO'].includes(miRolSistema);
+  
+        let queryCitas = fisioNet
+            .from('solicitudes_citas')
+            .select('*')
+            .eq('estado', 'PENDIENTE')
+            .eq('id_clinica_solicitada', clinicaId);
+  
+        if (!esPersonalAdministrativo) {
+            queryCitas = queryCitas.eq('id_profesional_solicitado', user.id);
+        }
+  
+        const { data: solicitudes, error } = await queryCitas.order('creado_el', { ascending: false });
+  
+        if (error) {
+            console.error("❌ ERROR DE SUPABASE EN SALA DE ESPERA:", error);
+            return;
+        }
+  
+        if (badge) badge.innerText = solicitudes?.length || 0;
+  
+        if (!solicitudes || solicitudes.length === 0) {
+            lista.innerHTML = `<p style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;">Sin solicitudes nuevas en esta sede.</p>`;
+            return;
+        }
+  
+        lista.innerHTML = solicitudes.map(sol => {
+            const nombreFull = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`.trim().toUpperCase();
+            const horaFormateada = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '--:--';
+            
+            return `
+            <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); border-left: 5px solid #10b981 !important;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="text-align: left;">
+                        <span style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 5px; font-size: 0.6rem; font-weight: 800;">📅 SOLICITUD SEDE</span>
+                        <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-top: 5px;">${nombreFull}</strong>
+                        <small style="color: #64748b;">📅 ${sol.fecha_cita} ⏰ ${horaFormateada}</small>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <!-- Botón Confirmar (Cambiado a 'CONFIRMAR' para que coincida con la lógica) -->
+                        <button onclick="procesarSolicitud('${sol.id}', 'CONFIRMAR')" style="background: #10b981; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Aprobar y Confirmar">✅</button>
+                        
+                        <!-- Botón Azul: Proponer Nuevo Horario -->
+                        <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
+                        
+                        <!-- Botón Rechazar -->
+                        <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 7px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Rechazar">🗑️</button>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 5px;">
-                    <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
-                    <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
+                <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold; text-align: left;">
+                    📞 ${sol.telefono || 'Sin teléfono'} 
                 </div>
-            </div>
-            <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold;">
-                📞 ${sol.telefono} 
-            </div>
-        </div>`;
-    }).join('');
+            </div>`;
+        }).join('');
+
+    } catch (err) {
+        console.error("❌ Error al cargar sala de espera:", err);
+    }
 }
 
-window.procesarSolicitud = async (idSolicitud, accion) => {
-    if (accion === 'RECHAZAR') {
-        if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
-        await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
-        cargarSalaEspera();
-        return;
-    }
+const cargarEstadisticas = async () => {
+    const clinicaId = localStorage.getItem('id_clinica_activa'); 
+    if (!clinicaId) return;
 
-    const { data: sol } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
-    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
     const { data: { user } } = await fisioNet.auth.getUser();
+    if (!user) return;
 
-    const nomS = sol.nombre.toUpperCase().trim();
-    const apePS = sol.apellido_p.toUpperCase().trim();
-    const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
-    const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
+    const hoy = typeof obtenerFechaLocal === 'function' ? obtenerFechaLocal() : new Date().toISOString().split('T')[0];
+    
+    try {
+        // 1. Pacientes asociados a la sede activa
+        const { count: totalPacientes } = await fisioNet
+            .from('vinculos_clinicos')
+            .select('*', { count: 'exact', head: true })
+            .eq('id_clinica', clinicaId);
 
-    const raizN = nomS.substring(0, 4);
-    const raizA = apePS.substring(0, 4);
-    const raizMaterno = sol.apellido_m ? sol.apellido_m.toUpperCase().trim().substring(0, 4) : '';
+        // 2. Citas programadas para hoy en la sede activa
+        const { count: citasHoy } = await fisioNet
+            .from('agenda_maestra')
+            .select('*', { count: 'exact', head: true })
+            .eq('id_clinica', clinicaId)
+            .eq('fecha', hoy)
+            .neq('estado', 'CANCELADO');
 
-    let filtrosOr = `telefono.eq.${sol.telefono}, and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%)`;
-    if (curpS) filtrosOr += `,curp.eq.${curpS}`;
+        // 3. Inventario de insumos de la sede
+        const { data: insumos } = await fisioNet
+            .from('inventario_insumos')
+            .select('precio_costo, cantidad_actual, stock_minimo')
+            .eq('id_clinica', clinicaId);
 
-    let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
+        let inversionTotal = 0;
+        let contadorCriticos = 0;
 
-    let idPacienteFinal = null;
-
-    if (coincidencias && coincidencias.length > 0) {
-        let pMatch = null;
-
-        if (curpS) pMatch = coincidencias.find(p => p.curp === curpS);
-
-        if (!pMatch) {
-            pMatch = coincidencias.find(p => {
-                const nomDB = p.nombre ? p.nombre.toUpperCase() : '';
-                const apPDB = p.apellido_paterno ? p.apellido_paterno.toUpperCase() : '';
-                const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
-                
-                const checkPaterno = apPDB.includes(raizA);
-                const checkNombre = nomDB.includes(raizN);
-                const checkMaterno = raizMaterno && apMDB ? apMDB.includes(raizMaterno) : true; 
-
-                return checkPaterno && checkMaterno && checkNombre;
+        if (insumos) {
+            insumos.forEach(item => {
+                inversionTotal += (Number(item.precio_costo) || 0) * (Number(item.cantidad_actual) || 0);
+                if (Number(item.cantidad_actual) <= Number(item.stock_minimo)) contadorCriticos++;
             });
         }
 
-        if (!pMatch) pMatch = coincidencias.find(p => p.telefono === sol.telefono) || coincidencias[0];
-
-        const nomEnBase = `${pMatch.nombre} ${pMatch.apellido_paterno}`;
+        // Actualización de la interfaz (UI)
+        if (document.getElementById('totalPacientes')) {
+            document.getElementById('totalPacientes').innerText = totalPacientes || 0;
+        }
         
-        let titulo = "🕵️ POSIBLE COINCIDENCIA DETECTADA";
-        if (curpS && pMatch.curp === curpS) {
-            titulo = "🆔 IDENTIDAD CONFIRMADA POR CURP";
-        } else if (pMatch.nombre.toUpperCase().includes(raizN) && pMatch.apellido_paterno.toUpperCase().includes(raizA)) {
-            titulo = "🎯 IDENTIDAD CONFIRMADA POR NOMBRE Y APELLIDOS";
+        if (document.getElementById('citasHoy')) {
+            document.getElementById('citasHoy').innerText = citasHoy || 0;
         }
 
-        const esMismo = confirm(`${titulo}\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar sus datos / Cancelar = Es un familiar)`);
-
-        if (esMismo) {
-            idPacienteFinal = pMatch.id;
-            
-            const updates = {};
-            if (curpS && pMatch.curp !== curpS) updates.curp = curpS;
-            if (correoS && pMatch.correo_electronico !== correoS) updates.correo_electronico = correoS;
-            if (sol.telefono && pMatch.telefono !== sol.telefono) updates.telefono = sol.telefono;
-            if (nomS.length > pMatch.nombre.length) updates.nombre = nomS;
-
-            if (Object.keys(updates).length > 0) {
-                await fisioNet.from('pacientes_maestros').update(updates).eq('id', idPacienteFinal);
-            }
-        } else if (pMatch.telefono === sol.telefono) {
-            const esFam = confirm(`👥 ¿NUEVO FAMILIAR?\n\n¿Deseas crear un expediente SEPARADO para ${nomS} compartiendo el teléfono de ${pMatch.nombre}?`);
-            if (esFam) {
-                const { data: nFam, error: errFam } = await fisioNet.from('pacientes_maestros').insert({
-                    nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
-                    telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
-                    id_clinica: clinicaId, creado_por: user.id
-                }).select().single();
-
-                if (errFam) {
-                    alert(`¡Alto ahí!\nSupabase rechazó el registro.\nMotivo: ${errFam.message}`);
-                    return; 
-                }
-                idPacienteFinal = nFam.id;
-                            await window.crearVinculoInicial(idPacienteFinal, user.id, clinicaId); // 👈 AGREGA ESTO
-            } else { return; } 
+        if (document.getElementById('insumosBajos')) {
+            const el = document.getElementById('insumosBajos');
+            el.innerText = contadorCriticos;
+            el.style.color = contadorCriticos > 0 ? '#ef4444' : '#64748b';
         }
+
+    } catch (error) {
+        console.error("❌ Error en estadísticas FisioCid:", error);
+    }
+};
+
+
+// 🕒 Función auxiliar global para transformar "06:00 PM" a "18:00:00" de forma segura
+const convertirA24Hrs = (str12) => {
+    if (!str12) return "09:00:00";
+    // Si ya viene en formato de 24 horas (ej. "18:00" o "18:00:00"), lo devolvemos limpio
+    if (!str12.toUpperCase().includes('AM') && !str12.toUpperCase().includes('PM')) {
+        return str12.length === 5 ? `${str12}:00` : str12;
     }
 
-    if (!idPacienteFinal) {
-        const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
-            nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
-            telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
-            id_clinica: clinicaId, creado_por: user.id
+    const [time, modifier] = str12.trim().toUpperCase().split(/\s+/);
+    let [hours, minutes] = time.split(':');
+    let h = parseInt(hours, 10);
+    let m = minutes || '00';
+
+    if (modifier === 'PM' && h < 12) h += 12;
+    if (modifier === 'AM' && h === 12) h = 0;
+
+    return `${String(h).padStart(2, '0')}:${m}:00`;
+};
+
+// 🛠️ Función auxiliar segura para sincronizar con Google Calendar
+const ejecutarSyncCalendar = async (citaObj, nombrePaciente, esExpress = false) => {
+    const funcionSync = typeof sincronizarConGoogleCalendar === 'function' 
+        ? sincronizarConGoogleCalendar
+        : (typeof window.sincronizarConGoogleCalendar === 'function' ? window.sincronizarConGoogleCalendar : null);
+
+    if (funcionSync) {
+        await funcionSync(citaObj, nombrePaciente, esExpress);
+    } else {
+        console.warn("⚠️ La función sincronizarConGoogleCalendar no se encontró en el ámbito global.");
+    }
+};
+
+window.procesarSolicitud = async (idSolicitud, accion) => {
+    // console.log(`🚀 [WEB] Iniciando procesarSolicitud para ID: ${idSolicitud} con acción: ${accion}`);
+    
+    const { data: { user }, error: authError } = await fisioNet.auth.getUser();
+    if (authError || !user) {
+        console.error("❌ [WEB] Error de autenticación:", authError);
+        alert("⚠️ Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.");
+        location.reload();
+        return;
+    }
+
+    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    if (!clinicaId) {
+        console.error("❌ [WEB] No hay clínica activa en localStorage.");
+        alert("⚠️ Error: No hay una clínica activa seleccionada en esta sesión.");
+        return;
+    }
+
+    const { data: sol, error: solError } = await fisioNet.from('solicitudes_citas').select('*').eq('id', idSolicitud).single();
+    if (solError || !sol) {
+        console.error("❌ [WEB] No se encontró la solicitud:", solError);
+        alert("⚠️ No se encontró la información de esta solicitud.");
+        return;
+    }
+
+    // 🛡️ Manejo de RECHAZO
+    if (accion === 'RECHAZAR') {
+        if (!confirm("¿Deseas descartar esta solicitud de forma definitiva?")) return;
+        
+        await fisioNet.from('solicitudes_citas').update({ estado: 'RECHAZADO' }).eq('id', idSolicitud);
+
+        try {
+            if (sol.telefono) {
+                const nombrePacienteMsg = sol.nombre || 'Paciente';
+                const mensajeRechazo = `Hola *${nombrePacienteMsg}*, lamentablemente el profesional no está disponible en el horario solicitado. ¿Gustas intentar de nuevo para elegir otra opción o fecha? Responde con cualquier mensaje para reiniciar el proceso.`;
+                
+                await fisioNet.functions.invoke('send-whatsapp', {
+                    body: { to: sol.telefono, message: mensajeRechazo }
+                });
+            }
+        } catch (whatsappErr) {
+            console.error("⚠️ [WEB] Excepción en WhatsApp de rechazo:", whatsappErr);
+        }
+
+        cargarSalaEspera();
+        return;
+    }
+
+    // =================================================================================
+    // 🔀 DISTINCIÓN DE CAMINOS (App vs Bot)
+    // =================================================================================
+    let idPacienteFinal = null;
+    let esFlujoPesadoApp = true; 
+
+    if (esFlujoPesadoApp) {
+        const nomS = sol.nombre.toUpperCase().trim();
+        const apePS = sol.apellido_p.toUpperCase().trim();
+        const curpS = sol.curp ? sol.curp.toUpperCase().trim() : null;
+        const correoS = sol.email ? sol.email.toLowerCase().trim() : null;
+        const raizN = nomS.substring(0, 4);
+        const raizA = apePS.substring(0, 4);
+        
+        let filtrosOr = `telefono.eq.${sol.telefono},and(nombre.ilike.%${raizN}%,apellido_paterno.ilike.%${raizA}%),and(nombre.ilike.%${raizN}%,apellido_materno.ilike.%${raizA}%)`;
+        if (curpS) filtrosOr += `,curp.eq.${curpS}`;
+        
+        let { data: coincidencias } = await fisioNet.from('pacientes_maestros').select('*').or(filtrosOr);
+        
+        if (coincidencias && coincidencias.length > 0) {
+            let pMatch = null;
+            if (curpS) pMatch = coincidencias.find(p => p.curp === curpS);
+        
+            if (!pMatch) {
+                pMatch = coincidencias.find(p => {
+                    const nomDB = p.nombre ? p.nombre.toUpperCase() : '';
+                    const apPDB = p.apellido_paterno ? p.apellido_paterno.toUpperCase() : '';
+                    const apMDB = p.apellido_materno ? p.apellido_materno.toUpperCase() : '';
+                    return nomDB.includes(raizN) && (apPDB.includes(raizA) || apMDB.includes(raizA));
+                });
+            }
+
+            if (!pMatch) pMatch = coincidencias.find(p => p.telefono === sol.telefono) || coincidencias[0];
+        
+            const nomEnBase = `${pMatch.nombre} ${pMatch.apellido_paterno}`;
+            const esMismo = confirm(`🕵️ COINCIDENCIA DETECTADA\n\nEn base: ${nomEnBase}\nSolicitud: ${nomS} ${apePS}\n\n¿Es la MISMA PERSONA?\n(Aceptar = Actualizar / Cancelar = Familiar nuevo)`);
+        
+            if (esMismo) {
+                idPacienteFinal = pMatch.id;
+                const updates = {};
+                if (curpS && pMatch.curp !== curpS) updates.curp = curpS;
+                if (correoS && pMatch.correo_electronico !== correoS) updates.correo_electronico = correoS;
+                if (sol.telefono && pMatch.telefono !== sol.telefono) updates.telefono = sol.telefono;
+                if (nomS.length > pMatch.nombre.length) updates.nombre = nomS;
+        
+                if (Object.keys(updates).length > 0) {
+                    await fisioNet.from('pacientes_maestros').update(updates).eq('id', idPacienteFinal);
+                }
+            } else if (pMatch.telefono === sol.telefono) {
+                const esFam = confirm(`👥 ¿NUEVO FAMILIAR?\n\n¿Deseas crear un expediente separado para ${nomS}?`);
+                if (esFam) {
+                    const { data: nFam, error: errFam } = await fisioNet.from('pacientes_maestros').insert({
+                        nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
+                        telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
+                        id_clinica: clinicaId, creado_por: user.id
+                    }).select().single();
+        
+                    if (errFam) {
+                        alert(`Supabase rechazó el registro: ${errFam.message}`);
+                        return; 
+                    }
+                    idPacienteFinal = nFam.id;
+                } else { return; } 
+            }
+        }
+        
+        if (!idPacienteFinal) {
+            const { data: nPac, error: eP } = await fisioNet.from('pacientes_maestros').insert({
+                nombre: nomS, apellido_paterno: apePS, apellido_materno: sol.apellido_m?.toUpperCase(),
+                telefono: sol.telefono, correo_electronico: correoS, curp: curpS,
+                id_clinica: clinicaId, creado_por: user.id
+            }).select().single();
+        
+            if (eP) return alert("Error al crear paciente nuevo: " + eP.message);
+            idPacienteFinal = nPac.id;
+        }
+
+        // 🕒 Convertimos la hora a formato 24 horas antes de insertar
+        const horaFormateada24 = convertirA24Hrs(sol.hora_cita);
+
+        const { data: nuevaCita, error: eAg } = await fisioNet.from('agenda_maestra').insert({
+            id_paciente: idPacienteFinal,
+            id_profesional: user.id,
+            id_clinica: clinicaId,
+            fecha: sol.fecha_cita,
+            hora_inicio_cita: horaFormateada24, // 👈 Hora corregida (ej. 18:00:00)
+            modalidad: 'CONSULTORIO',
+            estatus: 'PENDIENTE',
+            estado: 'ACTIVO'
         }).select().single();
 
-        if (eP) return alert("Error al crear paciente nuevo: " + eP.message);
-        idPacienteFinal = nPac.id;
-        await window.crearVinculoInicial(idPacienteFinal, user.id, clinicaId); // 👈 AGREGA ESTO
+        if (eAg) {
+            console.error("❌ [WEB] Error al insertar en agenda_maestra:", eAg);
+            return alert("Error al insertar en agenda: " + eAg.message);
+        }
+
+        // 📅 Sincronización Segura con Google Calendar
+        try {
+            const nombreCompleto = `${sol.nombre} ${sol.apellido_p} ${sol.apellido_m || ''}`;
+            await ejecutarSyncCalendar(nuevaCita, nombreCompleto.trim(), false);
+        } catch (syncErr) {
+            console.warn("⚠️ [WEB] Advertencia al sincronizar con Google Calendar:", syncErr);
+        }
     }
 
-    const { error: eAg } = await fisioNet.from('agenda_maestra').insert({
-        id_paciente: idPacienteFinal,
-        id_profesional: user.id,
-        id_clinica: clinicaId,
-        fecha: sol.fecha_cita,
-        hora_inicio_cita: sol.hora_cita,
-        modalidad: 'CONSULTORIO',
-        estatus: 'PENDIENTE',
-        estado: 'ACTIVO'
-    });
+    // --- ACCIÓN COMÚN: Actualizar solicitud a CONFIRMADO ---
+    await fisioNet.from('solicitudes_citas').update({ estado: 'CONFIRMADO' }).eq('id', idSolicitud);
+    
+    // Limpieza del bot
+    try {
+        await fisioNet.from('sesiones_whatsapp_bot').update({
+            estado_conversacion: 'INICIO',
+            fecha_temporal: null,
+            dato_temporal: null
+        }).eq('telefono_paciente', sol.telefono);
+    } catch (botErr) {}
 
-    if (!eAg) {
-        await fisioNet.from('solicitudes_citas').update({ estado: 'APROBADO' }).eq('id', idSolicitud);
-        alert("✅ PROCESO COMPLETADO EXITOSAMENTE");
-        cargarSalaEspera();
-        if (typeof cargarAgenda === 'function') cargarAgenda('semana');
-    } else {
-        alert("Error al insertar en agenda: " + eAg.message);
+    // 📱 DISPARO DEL WHATSAPP DE ACEPTACIÓN
+    try {
+        if (sol.telefono) {
+            const nombrePacienteMsg = sol.nombre || 'Paciente';
+            const horaLimpia = sol.hora_cita ? sol.hora_cita.substring(0, 5) : '';
+            const mensajeAceptacion = `✅ ¡Hola *${nombrePacienteMsg}*! Tu solicitud ha sido aceptada. Te esperamos para tu cita el día 📅 *${sol.fecha_cita}* a las ⏰ *${horaLimpia}*. ¡Te esperamos!`;
+
+            const { data: fnData, error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                body: { to: sol.telefono, message: mensajeAceptacion }
+            });
+
+            if (fnError) {
+                console.error("❌ [WEB] Error retornado por invoke('send-whatsapp'):", fnError);
+            }
+        }
+    } catch (whatsappErr) {
+        console.error("⚠️ [WEB] Excepción crítica al invocar WhatsApp de aceptación:", whatsappErr);
     }
+
+    alert("✅ PROCESO COMPLETADO Y WHATSAPP ENVIADO");
+    cargarSalaEspera();
+    if (typeof cargarAgenda === 'function') cargarAgenda('semana');
 };
 
 window.abrirModalConvenio = () => {
     const modal = document.getElementById('modalConvenios');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    if (modal) { modal.style.display = 'flex'; }
 };
 
-function actualizarPrecioVisual() {
-    const modalidad = document.getElementById('modalidadCita').value;
+async function actualizarPrecioVisual() {
+    const modalidad = document.getElementById('modalidadCita')?.value || 'CONSULTORIO';
     const selector = document.getElementById('selectConvenioPaciente');
     const vistaPrevia = document.getElementById('vistaPreviaPago');
     const textoMonto = document.getElementById('textoMontoFinal');
 
-    let precioBase = (modalidad === 'CONSULTORIO') ? parseFloat(document.getElementById('baseConsultorio')?.value || 800) : parseFloat(document.getElementById('baseDomicilio')?.value || 1200);
+    const { data: { user } } = await fisioNet.auth.getUser();
+    const clinicaActiva = localStorage.getItem('id_clinica_activa');
 
-    if (selector && selector.value) {
-        const porcentaje = parseFloat(selector.selectedOptions[0].dataset.descuento) || 0;
-        precioBase = precioBase - (precioBase * porcentaje / 100);
+    let costoConsultorio = parseFloat(document.getElementById('baseConsultorio')?.value) || 800;
+    let costoDomicilio = parseFloat(document.getElementById('baseDomicilio')?.value) || 1200;
+
+    if (user && clinicaActiva) {
+        // 🎯 LEER DIRECTAMENTE DE LA RELACIÓN EN LA SEDE ACTIVA
+        const { data: colab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('costo_consulta_base, costo_domicilio_base')
+            .eq('id_profesional', user.id)
+            .eq('id_clinica', clinicaActiva)
+            .maybeSingle();
+
+        if (colab) {
+            if (colab.costo_consulta_base !== null && colab.costo_consulta_base !== undefined) {
+                costoConsultorio = Number(colab.costo_consulta_base);
+            }
+            if (colab.costo_domicilio_base !== null && colab.costo_domicilio_base !== undefined) {
+                costoDomicilio = Number(colab.costo_domicilio_base);
+            }
+        }
     }
-    if (textoMonto) textoMonto.innerText = `$${precioBase.toFixed(2)}`;
+
+    // 🔄 Evaluamos correctamente si la opción elegida es a Domicilio
+    const esDomicilio = modalidad.toUpperCase().includes('DOMICILIO');
+    const precioBase = esDomicilio ? costoDomicilio : costoConsultorio;
+
+    let porcentaje = 0;
+    if (selector && selector.selectedIndex >= 0) {
+        const opcionSeleccionada = selector.options[selector.selectedIndex];
+        if (opcionSeleccionada && opcionSeleccionada.dataset.descuento) {
+            porcentaje = parseFloat(opcionSeleccionada.dataset.descuento) || 0;
+        }
+    }
+
+    // ✅ Cálculo con nombres de variables unificados
+    const descuentoCalculado = (precioBase * porcentaje) / 100;
+    const precioFinal = precioBase - descuentoCalculado;
+
+    if (textoMonto) textoMonto.innerText = `$${precioFinal.toFixed(2)}`;
     if (vistaPrevia) vistaPrevia.style.display = 'block';
-
-    const lblPrecio = document.getElementById('labelPrecioFinal');
-    if (lblPrecio) {
-        const descuento = (modalidad === 'CONSULTORIO' ? parseFloat(document.getElementById('baseConsultorio')?.value || 800) : parseFloat(document.getElementById('baseDomicilio')?.value || 1200)) - precioBase;
-        lblPrecio.innerHTML = `Precio Final: <b>$${precioBase.toFixed(2)}</b> <small>(Ahorro: $${descuento.toFixed(2)})</small>`;
-    }
 }
 
 document.getElementById('linkMostrarConvenio')?.addEventListener('click', async (e) => {
@@ -1429,194 +2362,237 @@ document.getElementById('linkMostrarConvenio')?.addEventListener('click', async 
         actualizarPrecioVisual(); 
         e.target.innerText = "✕ Quitar convenio";
     } else {
-        contenedor.style.display = 'none'; document.getElementById('selectConvenioPaciente').value = "";
-        actualizarPrecioVisual(); e.target.innerText = "+ ¿Aplicar convenio o empresa?";
+        contenedor.style.display = 'none'; 
+        document.getElementById('selectConvenioPaciente').value = "";
+        actualizarPrecioVisual(); 
+        e.target.innerText = "+ ¿Aplicar convenio o empresa?";
     }
 });
 
 document.getElementById('modalidadCita')?.addEventListener('change', actualizarPrecioVisual);
 document.getElementById('selectConvenioPaciente')?.addEventListener('change', actualizarPrecioVisual);
 
-window.generarReporteSocio = async (idSocio, nombreSocio) => {
-    const clinicaId = localStorage.getItem('id_clinica_activa');
-    
-    const { data: socio } = await fisioNet.from('red_colaboracion').select('estado_conexion').eq('id', idSocio).single();
-    
-    const { data: citas, error } = await fisioNet
-        .from('agenda_maestra')
-        .select('descuento_aplicado')
-        .eq('id_convenio_aplicado', idSocio)
-        .eq('id_clinica', clinicaId);
-
-    if (error) return;
-
-    const totalPacientes = citas.length;
-    const ahorroTotal = citas.reduce((acc, c) => acc + (c.descuento_aplicado || 0), 0);
-    
-    const estaActiva = socio.estado_conexion === 'ACTIVO';
-    const mensajeEstado = estaActiva 
-        ? "¡Esta alianza está activa y funcionando! 🚀" 
-        : "⚠️ ESTA ALIANZA SE ENCUENTRA PAUSADA ACTUALMENTE.";
-
-    alert(`
-    📊 INFORME DE IMPACTO: ${nombreSocio}
-    --------------------------------------------
-    ✅ Pacientes referidos: ${totalPacientes}
-    💰 Ahorro generado a sus miembros: $${ahorroTotal.toFixed(2)} MXN
-    
-    ${mensajeEstado}
-    `);
-};
-
-window.desactivarSocio = async (idSocio, nombre) => {
-    const confirmacion = confirm(`¿Deseas cambiar el estado de la alianza con "${nombre}"?`);
-    if (!confirmacion) return;
-
-    const { data: socio } = await fisioNet.from('red_colaboracion').select('estado_conexion').eq('id', idSocio).single();
-    const nuevoEstado = socio.estado_conexion === 'ACTIVO' ? 'PAUSADO' : 'ACTIVO';
-
-    const { error } = await fisioNet
-        .from('red_colaboracion')
-        .update({ estado_conexion: nuevoEstado })
-        .eq('id', idSocio);
-
-    if (!error) {
-        alert(`Alianza ${nuevoEstado === 'ACTIVO' ? 'Activada ✅' : 'Pausada 🚫'}`);
-        renderizarTablaAlianzas(); 
-        inicializarFormularioConvenio(); 
-    }
-};
-
-// --- GESTIÓN DE ALIANZAS Y CONVENIOS ---
 async function inicializarFormularioConvenio() {
-    console.log("🔍 Vinculando formulario con automatización de accesos...");
-    
     const select = document.getElementById('selectConvenioPaciente');
-    const formConvenio = document.getElementById('formNuevoConvenio');
+    if (!select) return;
 
-    // --- A. LLENAR EL SELECTOR ---
-    if (select) {
+    try {
         const { data: convenios, error } = await fisioNet
             .from('red_colaboracion')
-            .select('*')
+            .select('id, nombre_entidad, porcentaje_descuento')
             .eq('estado_conexion', 'ACTIVO')
             .order('nombre_entidad', { ascending: true });
 
-        if (!error && convenios) {
-            select.innerHTML = '<option value="">👤 PACIENTE PARTICULAR (SIN CONVENIO)</option>';
+        // Siempre dejamos la opción por defecto sin lanzar error
+        select.innerHTML = '<option value="" data-descuento="0">👤 PACIENTE PARTICULAR (SIN CONVENIO)</option>';
+
+        if (!error && convenios && convenios.length > 0) {
             convenios.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c.id;
-                opt.dataset.descuento = c.porcentaje_descuento;
-                opt.textContent = `🤝 ${c.nombre_entidad} (${c.porcentaje_descuento}% DESC)`;
+                opt.dataset.descuento = c.porcentaje_descuento || 0;
+                opt.textContent = `🤝 ${c.nombre_entidad} (${c.porcentaje_descuento || 0}% DESC)`;
                 select.appendChild(opt);
             });
         }
-    }
-
-    // --- B. EVENTO DE GUARDADO ---
-    if (formConvenio) {
-        formConvenio.onsubmit = async (e) => {
-            e.preventDefault();
-            
-            const { data: { user: doctorActual } } = await fisioNet.auth.getUser();
-            if (!doctorActual) {
-                alert("⚠️ Error: Sesión de doctor no detectada.");
-                return;
-            }
-            const MI_ID_DOCTOR = doctorActual.id;
-
-            const emailSocio = document.getElementById('email_contacto').value.toLowerCase().trim();
-            const nombreEntidad = document.getElementById('nomConvenio').value.trim().toUpperCase();
-            const passPredeterminada = "Temporal123";
-
-            console.log("🚀 Iniciando proceso para:", emailSocio);
-
-            // 1. INTENTAR REGISTRO EN AUTH
-            const { data: authData, error: authError } = await fisioAdmin.auth.signUp({
-                email: emailSocio,
-                password: passPredeterminada
-            });
-
-            let idDelSocioFinal = null;
-
-            if (authError) {
-                if (authError.message.includes("already registered")) {
-                    console.log("ℹ️ El socio ya existe en Auth. Rescatando UUID...");
-                    
-                    const { data: socioRecuperado } = await fisioNet
-                        .from('red_colaboracion')
-                        .select('id_usuario_socio')
-                        .eq('email_contacto', emailSocio)
-                        .maybeSingle();
-                    
-                    idDelSocioFinal = socioRecuperado?.id_usuario_socio || null;
-
-                    if (!idDelSocioFinal) {
-                        console.warn("⚠️ El usuario existe en Auth pero no en tu tabla. Tip: Para pruebas usa correos nuevos o vincula el ID manualmente en Supabase una vez.");
-                    }
-                } else {
-                    alert("Error en Auth: " + authError.message);
-                    return;
-                }
-            } else if (authData && authData.user) {
-                idDelSocioFinal = authData.user.id;
-                console.log("✅ ID GENERADO EXITOSAMENTE:", idDelSocioFinal);
-            }
-
-            // 2. PREPARAR DATOS
-            const datosSocio = {
-                nombre_entidad: nombreEntidad,
-                contacto_principal: document.getElementById('contactoNombre').value.trim().toUpperCase(),
-                tipo_entidad: document.getElementById('tipoConvenio').value,
-                telefono_contacto: document.getElementById('contactoTel').value.trim(),
-                email_contacto: emailSocio,
-                porcentaje_descuento: parseFloat(document.getElementById('porcentajeDesc').value) || 0,
-                id_doctor_emisor: MI_ID_DOCTOR,
-                id_usuario_socio: idDelSocioFinal, 
-                estado_conexion: 'ACTIVO'
-            };
-
-            // 3. VERIFICAR SI YA EXISTE EN TABLA
-            const { data: existe } = await fisioNet.from('red_colaboracion')
-                .select('id').eq('nombre_entidad', nombreEntidad).maybeSingle();
-
-            if (existe) {
-                if (!confirm(`⚠️ EL SOCIO "${nombreEntidad}" YA EXISTE. ¿Actualizar?`)) return;
-                
-                const { error: errUpd } = await fisioNet.from('red_colaboracion')
-                    .update(datosSocio)
-                    .eq('id', existe.id);
-                
-                if (!errUpd) alert("✅ ¡ALIANZA ACTUALIZADA!");
-                else console.error("Error en Update:", errUpd);
-
-            } else {
-                // 4. INSERTAR
-                console.log("📤 Intentando INSERT con ID Socio:", idDelSocioFinal);
-                const { error: errIns } = await fisioNet.from('red_colaboracion').insert([datosSocio]);
-                
-                if (!errIns) {
-                    alert(`🚀 ¡ALIANZA GUARDADA!\n📧 ${emailSocio}\n🔑 ${passPredeterminada}`);
-                } else {
-                    console.error("❌ ERROR TÉCNICO:", errIns);
-                    alert(`Error: ${errIns.message}`); 
-                }
-            }
-
-            document.getElementById('modalConvenios').style.display = 'none';
-            formConvenio.reset();
-            if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas();
-            await inicializarFormularioConvenio();
-        };
+    } catch (err) {
+        console.error("Error al cargar convenios:", err);
+        // Fallback seguro en caso de error de red
+        select.innerHTML = '<option value="" data-descuento="0">👤 PACIENTE PARTICULAR (SIN CONVENIO)</option>';
     }
 }
 
-// --- 🕵️ FUNCIÓN CAZADORA DEFINITIVA (DASHBOARD) ---
+window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
+    if (!idSolicitud || idSolicitud === 'undefined') return;
+
+    // Obtener datos del paciente para la notificación
+    let telefonoPaciente = '';
+    let nombrePaciente = '';
+    let idProfSolicitado = '';
+
+    try {
+        const { data: solData } = await fisioNet
+            .from('solicitudes_citas')
+            .select('telefono, nombre, id_profesional_solicitado')
+            .eq('id', idSolicitud)
+            .single();
+
+        if (solData) {
+            telefonoPaciente = solData.telefono || '';
+            nombrePaciente = solData.nombre || 'Paciente';
+            idProfSolicitado = solData.id_profesional_solicitado || '';
+        }
+    } catch (e) {
+        console.warn("Error al obtener datos de la solicitud:", e);
+    }
+
+    let modalReagendar = document.getElementById('modalProponerHorario');
+
+    if (!modalReagendar) {
+        modalReagendar = document.createElement('div');
+        modalReagendar.id = 'modalProponerHorario';
+        modalReagendar.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: flex; justifyContent: center;
+            align-items: center; z-index: 9999; backdrop-filter: blur(2px);
+        `;
+        document.body.appendChild(modalReagendar);
+    }
+
+    const fechaHoy = new Date().toISOString().split('T')[0];
+
+    modalReagendar.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px;">
+            <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 800;">🔄 Proponer Nuevo Horario</h3>
+            <label style="font-size: 0.75rem; font-weight: 700; color: #475569;">SELECCIONA LA NUEVA FECHA:</label>
+            <input type="date" id="inputNuevaFechaPropuesta" value="${fechaHoy}" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+            <button id="btnConsultarDispoPropuesta" style="background: #3b82f6; color: white; border: none; padding: 9px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem;">🔍 Consultar Horarios Disponibles</button>
+            <div id="contenedorHorariosLibresPropuesta" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; margin-top: 5px;">
+                <span style="font-size: 0.75rem; color: #94a3b8; text-align: center;">Elige una fecha y presiona consultar.</span>
+            </div>
+            <button onclick="document.getElementById('modalProponerHorario').remove();" style="background: #e2e8f0; color: #475569; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.75rem; margin-top: 5px;">Cancelar</button>
+        </div>
+    `;
+
+    document.getElementById('btnConsultarDispoPropuesta').onclick = async () => {
+        const fechaElegida = document.getElementById('inputNuevaFechaPropuesta').value;
+        const contenedor = document.getElementById('contenedorHorariosLibresPropuesta');
+        const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        if (!fechaElegida || !clinicaId || !user) {
+            alert("Faltan datos de clínica o sesión de usuario.");
+            return;
+        }
+
+        contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#3b82f6; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
+
+        try {
+            const [ocupadasRes, perfilRes] = await Promise.all([
+                fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
+                fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita, nombre_completo').eq('id', user.id).single()
+            ]);
+
+            const ocupadas = ocupadasRes.data;
+            const perfil = perfilRes.data;
+
+            if (!perfil?.horario_atencion) {
+                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil primero.</p>`;
+                return;
+            }
+
+            const config = JSON.parse(perfil.horario_atencion);
+            const intervalo = parseInt(perfil.intervalo_cita) || 30;
+            const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+            const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
+
+            const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
+            const minToH = (m) => `${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
+
+            let espaciosDisponibles = [];
+            bloquesHoy.forEach(bloque => {
+                let inicio = aMin(bloque.inicio);
+                let fin = aMin(bloque.fin);
+                while (inicio + intervalo <= fin) {
+                    const horaGen = minToH(inicio);
+                    const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
+                    if (!estaOcupada) espaciosDisponibles.push(horaGen);
+                    inicio += intervalo;
+                }
+            });
+
+            if (espaciosDisponibles.length === 0) {
+                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem; font-weight: bold;">Sin horarios disponibles para este día ❌</p>`;
+                return;
+            }
+
+            contenedor.innerHTML = `<span style="font-size: 0.75rem; font-weight: 700; color: #1e3a8a;">Selecciona el nuevo horario (${espaciosDisponibles.length} libres):</span>`;
+            const gridHorarios = document.createElement('div');
+            gridHorarios.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px;";
+
+            espaciosDisponibles.forEach(hora => {
+                const btnHora = document.createElement('button');
+                btnHora.innerText = hora;
+                btnHora.style.cssText = "background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px; border-radius: 6px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-align: center;";
+
+                btnHora.onclick = async () => { 
+                    modalReagendar.remove();
+                    try {
+                        // 0. Cancelar cualquier otra solicitud duplicada o vieja de este paciente
+                        if (telefonoPaciente && idProfSolicitado) {
+                            await fisioNet.from('solicitudes_citas')
+                                .update({ estado: 'CANCELADO' })
+                                .eq('telefono', telefonoPaciente)
+                                .eq('id_profesional_solicitado', idProfSolicitado)
+                                .eq('estado', 'PENDIENTE')
+                                .neq('id', idSolicitud);
+                        }
+
+                        // 🕒 Asegurar formato 24 horas (por si acaso se inyecta con sufijo o formato distinto)
+                        const horaFormateada24 = typeof convertirA24Hrs === 'function' ? convertirA24Hrs(hora) : `${hora}:00`;
+
+                        // 1. Actualizar la solicitud actual con la nueva fecha y hora en formato 24h
+                        const { error } = await fisioNet.from('solicitudes_citas')
+                            .update({ 
+                                fecha_cita: fechaElegida, 
+                                hora_cita: horaFormateada24, 
+                                estado: 'PENDIENTE' 
+                            })
+                            .eq('id', idSolicitud);
+
+                        if (error) throw error;
+
+                        // 2. Cambiar la sesión del bot a ESPERANDO_CONFIRMACION_CAMBIO
+                        if (telefonoPaciente) {
+                            await fisioNet.from('sesiones_whatsapp_bot').upsert({
+                                telefono_paciente: telefonoPaciente,
+                                id_profesional: idProfSolicitado,
+                                estado_conversacion: 'ESPERANDO_CONFIRMACION_CAMBIO',
+                                fecha_temporal: fechaElegida,
+                                dato_temporal: hora
+                            }, { onConflict: 'telefono_paciente' });
+
+                            // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VÍA WHATSAPP
+                            const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
+
+                            const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
+                                body: { 
+                                    to: telefonoPaciente, 
+                                    message: mensajeTexto 
+                                }
+                            });
+
+                            if (fnError) {
+                                console.error("Error al disparar el mensaje de WhatsApp:", fnError);
+                            }
+                        }
+
+                        alert(`✅ ¡Horario actualizado y mensaje enviado por WhatsApp a ${nombrePaciente}!`);
+
+                        if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
+                        if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+
+                    } catch (err) {
+                        console.error("Error al actualizar nuevo horario:", err);
+                        alert("Hubo un error al actualizar el horario.");
+                    }
+                };
+
+                gridHorarios.appendChild(btnHora);
+            });
+
+            contenedor.appendChild(gridHorarios);
+        } catch (err) {
+            console.error("Error consultando disponibilidad:", err);
+            contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Error al sincronizar horarios.</p>`;
+        }
+    };
+};
+
 async function verificarDisponibilidadReal() {
     const fechaElegida = document.getElementById('fechaCita').value;
     const contenedor = document.getElementById('gridHorariosDisponibles');
-    const clinicaId = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    const clinicaId = localStorage.getItem('id_clinica_activa');
     const inputHoraOculto = document.getElementById('horaCita');
     const { data: { user } } = await fisioNet.auth.getUser();
 
@@ -1626,22 +2602,53 @@ async function verificarDisponibilidadReal() {
     inputHoraOculto.value = ""; 
 
     try {
-        const [ocupadasRes, perfilRes] = await Promise.all([
-            fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
-            fisioNet.from('perfiles_profesionales').select('horario_atencion, intervalo_cita').eq('id', user.id).single()
+        // 🚀 CONSULTAMOS EN PARALELO Y FILTRAMOS CITAS CANCELADAS EN AGENDA_MAESTRA
+        const [ocupadasRes, pendientesRes, confirmadasRes, colabRes] = await Promise.all([
+            fisioNet.from('agenda_maestra')
+                .select('hora_inicio_cita')
+                .eq('fecha', fechaElegida)
+                .eq('id_clinica', clinicaId)
+                .eq('estado', 'ACTIVO')
+                .neq('estatus', 'CANCELADO'), // 👈 Evita bloqueo por citas canceladas
+            fisioNet.from('solicitudes_citas')
+                .select('hora_cita')
+                .eq('fecha_cita', fechaElegida)
+                .eq('id_clinica_solicitada', clinicaId)
+                .eq('id_profesional_solicitado', user.id)
+                .eq('estado', 'PENDIENTE'),
+            fisioNet.from('solicitudes_citas')
+                .select('hora_cita')
+                .eq('fecha_cita', fechaElegida)
+                .eq('id_clinica_solicitada', clinicaId)
+                .eq('id_profesional_solicitado', user.id)
+                .eq('estado', 'CONFIRMADO'),
+            fisioNet.from('colaboradores_clinica')
+                .select('horario_atencion, intervalo_cita')
+                .eq('id_profesional', user.id)
+                .eq('id_clinica', clinicaId)
+                .maybeSingle()
         ]);
 
-        const ocupadas = ocupadasRes.data;
-        const perfil = perfilRes.data;
+        const ocupadasCitas = ocupadasRes.data || [];
+        const ocupadasPendientes = pendientesRes.data || [];
+        const ocupadasConfirmadas = confirmadasRes.data || [];
+        const colab = colabRes.data;
 
-        if (!perfil?.horario_atencion) {
-            contenedor.innerHTML = '<p style="color:#ef4444; text-align:center; width:100%;">Configura tus horarios primero.</p>';
+        if (!colab?.horario_atencion) {
+            contenedor.innerHTML = '<p style="color:#ef4444; text-align:center; width:100%;">Configura tus horarios para esta sede primero.</p>';
             return;
         }
 
-        const config = JSON.parse(perfil.horario_atencion);
-        const intervalo = parseInt(perfil.intervalo_cita) || 30; 
-        const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
+        const config = typeof colab.horario_atencion === 'string' 
+            ? JSON.parse(colab.horario_atencion) 
+            : colab.horario_atencion;
+
+        const intervalo = parseInt(colab.intervalo_cita) || 30; 
+        
+        // 🗓️ Parseo seguro del día de la semana sin problemas de zona horaria UTC
+        const [pAño, pMes, pDia] = fechaElegida.split('-').map(Number);
+        const diaNum = new Date(pAño, pMes - 1, pDia).getDay();
+
         const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
 
         const aMin = (h) => h.split(':').reduce((hrs, min) => (hrs * 60) + +min);
@@ -1649,15 +2656,33 @@ async function verificarDisponibilidadReal() {
 
         let espaciosDisponibles = [];
 
+        // 🕒 Lógica para detectar la hora local y ocultar lo pasado
+        const ahora = new Date();
+        const año = ahora.getFullYear();
+        const mes = String(ahora.getMonth() + 1).padStart(2, '0');
+        const diaLocal = String(ahora.getDate()).padStart(2, '0');
+        const fechaLocalHoy = `${año}-${mes}-${diaLocal}`;
+        const esHoy = (fechaElegida === fechaLocalHoy);
+        const minActuales = (ahora.getHours() * 60) + ahora.getMinutes();
+
         bloquesHoy.forEach(bloque => {
             let inicio = aMin(bloque.inicio);
             let fin = aMin(bloque.fin);
 
             while (inicio + intervalo <= fin) {
                 const horaGen = minToH(inicio);
-                const estaOcupada = ocupadas?.some(o => o.hora_inicio_cita.startsWith(horaGen));
                 
-                if (!estaOcupada) {
+                // 🔍 Validamos si la hora está ocupada en CUALQUIERA de las 3 fuentes (con safe checks)
+                const estaEnAgenda = ocupadasCitas.some(o => o.hora_inicio_cita && o.hora_inicio_cita.startsWith(horaGen));
+                const estaPendiente = ocupadasPendientes.some(s => s.hora_cita && s.hora_cita.startsWith(horaGen));
+                const estaConfirmada = ocupadasConfirmadas.some(s => s.hora_cita && s.hora_cita.startsWith(horaGen));
+                
+                const estaOcupada = estaEnAgenda || estaPendiente || estaConfirmada;
+                
+                // 🚀 Filtro de horas pasadas el día de hoy u ocupadas
+                if (esHoy && inicio <= minActuales) {
+                    // Hora expirada
+                } else if (!estaOcupada) {
                     espaciosDisponibles.push(horaGen);
                 }
                 inicio += intervalo; 
@@ -1667,13 +2692,15 @@ async function verificarDisponibilidadReal() {
         contenedor.innerHTML = ''; 
 
         if (espaciosDisponibles.length === 0) {
-            contenedor.innerHTML = '<p style="color:#64748b; text-align:center; width:100%;">Sin citas para este día.</p>';
+            contenedor.innerHTML = '<p style="color:#64748b; text-align:center; width:100%;">Sin disponibilidad para este día.</p>';
             return;
         }
 
         espaciosDisponibles.forEach(hora => {
             const pastilla = document.createElement('div');
-            pastilla.className = 'pastilla-hora disponible'; 
+            const estaSeleccionada = inputHoraOculto.value === hora;
+            
+            pastilla.className = `pastilla-hora disponible ${estaSeleccionada ? 'seleccionada' : ''}`; 
             pastilla.innerText = hora;
             pastilla.onclick = () => {
                 document.querySelectorAll('.pastilla-hora').forEach(p => p.classList.remove('seleccionada'));
@@ -1684,8 +2711,8 @@ async function verificarDisponibilidadReal() {
         });
 
     } catch (err) {
-        console.error("Error:", err);
-        contenedor.innerHTML = '<p>Error de conexión.</p>';
+        console.error("Error al verificar disponibilidad:", err);
+        contenedor.innerHTML = '<p style="color:#ef4444; text-align:center; width:100%;">Error de conexión al cargar horarios.</p>';
     }
 }
 
@@ -1697,9 +2724,256 @@ document.getElementById('btnNuevaCita')?.addEventListener('click', () => {
     verificarDisponibilidadReal();
 });
 
-// ============================================================================
-// 📥 BANDEJA INTELIGENTE DEL DASHBOARD: SOLICITUDES + ESTUDIOS PENDIENTES RAD
-// ============================================================================
+// ==========================================
+// 📬 CARGAR SOLICITUDES PENDIENTES DE LA RED (CORREGIDO)
+// ==========================================
+async function cargarSolicitudesRedPendientes() {
+    const contenedorPadre = document.getElementById('contenedorSolicitudesPendientes');
+    const contenedorEnviadas = document.getElementById('listaSolicitudesEnviadas');
+    const contenedorRecibidas = document.getElementById('listaSolicitudesRecibidasRed');
+    
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const idClinica = localStorage.getItem('id_clinica_activa');
+        if (!user) return;
+
+        // 1. Obtener Recibidas (Red + Colaboradores)
+        const { data: recibidasRed } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .eq('id_doctor_receptor', user.id)
+            .eq('estado_conexion', 'PENDIENTE');
+
+        const { data: recibidasColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('id, id_clinica, cargo_clinico, clinicas(nombre_clinica)')
+            .eq('id_profesional', user.id)
+            .eq('estado', 'PENDIENTE');
+
+        // 2. Obtener Enviadas por mi
+        const { data: enviadasRed } = await fisioNet
+            .from('red_colaboracion')
+            .select('*')
+            .eq('id_doctor_emisor', user.id)
+            .eq('estado_conexion', 'PENDIENTE');
+
+        const totalRecibidas = (recibidasRed || []).length + (recibidasColab || []).length;
+        const totalEnviadas = (enviadasRed || []).length;
+        const tienePendientes = totalRecibidas > 0 || totalEnviadas > 0;
+
+        if (contenedorPadre) {
+            contenedorPadre.style.setProperty('display', tienePendientes ? 'block' : 'none', 'important');
+        }
+
+        // --- RENDERIZAR ENVIADAS (Consultar nombres de a quién se las envié) ---
+        if (contenedorEnviadas) {
+            if (totalEnviadas === 0) {
+                contenedorEnviadas.innerHTML = `<p style="font-size:0.75rem; color:#94a3b8; text-align:center; margin:5px 0;">No has enviado solicitudes pendientes.</p>`;
+            } else {
+                // Obtener nombres reales de los receptores desde perfiles_profesionales
+                const idsReceptores = enviadasRed.map(e => e.id_doctor_receptor).filter(Boolean);
+                let mapaReceptores = {};
+
+                if (idsReceptores.length > 0) {
+                    const { data: perfilesRec } = await fisioNet
+                        .from('perfiles_profesionales')
+                        .select('id, nombre_completo, especialidad')
+                        .in('id', idsReceptores);
+
+                    (perfilesRec || []).forEach(p => {
+                        mapaReceptores[p.id] = p;
+                    });
+                }
+
+                contenedorEnviadas.innerHTML = enviadasRed.map(sol => {
+                    const destinatario = mapaReceptores[sol.id_doctor_receptor];
+                    const nombreMostrar = destinatario?.nombre_completo || 'DOCTOR / ESPECIALISTA';
+                    const especialidadMostrar = destinatario?.especialidad || sol.tipo_entidad || 'ESPECIALISTA';
+
+                    return `
+                        <div style="background:#fff3c7; border:1px solid #fde68a; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:0.65rem; background:#d97706; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">ENVIADA A:</span>
+                                <h5 style="margin:4px 0 0 0; font-size:0.85rem; color:#78350f;">${nombreMostrar.toUpperCase()}</h5>
+                                <small style="font-size:0.7rem; color:#b45309;">🎓 ${especialidadMostrar.toUpperCase()}</small>
+                            </div>
+                            <small style="font-size:0.7rem; color:#b45309;">⏳ Esperando respuesta</small>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // --- RENDERIZAR RECIBIDAS ---
+        if (contenedorRecibidas) {
+            if (totalRecibidas === 0) {
+                contenedorRecibidas.innerHTML = `<p style="font-size:0.75rem; color:#94a3b8; text-align:center; margin:5px 0;">Sin invitaciones pendientes.</p>`;
+            } else {
+                let htmlRecibidas = "";
+
+                (recibidasRed || []).forEach(sol => {
+                    htmlRecibidas += `
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:0.65rem; background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">SOLICITUD DE RED</span>
+                                <h5 style="margin:4px 0 2px 0; font-size:0.9rem; color:#1e3a8a; font-weight:800;">${sol.nombre_entidad || 'DOCTOR / ESPECIALISTA'}</h5>
+                                <small style="font-size:0.72rem; color:#3b82f6; font-weight:700;">🎓 ${sol.tipo_entidad || 'ESPECIALISTA'}</small>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button onclick="responderSolicitudRed('${sol.id}', 'ACTIVO', 'RED')" style="background:#10b981; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">✅ Aceptar</button>
+                                <!-- 🔄 Botón Azul: Proponer Nuevo Horario -->
+                    <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
+                                <button onclick="responderSolicitudRed('${sol.id}', 'RECHAZADO', 'RED')" style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">❌</button>
+                            </div>
+                        </div>`;
+                });
+
+                (recibidasColab || []).forEach(sol => {
+                    htmlRecibidas += `
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:0.65rem; background:#2563eb; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">INVITACIÓN A CLÍNICA</span>
+                                <h5 style="margin:4px 0 2px 0; font-size:0.9rem; color:#1e3a8a; font-weight:800;">${sol.clinicas?.nombre_clinica || 'CLÍNICA'}</h5>
+                                <small style="font-size:0.72rem; color:#3b82f6; font-weight:700;">🎓 ${sol.cargo_clinico || 'ESPECIALISTA'}</small>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button onclick="responderSolicitudRed('${sol.id}', 'ACTIVO', 'COLAB')" style="background:#10b981; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">✅ Aceptar</button>
+                                <button onclick="responderSolicitudRed('${sol.id}', 'RECHAZADO', 'COLAB')" style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:bold;">❌</button>
+                            </div>
+                        </div>`;
+                });
+
+                contenedorRecibidas.innerHTML = htmlRecibidas;
+            }
+        }
+
+    } catch (err) {
+        console.error("❌ Error al cargar solicitudes pendientes:", err);
+    }
+}
+
+// Handler único unificado para responder solicitudes (RED o COLAB)
+window.responderSolicitudRed = async (idSolicitud, nuevoEstado, tipoOrigen = 'RED') => {
+    try {
+        const idClinica = localStorage.getItem('id_clinica_activa');
+
+        if (tipoOrigen === 'RED') {
+            const { data: alianza, error: errRed } = await fisioNet
+                .from('red_colaboracion')
+                .update({ estado_conexion: nuevoEstado })
+                .eq('id', idSolicitud)
+                .select()
+                .single();
+
+            if (errRed) throw errRed;
+
+            if (nuevoEstado === 'ACTIVO' && idClinica) {
+                await fisioNet
+                    .from('colaboradores_clinica')
+                    .insert([{
+                        id_clinica: idClinica,
+                        id_profesional: alianza.id_doctor_emisor,
+                        rol_sistema: 'SOCIOS_EXTERNOS',
+                        cargo_clinico: alianza.tipo_entidad || 'DOCTOR EXTERNO',
+                        estado: 'ACTIVO',
+                        tipo_vinculo: 'EXTERNO',
+                        area_asignada: 'INTERCONSULTA'
+                    }]);
+            }
+        } else {
+            const { error: errColab } = await fisioNet
+                .from('colaboradores_clinica')
+                .update({ 
+                    estado: nuevoEstado,
+                    fecha_inicio: nuevoEstado === 'ACTIVO' ? new Date().toISOString().split('T')[0] : null
+                })
+                .eq('id', idSolicitud);
+
+            if (errColab) throw errColab;
+        }
+
+        alert(`Solicitud ${nuevoEstado === 'ACTIVO' ? 'aceptada' : 'rechazada'} correctamente.`);
+        await cargarSolicitudesRedPendientes();
+        if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas();
+
+    } catch (err) {
+        console.error("❌ Error al responder solicitud:", err);
+        alert("Error al responder solicitud: " + err.message);
+    }
+};
+
+
+// ==========================================
+// ✉️ ENVIAR SOLICITUD DE COLABORACIÓN (CORREGIDO)
+// ==========================================
+async function enviarSolicitudColaboracion(idReceptor) {
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        if (!user) return;
+
+        // 1. Validar que no sea auto-solicitud
+        if (user.id === idReceptor) {
+            alert("⚠️ No puedes enviarte una solicitud a ti mismo.");
+            return;
+        }
+
+        // 2. Obtener datos del EMISOR (Quien envía la invitación - o sea, TÚ)
+        const { data: perfilEmisor } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('nombre_completo, especialidad')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        // 3. Obtener datos del RECEPTOR (Quien recibe la invitación)
+        const { data: perfilReceptor } = await fisioNet
+            .from('perfiles_profesionales')
+            .select('nombre_completo')
+            .eq('id', idReceptor)
+            .maybeSingle();
+
+        // 4. Verificar si ya existe un registro entre ambos usuarios
+        const { data: existente } = await fisioNet
+            .from('red_colaboracion')
+            .select('id, estado_conexion')
+            .or(`and(id_doctor_emisor.eq.${user.id},id_doctor_receptor.eq.${idReceptor}),and(id_doctor_emisor.eq.${idReceptor},id_doctor_receptor.eq.${user.id})`)
+            .maybeSingle();
+
+        if (existente) {
+            alert(`⚠️ Ya existe una solicitud registrada entre ustedes (Estado: ${existente.estado_conexion}).`);
+            if (typeof cerrarModalColega === 'function') cerrarModalColega();
+            return;
+        }
+
+        // 5. Preparar datos reales del EMISOR (Para que el otro vea quién se lo manda)
+        const nombreEmisor = perfilEmisor?.nombre_completo || user.user_metadata?.full_name || 'COLABORADOR PROFESIONAL';
+        const especialidadEmisor = (perfilEmisor?.especialidad || 'ESPECIALISTA').toUpperCase().trim();
+
+        // 6. Insertar en red_colaboracion
+        const { error } = await fisioNet
+            .from('red_colaboracion')
+            .insert([{
+                id_doctor_emisor: user.id,
+                id_doctor_receptor: idReceptor,
+                id_usuario_socio: idReceptor, // Opcional, pero lo mantenemos por si lo usas en otro lado
+                nombre_entidad: nombreEmisor, // 👈 CORRECCIÓN: Guardamos TU nombre (el emisor)
+                contacto_principal: nombreEmisor, // 👈 CORRECCIÓN: Tu nombre como contacto
+                tipo_entidad: especialidadEmisor, // 👈 CORRECCIÓN: Tu especialidad
+                estado_conexion: 'PENDIENTE'
+            }]);
+
+        if (error) throw error;
+
+        const nombreDestino = perfilReceptor?.nombre_completo || 'el especialista';
+        alert(`✉️ Solicitud enviada correctamente a ${nombreDestino}.`);
+        
+        if (typeof cerrarModalColega === 'function') cerrarModalColega();
+        await cargarSolicitudesRedPendientes();
+
+    } catch (err) {
+        console.error("❌ Error al enviar solicitud:", err);
+        alert("No se pudo enviar la solicitud: " + err.message);
+    }
+}
 
 async function cargarSolicitudesRecibidas() {
     const lista = document.getElementById('listaEsperaReferidos'); 
@@ -1712,25 +2986,28 @@ async function cargarSolicitudesRecibidas() {
         if (!user) return;
 
         const clinicaId = localStorage.getItem('id_clinica_activa');
-        const miEspecialidad = localStorage.getItem('especialidadUsuario') || '';
-        const esRadiologo = miEspecialidad === 'MEDICO-RADIOLOGO' || miEspecialidad === 'QUIMICO';
+        const miEspecialidad = (localStorage.getItem('especialidadUsuario') || '').toUpperCase();
+        const miRolSistema = (localStorage.getItem('rol_actual') || 'STAFF_CLINICO').toUpperCase();
 
         let htmlFinal = "";
         let totalAlertasTotal = 0;
 
-        // 🩻 PARTE A: CASO EXCLUSIVO PARA ESTUDIOS DE GABINETE / LABORATORIO PENDIENTES
+        // -------------------------------------------------------------
+        // 1. ESTUDIOS DE GABINETE
+        // -------------------------------------------------------------
+        const esRadiologo = miEspecialidad === 'MEDICO-RADIOLOGO' || miEspecialidad === 'QUIMICO' || miEspecialidad.includes('RADIOL');
+
         if (esRadiologo) {
-            console.log("📡 Modo Especialista Activo en Dashboard: Escaneando estudios pendientes...");
-            
             const { data: pendientes, errorRad } = await fisioNet
                 .from('estudios_gabinete')
                 .select('*')
                 .eq('estado_dictamen', 'PENDIENTE')
                 .eq('doctor_emisor_id', user.id) 
+                .eq('id_clinica', clinicaId) // 🔒 Filtro de sede activa añadido
                 .order('fecha_registro', { ascending: false });
 
-            if (errorRad) throw errorRad;
-
+            if (errorRad) console.error("Error cargando estudios:", errorRad);
+            
             if (pendientes && pendientes.length > 0) {
                 totalAlertasTotal += pendientes.length;
                 pendientes.forEach(est => {
@@ -1741,7 +3018,7 @@ async function cargarSolicitudesRecibidas() {
                             <div style="text-align: left;">
                                 <span style="background: #fff3c7; color: #d97706; padding: 2px 8px; border-radius: 5px; font-size: 0.65rem; font-weight: 800; border: 1px solid #fde68a;">🩻 DICTAMEN PENDIENTE</span>
                                 <h4 style="margin: 8px 0 2px 0; font-size: 0.95rem; color: #1e293b; font-weight: 900; text-transform: uppercase;">${est.paciente_nombre_manual}</h4>
-                                <p style="margin: 0; font-size: 0.75rem; color: #2563eb; font-weight: 700;">${est.tipo_estudio} - [${est.zona_anatomica.toUpperCase()}]</p>
+                                <p style="margin: 0; font-size: 0.75rem; color: #2563eb; font-weight: 700;">${est.tipo_estudio} - [${(est.zona_anatomica || '').toUpperCase()}]</p>
                             </div>
                             <div>
                                 <button onclick="irAPortalGabineteDesdeDashboard('${est.archivo_url}', '${est.paciente_nombre_manual}')" 
@@ -1763,16 +3040,26 @@ async function cargarSolicitudesRecibidas() {
             }
         }
 
-        // 📅 PARTE B: SOLICITUDES DE CITAS WEB (SALA DE ESPERA MULTI-SEDE)
-        console.log("🔍 Escaneando solicitudes de citas entrantes para la clínica...");
-        const { data: solicitudesCitas, errorCitas } = await fisioNet
+        // -------------------------------------------------------------
+        // 2. SOLICITUDES DE CITAS (USANDO LOS ROLES REALES DEL SISTEMA)
+        // -------------------------------------------------------------
+        // ADMIN_SISTEMA y ADMINISTRATIVO ven todas las citas de la sede
+        const esPersonalAdministrativo = ['ADMIN_SISTEMA', 'ADMINISTRATIVO'].includes(miRolSistema);
+
+        let queryCitas = fisioNet
             .from('solicitudes_citas')
             .select('*')
             .eq('estado', 'PENDIENTE')
-            .eq('id_clinica_solicitada', clinicaId) // 🛡️ Candado SaaS Multi-sede activo
-            .order('creado_el', { ascending: false });
+            .eq('id_clinica_solicitada', clinicaId);
 
-        if (errorCitas) throw errorCitas;
+        // Si es STAFF_CLINICO u OPERATIVO, solo le mostramos las solicitudes explícitamente asignadas a él
+        if (!esPersonalAdministrativo) {
+            queryCitas = queryCitas.eq('id_profesional_solicitado', user.id);
+        }
+
+        const { data: solicitudesCitas, errorCitas } = await queryCitas.order('creado_el', { ascending: false });
+
+        if (errorCitas) console.error("Error al consultar citas pendientes:", errorCitas);
 
         if (solicitudesCitas && solicitudesCitas.length > 0) {
             totalAlertasTotal += solicitudesCitas.length;
@@ -1784,12 +3071,14 @@ async function cargarSolicitudesRecibidas() {
                         <div style="text-align: left;">
                             <span style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 5px; font-size: 0.6rem; font-weight: 800;">📅 SOLICITUD WEB</span>
                             <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-top: 5px;">${nombreFull}</strong>
-                            <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita.substring(0,5)}</small>
+                            <small style="color: #64748b;">Día: ${sol.fecha_cita} - Hora: ⏰ ${sol.hora_cita ? sol.hora_cita.substring(0,5) : ''}</small>
                         </div>
-                        <div style="display: flex; gap: 5px;">
-                            <button onclick="procesarSolicitud('${sol.id}', 'APROBAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
-                            <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
-                        </div>
+                      <div style="display: flex; gap: 5px;">
+    <button onclick="procesarSolicitud('${sol.id}', 'CONFIRMAR')" style="background: #10b981; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">✅</button>
+    <!-- 🔄 Botón Azul: Proponer Nuevo Horario -->
+                    <button onclick="proponerNuevoHorarioPrompt('${sol.id}')" style="background: #3b82f6; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;" title="Proponer otro horario">🔄</button>
+    <button onclick="procesarSolicitud('${sol.id}', 'RECHAZAR')" style="background: #ef4444; color: white; border: none; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.7rem;">🗑️</button>
+</div>
                     </div>
                     <div style="margin-top: 8px; font-size: 0.7rem; color: #2563eb; font-weight: bold; text-align: left;">
                         📞 TEL: ${sol.telefono} 
@@ -1798,13 +3087,15 @@ async function cargarSolicitudesRecibidas() {
             });
         }
 
-        // 🎨 RENDERIZADO FINAL EN LA INTERFAZ
+        // -------------------------------------------------------------
+        // 3. ACTUALIZACIÓN DE INTERFAZ (Única asignación sin destellos)
+        // -------------------------------------------------------------
         if (badge) badge.innerText = totalAlertasTotal;
 
-        if (htmlFinal === "") {
-            lista.innerHTML = `<div style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;"><i class="fas fa-check-circle text-success d-block fa-2x mb-2"></i>Sin solicitudes ni estudios pendientes.</div>`;
-        } else {
+        if (htmlFinal !== "") {
             lista.innerHTML = htmlFinal;
+        } else {
+            lista.innerHTML = `<div style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 20px;"><i class="fas fa-check-circle text-success d-block fa-2x mb-2"></i>Sin solicitudes ni estudios pendientes.</div>`;
         }
 
     } catch (err) {
@@ -1812,49 +3103,41 @@ async function cargarSolicitudesRecibidas() {
     }
 }
 
-// ============================================================================
-// 🧭 ENRUTADOR DINÁMICO DESDE EL DASHBOARD AL ÁREA PACS DE GABINETE
-// ============================================================================
-
 function irAPortalGabineteDesdeDashboard(archivoUrl, pacienteNombre) {
     localStorage.setItem('forzar_apertura_archivo', archivoUrl);
     localStorage.setItem('forzar_apertura_paciente', pacienteNombre);
-    
-    // 🎯 CORRECCIÓN: Cambiamos portal-laboratorio por portal-gabinete
     window.location.href = 'portal-gabinete.html'; 
 }
 
-async function responderSolicitud(idRegistro, nuevoEstado) {
-    try {
-        const { error } = await fisioNet
-            .from('red_colaboracion')
-            .update({ 
-                estado_conexion: nuevoEstado,
-                fecha_respuesta: new Date().toISOString() 
-            })
-            .eq('id', idRegistro);
+// Exponer la función al objeto window para que los onclick del HTML la reconozcan
+window.mostrarSeccion = function (seccionId) {
+    const agenda = document.getElementById('agenda-container');
+    const comunidad = document.getElementById('seccionComunidad');
 
-        if (error) throw error;
+    // Ocultar ambas secciones
+    if (agenda) agenda.style.setProperty('display', 'none', 'important');
+    if (comunidad) comunidad.style.setProperty('display', 'none', 'important');
 
-        if (nuevoEstado === 'ACTIVO' || nuevoEstado === 'ACEPTADO') {
-            alert("¡Enlace profesional confirmado con éxito! 🤝");
-        } else if (nuevoEstado === 'RECHAZADO') {
-            alert("Solicitud archivada correctamente.");
-        }
-
-        if (typeof cargarSolicitudesRecibidas === 'function') {
-            await cargarSolicitudesRecibidas();
-        }
-
-        if (typeof renderizarTablaAlianzas === 'function') {
-            await renderizarTablaAlianzas();
-        }
-
-    } catch (err) {
-        console.error("❌ Error al responder:", err);
-        alert("No se pudo procesar la acción. Revisa la consola.");
+    // Mostrar únicamente la sección seleccionada
+    const activa = document.getElementById(seccionId);
+    if (activa) {
+        activa.style.setProperty('display', 'block', 'important');
     }
-}
+
+    // Acciones específicas al activar Comunidad
+    if (seccionId === 'seccionComunidad') {
+        if (typeof cargarSolicitudesRedPendientes === 'function') {
+            cargarSolicitudesRedPendientes();
+        }
+    }
+    
+    // Acciones específicas al activar Agenda
+    if (seccionId === 'agenda-container') {
+        if (typeof cargarAgenda === 'function') {
+            cargarAgenda('semana');
+        }
+    }
+};
 
 async function buscarColegasFisioCid() {
     const query = document.getElementById('inputBusquedaColegas').value.trim();
@@ -1863,7 +3146,20 @@ async function buscarColegasFisioCid() {
 
     if (!grid) return;
 
-    grid.innerHTML = '<div style="text-align:center; width:100%;"><i class="fas fa-spinner fa-spin"></i> Buscando colegas...</div>';
+    // 🔒 CANDADO DE SEGURIDAD FISIOCID: No buscar si no hay al menos 3 letras o un filtro activo
+    if (query.length < 3 && (filtroEspecialidad === 'ALL' || filtroEspecialidad === 'Todas las especialidades')) {
+        grid.innerHTML = `
+            <div style="text-align:center; width:100%; grid-column:1/-1; padding: 30px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                <i class="fas fa-search" style="font-size: 2rem; color: #94a3b8; margin-bottom: 12px;"></i>
+                <p style="color:#475569; font-weight: 600; margin: 0; font-size: 0.9rem;">
+                    Usa el buscador de arriba.<br>
+                    <small style="color: #64748b;">Escribe al menos 3 letras del nombre de tu colega o selecciona una especialidad para encontrarlo en la red.</small>
+                </p>
+            </div>`;
+        return; // Frenamos la consulta a la base de datos
+    }
+
+    grid.innerHTML = '<div style="text-align:center; width:100%; grid-column:1/-1; color: var(--primary);"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Buscando colegas...</div>';
 
     try {
         let consulta = fisioNet
@@ -1878,60 +3174,58 @@ async function buscarColegasFisioCid() {
             consulta = consulta.eq('especialidad', filtroEspecialidad);
         }
 
+        // Limitamos a 20 resultados máximos para no saturar la pantalla
         const { data: colegas, error } = await consulta.limit(20);
 
         if (error) throw error;
 
         if (!colegas || colegas.length === 0) {
-            grid.innerHTML = `<p style="text-align:center; grid-column:1/-1; color:#64748b;">
-                No se encontró a "${query}". <br>
-                <small>Intenta buscando solo la primera palabra del nombre.</small>
-            </p>`;
+            grid.innerHTML = `<div style="text-align:center; grid-column:1/-1; padding: 20px;">
+                <p style="color:#64748b; font-weight:bold;">No se encontró a nadie con ese nombre o especialidad. 🕵️‍♂️</p>
+                <small>Intenta buscando solo el primer nombre o apellido.</small>
+            </div>`;
             return;
         }
 
-        grid.innerHTML = ''; 
+     grid.innerHTML = ''; 
 
         colegas.forEach(c => {
-            const fotoUrl = (c.logo_url && c.logo_url !== 'null') 
-                ? c.logo_url 
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo)}&background=random&color=fff`;
-
-            grid.innerHTML += `
-                <div style="background:white; padding:20px; border-radius:15px; border:1px solid #e2e8f0; text-align:center;">
-                    <img src="${fotoUrl}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; margin-bottom:10px;" 
-                         onerror="this.src='https://ui-avatars.com/api/?name=Doc&background=ccc'">
-                    <h4 style="margin:0; font-size:0.9rem;">${c.nombre_completo}</h4>
-                    <p style="margin:5px 0; font-size:0.75rem; color:#64748b; font-weight:bold;">${c.especialidad}</p>
-                    <button onclick="verDetalleColega('${c.id}')" style="margin-top:10px; background:var(--primary); color:white; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-size:0.8rem; width:100%;">Ver Perfil</button>
+            const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo)}&background=random`;
+            
+            const card = document.createElement('div');
+            card.className = 'col-md-6 col-lg-4 mb-3';
+            card.innerHTML = `
+                <div class="card h-100 shadow-sm border-0 p-3" style="cursor: pointer; background: #ffffff; border-radius: 12px;" onclick="verDetalleColega('${c.id}')">
+                    <div class="d-flex align-items-center">
+                        <img src="${fotoUrl}" class="rounded-circle me-3" width="50" height="50" style="object-fit: cover;" alt="Avatar">
+                        <div style="overflow: hidden;">
+                            <h6 class="mb-1 fw-bold text-dark text-truncate" style="font-size: 0.95rem;">${c.nombre_completo.toUpperCase()}</h6>
+                            <small class="text-muted d-block text-truncate"><i class="fas fa-user-md me-1"></i>${c.especialidad || 'ESPECIALISTA'}</small>
+                        </div>
+                    </div>
                 </div>
             `;
+            grid.appendChild(card);
         });
+
     } catch (err) {
-        console.error("Error en el buscador:", err);
-        grid.innerHTML = '<p style="color:red; text-align:center;">Error al conectar.</p>';
+        console.error("❌ Error al buscar colegas:", err);
+        grid.innerHTML = `<div class="text-danger text-center p-3">Error en la búsqueda: ${err.message}</div>`;
     }
 }
 
-function mostrarSeccion(seccionId) {
-    const agenda = document.getElementById('agenda-container');
-    const comunidad = document.getElementById('seccionComunidad');
 
-    if (agenda) agenda.style.setProperty('display', 'none', 'important');
-    if (comunidad) comunidad.style.setProperty('display', 'none', 'important');
 
-    const activa = document.getElementById(seccionId);
-    if (activa) {
-        activa.style.setProperty('display', 'block', 'important');
-        console.log("Cambiando vista a:", seccionId);
-    }
-
-    if (seccionId === 'seccionComunidad') {
-        if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
-    }
-    
-    if (seccionId === 'agenda-container') {
-        if (typeof cargarAgenda === 'function') cargarAgenda('semana');
+function gestionarEnlaceContacto(idElemento, valor, prefijo) {
+    const el = document.getElementById(idElemento);
+    if (!el) return;
+    if (valor) {
+        el.href = prefijo + valor;
+        const txt = el.querySelector('span:last-child');
+        if (txt) txt.innerText = valor;
+        el.style.display = 'flex';
+    } else {
+        el.style.display = 'none';
     }
 }
 
@@ -1939,13 +3233,14 @@ async function verDetalleColega(idColega) {
     const modal = document.getElementById('modalPerfilColega');
     
     try {
-        // 🔍 Buscamos exactamente los campos que definiste
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        // 🔍 Quitamos 'logo_url' de la consulta porque no existe en la tabla de Supabase
         const { data: perfiles, error } = await fisioNet
             .from('perfiles_profesionales')
             .select(`
                 nombre_completo, 
                 cedula_profesional, 
-                cedulas_adicionales, 
                 especialidad, 
                 institucion_egreso, 
                 telefono_contacto, 
@@ -1960,260 +3255,182 @@ async function verDetalleColega(idColega) {
         if (perfiles && perfiles.length > 0) {
             const c = perfiles[0];
             
-            // 1. Información Principal
+            // Textos principales
             document.getElementById('modalColegaNombre').innerText = c.nombre_completo || 'Sin Nombre';
-            document.getElementById('modalColegaEspecialidad').innerText = c.especialidad || 'MÉDICO';
-            
-            // 2. Detalles Académicos y Profesionales
+            document.getElementById('modalColegaEspecialidad').innerText = c.especialidad || 'MEDICO';
             document.getElementById('modalColegaInstitucion').innerText = c.institucion_egreso || 'No especificada';
             document.getElementById('modalColegaCedula').innerText = c.cedula_profesional || 'Sin registro';
-            
-            // Si tienes un campo para cédulas adicionales en el HTML, podrías mostrarlo así:
-            const adicionales = c.cedulas_adicionales ? ` | Adicionales: ${c.cedulas_adicionales}` : '';
-            document.getElementById('modalColegaCedula').innerText += adicionales;
 
-            // 3. Ubicación y Costos
-            // Asegúrate de tener estos IDs en tu HTML
+            // Generamos la foto/avatar automático por iniciales de forma segura
+            const fotoModal = document.getElementById('modalColegaFoto');
+            if (fotoModal) {
+                fotoModal.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo || 'Doctor')}&background=random`;
+            }
+
             const txtClinica = document.getElementById('modalColegaClinica');
             if (txtClinica) txtClinica.innerText = c.direccion_consultorio || 'Consultorio Privado';
             
             const txtCosto = document.getElementById('modalColegaCosto');
             if (txtCosto) txtCosto.innerText = c.costo_consulta_base ? `$${c.costo_consulta_base} MXN` : 'A convenir';
 
-            // 4. Contactos (Email y Teléfono)
             gestionarEnlaceContacto('modalColegaEmail', c.correo_institucional, 'mailto:');
             gestionarEnlaceContacto('modalColegaTelefono', c.telefono_contacto, 'tel:');
 
-            // 5. Acción del Botón
-            document.getElementById('btnEnlazarModal').onclick = () => enviarSolicitudColaboracion(idColega);
+            // GESTIÓN DEL BOTÓN DE ENLACE EN EL MODAL
+            const btnEnlazar = document.getElementById('btnEnlazarModal');
+            if (btnEnlazar) {
+                if (user && user.id === idColega) {
+                    btnEnlazar.style.display = 'none';
+                } else {
+                    btnEnlazar.style.display = 'flex';
+                    btnEnlazar.innerHTML = '🤝 ENVIAR SOLICITUD DE ENLACE';
+                    btnEnlazar.onclick = () => enviarSolicitudColaboracion(idColega);
+                }
+            }
 
-            modal.style.display = 'flex';
+            if (modal) modal.style.display = 'flex';
         }
     } catch (err) {
-        console.error("❌ Error de vinculación con Supabase:", err);
-        alert("Revisa que las columnas existan en Supabase con esos nombres exactos.");
+        console.error("❌ Error al cargar detalle del colega:", err);
     }
 }
 
-// Función auxiliar para no repetir código de links
-function gestionarEnlaceContacto(idElemento, valor, prefijo) {
-    const el = document.getElementById(idElemento);
-    if (!el) return;
-    if (valor) {
-        el.href = prefijo + valor;
-        el.querySelector('span').innerText = valor;
-        el.parentElement.style.display = 'block';
-    } else {
-        el.parentElement.style.display = 'none';
-    }
-}
-
+// Función para cerrar el modal limpiamente
 function cerrarModalColega() {
-    document.getElementById('modalPerfilColega').style.display = 'none';
-}
-
-async function enviarSolicitudColaboracion(idReceptor) {
-    try {
-        const { data: { user } } = await fisioNet.auth.getUser();
-        if (!user) return;
-
-        const { data: perfilSocio, error: errPerfil } = await fisioNet
-            .from('perfiles_profesionales')
-            .select('nombre_completo, correo_institucional, telefono_contacto, especialidad')
-            .eq('id', idReceptor)
-            .single();
-
-        if (errPerfil) throw errPerfil;
-
-        const datosAInsertar = {
-            id_doctor_emisor: user.id,
-            id_doctor_receptor: idReceptor,
-            id_usuario_socio: idReceptor, 
-            nombre_entidad: perfilSocio.nombre_completo,
-            contacto_principal: perfilSocio.nombre_completo,
-            email_contacto: perfilSocio.correo_institucional, 
-            telefono_contacto: perfilSocio.telefono_contacto,
-            estado_conexion: 'PENDIENTE',
-            tipo_entidad: 'PROFESIONAL_SALUD'
-        };
-
-        const { data: respuestaSupa, error } = await fisioNet
-            .from('red_colaboracion')
-            .insert([datosAInsertar])
-            .select(); 
-
-        if (error) throw error;
-
-        alert(`¡Solicitud enviada a ${perfilSocio.nombre_completo}! Datos vinculados.`);
-        cerrarModalColega();
-        
-        if (typeof renderizarTablaAlianzas === 'function') renderizarTablaAlianzas();
-
-    } catch (err) {
-        console.error("❌ Error crítico al enviar:", err);
-        alert("No se pudo enviar la solicitud: " + err.message);
+    const modal = document.getElementById('modalPerfilColega');
+    if (modal) {
+        modal.style.display = 'none';
     }
 }
 
-// ==========================================
-// 🚀 EVENTO MAESTRO DE ARRANQUE MODIFICADO
-// ==========================================
+
+
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Validar Sesión global
-    const { data: { user } } = await fisioNet.auth.getUser();
-    if (!user) { window.location.href = 'login.html'; return; }
+     verificarYPedirNotificaciones();
+   
+const { data: { session } } = await fisioNet.auth.getSession();
+    const idUsuarioActivo = session?.user?.id || localStorage.getItem('id_usuario_activo');
 
-    // 2. Ejecutamos la sincronización de Sede e Identidades Híbridas
-    await aplicarIdentidadVisual(); 
-    await actualizarInterfazSede(); 
-
- // ============================================================================
-    // 🕵️ BUSCADOR INMEDIATO DEL NOMBRE DE QUIEN VA A TRABAJAR (OPTIMIZADO)
-    // ============================================================================
-    console.log("🔍 Recuperando nombre del operador actual...");
-    let nombreTrabajador = "";
-
+    if (idUsuarioActivo) {
+        // 🔒 Validar estado del perfil profesional
+        const estadoPago = await validarEstadoPagoSede(idUsuarioActivo);
+        
+        if (!estadoPago.pagado) {
+            bloquearDashboardPorFaltaDePago(estadoPago);
+            return; // 🛑 Detiene la ejecución del dashboard de FisioCid App
+        }
+    }
     try {
-        // 1. Intentamos buscar primero en la tabla de perfiles profesionales médicos
-        const { data: perfilProf, error: errProf } = await fisioNet
+        // 1. Intento principal con getSession()
+        let { data: { session }, error: sessionError } = await fisioNet.auth.getSession();
+
+        // 2. 🛡️ RESCATE ESPECIAL PARA PWA EN iOS: Si vino nulo, forzamos recuperar la sesión guardada
+        if (!session) {
+            console.warn("⚠️ PWA iOS: getSession() vino nulo. Buscando sesión de respaldo...");
+            const localSession = await fisioNet.auth.getUser();
+            if (localSession?.data?.user) {
+                // Forzamos refresh del token de Supabase
+                const { data: refreshed } = await fisioNet.auth.refreshSession();
+                session = refreshed.session;
+            }
+        }
+
+        // 3. Si de plano NO hay usuario en ningún lado, entonces sí redirigimos
+        if (!session && !localStorage.getItem('sb-wboknacojtrfehlwswhh-auth-token')) {
+            console.warn("Sin credenciales en PWA. Redirigiendo a login.html...");
+            window.location.replace('login.html');
+            return;
+        }
+
+        // Si el objeto session sigue nulo por lag de red pero el token existía, jalamos el usuario de getUser()
+        const user = session?.user || (await fisioNet.auth.getUser())?.data?.user;
+
+        if (!user) {
+            window.location.replace('login.html');
+            return;
+        }
+
+        // ==========================================
+        // A PARTIR DE AQUÍ SIGUE TU CÓDIGO NORMAL
+        // ==========================================
+        await cargarSedes();
+        iniciarCanalSalaEspera();
+
+        const { data: perfilProf } = await fisioNet
             .from('perfiles_profesionales')
-            .select('nombre_completo, costo_consulta_base')
+            .select('nombre_completo, insignia_especial, telefono_contacto')
             .eq('id', user.id)
             .maybeSingle();
 
-        if (perfilProf && perfilProf.nombre_completo) {
-            nombreTrabajador = perfilProf.nombre_completo;
-            localStorage.setItem('nombre_completo', nombreTrabajador);
-            
-            if (!perfilProf.costo_consulta_base) {
-                const modalConfig = document.getElementById('modalConfigInicial');
-                if (modalConfig) modalConfig.style.display = 'flex';
-            }
-        } else {
-            // 2. 🔥 PLAN B (Tu idea): Si no es médico, buscamos su nombre en la tabla general de 'perfiles'
-            console.log("👥 Buscando identidad en la tabla general de perfiles...");
-            const { data: perfilGeneral } = await fisioNet
-                .from('perfiles')
-                .select('nombre_completo')
-                .eq('id', user.id)
-                .maybeSingle();
+        const nombreReal = perfilProf?.nombre_completo || user.user_metadata?.full_name || "COLABORADOR ACTIVO";
+        
+        localStorage.setItem('nombre_completo', nombreReal);
+        localStorage.setItem('usuarioId', user.id);
+     // 2. Valida y guarda el teléfono en el localStorage usando el nombre sin acento
+        if (perfilProf?.telefono_contacto) {
+            localStorage.setItem('telefono_contacto', perfilProf.telefono_contacto);
+        }
 
-            if (perfilGeneral && perfilGeneral.nombre_completo) {
-                nombreTrabajador = perfilGeneral.nombre_completo;
+        const txtSaludo = document.getElementById('txtSaludo');
+        if (txtSaludo) txtSaludo.innerText = `BIENVENIDO, ${nombreReal.toUpperCase()}`;
+        // ✨ LÓGICA DE LA INSIGNIA DORADA VIP
+        const contenedorInsignia = document.getElementById('contenedorInsigniaEspecial');
+        if (contenedorInsignia) {
+            if (perfilProf && perfilProf.insignia_especial) {
+                contenedorInsignia.innerHTML = `
+                    <span style="background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 900; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4); border: 1px solid #fef08a; text-transform: uppercase;">
+                        <i class="fas fa-crown" style="color: #fef08a; font-size: 0.8rem;"></i> ${perfilProf.insignia_especial}
+                    </span>
+                `;
+                contenedorInsignia.style.display = 'block';
             } else {
-                // 3. PLAN C: Si no está en las tablas, extraemos del registro de autenticación (Auth)
-                nombreTrabajador = user.user_metadata?.full_name || 
-                                   user.user_metadata?.nombre_completo || 
-                                   localStorage.getItem('nombre_completo') || 
-                                   "COLABORADOR ACTIVO";
+                contenedorInsignia.style.display = 'none';
             }
-            
-            localStorage.setItem('nombre_completo', nombreTrabajador);
         }
-    } catch (e) {
-        console.warn("⚠️ Error al consultar tablas de perfiles, usando metadatos de sesión:", e);
-        nombreTrabajador = user.user_metadata?.full_name || localStorage.getItem('nombre_completo') || "COLABORADOR ACTIVO";
-    }
 
-    // Renderizar el saludo con el nombre real recuperado
-    const txtSaludo = document.getElementById('txtSaludo');
-    if (txtSaludo && nombreTrabajador) {
-        txtSaludo.innerText = `BIENVENIDO, ${nombreTrabajador.toUpperCase()}`;
-    }
-
-    // 4. Configurar la Fecha de Hoy en la UI
-    const hoy = new Date();
-    const inputFecha = document.getElementById('filtroFechaAgenda');
-    if (inputFecha) inputFecha.value = hoy.toISOString().split('T')[0];
-    
-    if (document.getElementById('fechaHoy')) {
-        document.getElementById('fechaHoy').innerText = `| ${hoy.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}`;
-    }
-
-    // 5. CARGAS OPERATIVAS EN CASCADA
-    const clinicaActiva = localStorage.getItem('id_clinica_activa');
-    if (clinicaActiva) {
-        await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
-    }
-    
-    // Ejecución de módulos adaptados
-    renderizarBotonesPorRol();
-    await cargarAgenda('semana');
-    await cargarEstadisticas();
-    await cargarMonitorBoxes(); 
-    await cargarSalaEspera(); 
-    await inicializarFormularioConvenio(); 
-    if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas(); 
-    if (typeof cargarSolicitudesRecibidas === 'function') await cargarSolicitudesRecibidas();
- 
-    await verificarInvitacionesPendientes(); 
-
-    // 6. ENGRANAJE FINANCIERO CONTABLE
-    // ============================================================================
-    console.log("🏦 FisioCid: Activando escucha del Botón de Ingresos Contables...");
-    document.getElementById('btnRegistrarPagoFinal')?.addEventListener('click', async (e) => {
-        e.preventDefault(); 
-        const btn = document.getElementById('btnRegistrarPagoFinal');
-        btn.disabled = true;
-        btn.innerText = "PROCESANDO TRANSACCIÓN...";
-
-        const idCita = document.getElementById('cobro_idCita')?.value || null;
-        const idPaciente = document.getElementById('cobro_idPaciente')?.value || null;
-        const montoTotal = parseFloat(document.getElementById('cobro_montoTotal')?.value) || 0;
-        const concepto = document.getElementById('cobro_concepto')?.value?.trim()?.toUpperCase() || "CONSULTA GENERAL";
-        const metodo = document.getElementById('cobro_metodo')?.value || "EFECTIVO";
-        const notas = document.getElementById('cobro_notas')?.value?.trim() || null;
-        const montoIva = parseFloat((montoTotal - (montoTotal / 1.16)).toFixed(2));
-
-        try {
-            const { error: errPago } = await fisioNet
-                .from('finanzas_gestion')
-                .insert([{
-                    id_paciente: idPaciente,
-                    id_clinica: localStorage.getItem('id_clinica_activa'),
-                    id_cita: idCita,
-                    id_profesional: user.id,
-                    monto_total: montoTotal,
-                    monto_iva: montoIva,
-                    concepto: concepto,
-                    metodo_pago: metodo,
-                    pagado: true,
-                    estatus_pago: 'PAGADO',
-                    fecha_pago: new Date().toISOString().split('T')[0],
-                    notas_pago: notas !== "" ? notas : null
-                }]);
-
-            if (errPago) throw errPago;
-
-            if (idCita) {
-                const { error: errAgenda } = await fisioNet
-                    .from('agenda_maestra')
-                    .update({ estatus: 'FINALIZADA', pago_status: 'PAGADO' })
-                    .eq('id_cita', idCita);
-                if (errAgenda) throw errAgenda;
-            }
-
-            alert("💵 ¡INGRESO ASENTADO CORRECTAMENTE EN FISIOCID FINANZAS!🩺🚀");
-            window.location.reload(); 
-        } catch (error) {
-            console.error("❌ Fallo crítico en el motor contable de FisioCid:", error);
-            alert("No se pudo registrar el movimiento: " + error.message);
-            btn.disabled = false;
-            btn.innerText = "📦 REGISTRAR INGRESO";
+        // 4. Asegurar la clínica activa en caso de que esté vacía en memoria
+        let clinicaActiva = localStorage.getItem('id_clinica_activa');
+        if (!clinicaActiva && typeof asegurarClinicaActiva === 'function') {
+            clinicaActiva = await asegurarClinicaActiva();
         }
-    });
+
+        // Aplicar UI e Identidad Visual de la clínica seleccionada
+        await aplicarIdentidadVisual(); 
+        await actualizarInterfazSede(); 
+
+        if (clinicaActiva) {
+            await obtenerYGuardarRolOperativo(user.id, clinicaActiva);
+        }
+
+        renderizarBotonesPorRol();
+
+        const inputFecha = document.getElementById('filtroFechaAgenda');
+        if (inputFecha) inputFecha.value = obtenerFechaLocal();
+
+        // Cargar los módulos secuenciales
+        await cargarAgenda('semana');
+        await cargarEstadisticas();
+        await cargarMonitorBoxes(); 
+        await cargarSolicitudesRecibidas();
+        await cargarSolicitudesRedPendientes();
+        await inicializarFormularioConvenio(); 
+
+        if (typeof renderizarTablaEquipo === 'function') await renderizarTablaEquipo();
+        if (typeof renderizarTablaAlianzas === 'function') await renderizarTablaAlianzas(); 
+        
+        await verificarInvitacionesPendientes(); 
+        await comprobarConfiguracionInicialRequerida();
+
+    } catch (err) {
+        console.error("Error crítico al inicializar el Dashboard:", err);
+    }
 });
-
-// ==========================================
-// 🛡️ EL PORTERO: SISTEMA DE RECEPCIÓN DE INVITACIONES (STAFF)
-// ==========================================
 
 async function verificarInvitacionesPendientes() {
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
         if (!user || !user.email) return;
 
-        // 1. Buscamos si hay invitaciones para este correo
         const { data: invitaciones, error } = await fisioNet
             .from('invitaciones_clinicas')
             .select('*')
@@ -2222,11 +3439,8 @@ async function verificarInvitacionesPendientes() {
 
         if (error) throw error;
 
-        // 2. Si hay invitaciones, activamos la alarma visual (El Modal)
         if (invitaciones && invitaciones.length > 0) {
-            console.log("🚨 Invitación detectada para:", user.email);
-            const inv = invitaciones[0]; // Tomamos la más reciente
-            mostrarAlertaInvitacion(inv);
+            mostrarAlertaInvitacion(invitaciones[0]);
         }
     } catch (err) {
         console.error("Error en El Portero:", err);
@@ -2250,18 +3464,18 @@ function mostrarAlertaInvitacion(inv) {
                 
                 <div style="font-size:0.8rem; color:#475569; font-weight:600;">
                     📍 Área: ${inv.area_asignada || 'General'} <br>
-                    ⏰ Turno: ${inv.turno || 'No especificado'}
+                    ⏰ Turno: ${inv.turno || 'No especificado'} <br>
+                    🔗 Vínculo: <strong>${inv.tipo_vinculo || 'COLABORADOR'}</strong>
                 </div>
             </div>
 
             <div style="display:flex; gap:15px; justify-content:center;">
-                <!-- 🔥 AQUÍ AGREGAMOS LOS DATOS FALTANTES AL CLIC -->
-                <button onclick="procesarRespuestaInv('${inv.id}', 'ACEPTADO', '${inv.id_clinica_padre}', '${inv.nombre_clinica}', '${inv.rol_asignado}', '${inv.cargo_clinico}', '${inv.area_asignada}', '${inv.turno}', '${inv.id_superior_directo}')" 
+                <button onclick="procesarRespuestaInv('${inv.id}', 'ACEPTADO', '${inv.id_clinica_padre}', '${inv.nombre_clinica}')" 
                         style="background:#10b981; color:white; border:none; padding:15px; border-radius:14px; font-weight:800; cursor:pointer; flex:1; font-size:1rem; transition:0.2s;">
                     ✅ ACEPTAR
                 </button>
                 
-                <button onclick="procesarRespuestaInv('${inv.id}', 'RECHAZADO', null, null, null)" 
+                <button onclick="procesarRespuestaInv('${inv.id}', 'RECHAZADO', null, null)" 
                         style="background:#fee2e2; color:#ef4444; border:none; padding:15px; border-radius:14px; font-weight:800; cursor:pointer; flex:1; font-size:1rem; transition:0.2s;">
                     ❌ RECHAZAR
                 </button>
@@ -2273,16 +3487,13 @@ function mostrarAlertaInvitacion(inv) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica, rol) => {
+window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica) => {
     try {
-        console.log("🔄 Procesando respuesta:", respuesta, "para la clínica:", nombreClinica);
-
-        // 1. ACTUALIZAR ESTADO Y RESCATAR EL ADN COMPLETO DEL RECLUTAMIENTO
         const { data: datosInv, error: errUpdateInv } = await fisioNet
             .from('invitaciones_clinicas')
             .update({ estado: respuesta })
             .eq('id', idInv)
-            .select('rol_asignado, cargo_clinico, area_asignada, turno, id_superior_directo') 
+            .select('rol_asignado, cargo_clinico, area_asignada, turno, id_superior_directo, tipo_vinculo')
             .single();
 
         if (errUpdateInv) throw new Error("No se pudo actualizar la invitación.");
@@ -2290,27 +3501,26 @@ window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica,
         if (respuesta === 'ACEPTADO') {
             const { data: { user } } = await fisioNet.auth.getUser();
 
-            // 2. ⚡ CREAR EL VÍNCULO CON LA INFORMACIÓN COMPLETA
+            const esExterno = datosInv.cargo_clinico?.toUpperCase().includes('EXTERNO') || 
+                              datosInv.rol_asignado === 'SOCIOS_EXTERNOS' ||
+                              datosInv.cargo_clinico?.toUpperCase().includes('ALIANZA');
+
             const { error: errInsertColab } = await fisioNet
                 .from('colaboradores_clinica')
                 .insert([{
                     id_clinica: idClinica,
                     id_profesional: user.id,
-                     rol_sistema: datosInv.rol_asignado,
+                    rol_sistema: datosInv.rol_asignado,
                     cargo_clinico: datosInv.cargo_clinico || 'STAFF',
-                    // 🔥 NUEVOS CAMPOS: Mapeamos lo que rescatamos de la invitación
                     area_asignada: datosInv.area_asignada || 'GENERAL', 
                     turno: datosInv.turno || 'MATUTINO',
                     id_superior_directo: datosInv.id_superior_directo || null,
+                    tipo_vinculo: datosInv.tipo_vinculo || (esExterno ? 'EXTERNO' : 'INTERNO'),
                     estado: 'ACTIVO'
                 }]);
 
-            if (errInsertColab) {
-                console.error("Error al crear colaborador:", errInsertColab);
-                throw new Error("Invitación aceptada, pero falló la creación del equipo.");
-            }
+            if (errInsertColab) throw new Error("Invitación aceptada, pero falló la creación del equipo.");
 
-            // 3. GUARDAR EN LOCALSTORAGE PARA LA SESIÓN ACTUAL
             localStorage.setItem('id_clinica_activa', idClinica);
             localStorage.setItem('nombre_clinica', nombreClinica);
 
@@ -2319,7 +3529,6 @@ window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica,
             alert("Has rechazado la invitación correctamente.");
         }
 
-        // 4. LIMPIEZA VISUAL Y RECARGA
         const modal = document.getElementById('modalPorteroInv');
         if (modal) modal.remove();
 
@@ -2330,72 +3539,102 @@ window.procesarRespuestaInv = async (idInv, respuesta, idClinica, nombreClinica,
         alert("Algo salió mal: " + err.message);
     }
 };
-// --- 🧪 MOTOR DE DESPEGUE A LABORATORIO FISIOCID ---
+
 window.lanzarLaboratorioGeneral = async () => {
-    console.log("🧪 Preparando identidad para el Portal de Laboratorio...");
-    
     try {
-        // 1. Obtenemos el usuario de la sesión actual de Supabase
         const { data: { user }, error } = await fisioNet.auth.getUser();
 
         if (error || !user) {
-            console.error("❌ No se detectó sesión activa:", error);
-            window.location.href = 'portal-laboratorio.html'; // Salto básico si falla
+            window.location.href = 'portal-laboratorio.html';
             return;
         }
 
-        // 2. Extraemos los datos del profesional que está frente a la pantalla
-        // Priorizamos metadatos de Supabase, luego lo que el Dashboard ya cargó
         const nombreProfesional = user.user_metadata?.full_name || localStorage.getItem('nombre_completo') || "ESPECIALISTA FISIOCID";
         const sedeActual = localStorage.getItem('nombre_clinica') || "FISIOCID-MATRIZ";
         const colorActual = localStorage.getItem('clinica_color') || "#00cfd5";
 
-        // 3. Llenamos la "mochila" para que el portal-laboratorio.js la lea al llegar
         localStorage.setItem('full_name', nombreProfesional);
         localStorage.setItem('id_socio_activo', user.id);
         localStorage.setItem('clinica_nombre', sedeActual);
         localStorage.setItem('clinica_color', colorActual);
 
-        console.log(`✅ Mochila cargada para: ${nombreProfesional} en ${sedeActual}`);
-
-        // 4. ¡Vámonos al Laboratorio!
         window.location.href = 'portal-laboratorio.html';
 
     } catch (err) {
-        console.error("❌ Error crítico en el despegue:", err);
         window.location.href = 'portal-laboratorio.html';
     }
 };
 
-// ============================================================================
-// 🏦 SISTEMA FINANCIERO HÍBRIDO: DISPARADOR DE COBRO
-// ============================================================================
-
-// 1. Abre el modal y precarga la información de la cita de forma inteligente
 window.dispararModalCobroAsistido = async (idCita, idPaciente, nombrePaciente, montoSugerido, conceptoSugerido) => {
     document.getElementById('cobro_idCita').value = idCita || "";
     document.getElementById('cobro_idPaciente').value = idPaciente || "";
     document.getElementById('cobro_pacienteNombre').value = nombrePaciente ? nombrePaciente.toUpperCase() : "PACIENTE GENERAL";
     document.getElementById('cobro_montoTotal').value = montoSugerido || 0;
     document.getElementById('cobro_concepto').value = conceptoSugerido ? conceptoSugerido.toUpperCase() : "CONSULTA DE FISIOTERAPIA";
-    document.getElementById('cobro_metodo').value = "EFECTIVO"; // Por defecto
+    document.getElementById('cobro_metodo').value = "EFECTIVO";
     document.getElementById('cobro_notas').value = "";
 
-    // Desplegamos el modal híbrido
     document.getElementById('modalCobroAsistido').style.display = 'flex';
 };
 
-// 2. Cierra la ventana de cobro
 window.cerrarModalCobro = () => {
     document.getElementById('modalCobroAsistido').style.display = 'none';
 };
-// ==========================================
-// 🛡️ CAZADOR DE ROL OPERATIVO (MULTI-SEDE)
-// ==========================================
+
+async function asentarIngresoEnCaja() {
+    const idCita = document.getElementById('cobro_idCita').value;
+    const idPaciente = document.getElementById('cobro_idPaciente').value;
+    const concepto = document.getElementById('cobro_concepto').value;
+    const metodo = document.getElementById('cobro_metodo').value;
+    const monto = parseFloat(document.getElementById('cobro_montoTotal').value) || 0;
+    const notas = document.getElementById('cobro_notas').value;
+    const clinicaId = localStorage.getItem('id_clinica_activa');
+
+    const { data: { user } } = await fisioNet.auth.getUser();
+
+    if (!idCita || !clinicaId) {
+        alert("⚠️ No se puede asentar el pago: Faltan datos de la cita o clínica.");
+        return;
+    }
+
+    try {
+        const { error: errPago } = await fisioNet.from('caja_movimientos').insert({
+            id_clinica: clinicaId,
+            id_paciente: idPaciente || null,
+            id_cita: idCita,
+            id_atendido_por: user.id,
+            tipo_movimiento: 'INGRESO',
+            concepto: concepto,
+            metodo_pago: metodo,
+            monto: monto,
+            observaciones: notas,
+            fecha_registro: new Date().toISOString()
+        });
+
+        if (errPago) throw errPago;
+
+        const { error: errCita } = await fisioNet
+            .from('agenda_maestra')
+            .update({ pago_status: 'PAGADO', estatus: 'COMPLETADO' })
+            .eq('id_cita', idCita);
+
+        if (errCita) throw errCita;
+
+        alert("✅ INGRESO REGISTRADO EN CAJA EXITOSAMENTE");
+        cerrarModalCobro();
+        await cargarAgenda('semana');
+        await cargarEstadisticas();
+
+    } catch (err) {
+        console.error("❌ Error al asentar el pago:", err);
+        alert("Error al registrar cobro: " + err.message);
+    }
+}
+
+document.getElementById('btnRegistrarPagoFinal')?.addEventListener('click', asentarIngresoEnCaja);
+
 async function obtenerYGuardarRolOperativo(userId, clinicaId) {
     try {
-        console.log("🔍 Verificando rol operativo en la sede activa...");
-        
         const { data: colaborador, error } = await fisioNet
             .from('colaboradores_clinica')
             .select('rol_sistema')
@@ -2405,19 +3644,17 @@ async function obtenerYGuardarRolOperativo(userId, clinicaId) {
 
         if (error) throw error;
 
-        let rolFinal = 'STAFF_CLINICO'; // Rol de protección por defecto
+        let rolFinal = 'STAFF_CLINICO';
         
         if (colaborador && colaborador.rol_sistema) {
             rolFinal = colaborador.rol_sistema;
         }
 
-        // Guardamos el rol en memoria para que renderizarBotonesPorRol lo encuentre
         localStorage.setItem('rol_actual', rolFinal);
-        console.log(`✅ Permisos concedidos como: [${rolFinal}]`);
 
     } catch (error) {
         console.error("❌ Error al recuperar el rol operativo:", error.message);
-        localStorage.setItem('rol_actual', 'STAFF_CLINICO'); // Candado de seguridad si algo falla
+        localStorage.setItem('rol_actual', 'STAFF_CLINICO');
     }
 }
 
@@ -2429,20 +3666,17 @@ function renderizarBotonesPorRol() {
     const miRol = localStorage.getItem('rol_actual') || 'STAFF_CLINICO'; 
     const esAdmin = (miRol === 'ADMIN_SISTEMA' || miRol === 'DUEÑO');
     
-    // 🎯 NUEVA REGLA: El administrativo también puede ver la gestión de personal
+    // Control de permisos para equipo
     const puedeGestionarEquipo = (esAdmin || miRol === 'ADMINISTRATIVO');
     
     // ==========================================
-    // 🛡️ CONTROL DEL NAVBAR SUPERIOR AJUSTADO
+    // CONTROL DEL NAVBAR SUPERIOR
     // ==========================================
     const btnEquipo = document.getElementById('btnMiEquipo');
     const btnPrecios = document.getElementById('btnAbrirConfig');
     const btnIdentidad = document.getElementById('btnIdentidadVisual');
 
-    // Ahora el botón de equipo se muestra para Admin Y Administrativo 🚀
     if (btnEquipo) btnEquipo.style.display = puedeGestionarEquipo ? 'flex' : 'none';
-    
-    // Precios e Identidad se quedan EXCLUSIVOS para ti (Modo Dios)
     if (btnPrecios) btnPrecios.style.display = esAdmin ? 'flex' : 'none';
     if (btnIdentidad) btnIdentidad.style.display = esAdmin ? 'flex' : 'none';
 
@@ -2450,16 +3684,17 @@ function renderizarBotonesPorRol() {
     // 2. CATÁLOGO MAESTRO DE BOTONES
     // ==========================================
     const catalogoBotones = {
+        recetas:         `<button class="btn-action"  onclick="window.location.href='portal-recetas.html'">📋 Crear Receta</button>`,
         agregarPaciente: `<button class="btn-action" onclick="window.location.href='nuevo-paciente.html'">📝 Agregar Paciente</button>`,
-        listaPacientes: `<button class="btn-action" onclick="window.location.href='lista-pacientes.html'">👥 Lista de Pacientes</button>`,
-        inventario:     `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
-        nuevoEstudio:   `<button class="btn-action" onclick="window.location.href='portal-gabinete.html'">📡 Nuevo Estudio</button>`,
-        laboratorio:    `<button class="btn-action" onclick="lanzarLaboratorioGeneral()">🧪 Nuevo Laboratorio</button>`,
-        finanzas:       `<button class="btn-action" onclick="window.location.href='finanzas.html'">📊 Control de Caja</button>`
+        listaPacientes:  `<button class="btn-action" onclick="window.location.href='lista-pacientes.html'">👥 Lista de Pacientes</button>`,
+        inventario:      `<button class="btn-action" onclick="window.location.href='inventario.html'">📦 Inventario</button>`,
+        nuevoEstudio:    `<button class="btn-action" onclick="window.location.href='portal-gabinete.html'">📡 Nuevo Estudio</button>`,
+        laboratorio:     `<button class="btn-action" onclick="lanzarLaboratorioGeneral()">🧪 Nuevo Laboratorio</button>`,
+        finanzas:        `<button class="btn-action" onclick="window.location.href='finanzas.html'">📊 Control de Caja</button>`
     };
 
     // ==========================================
-    // 3. ASIGNACIÓN EN CALIENTE 🔥
+    // 3. ASIGNACIÓN EN CALIENTE CON BOTÓN DE RECETAS
     // ==========================================
     let botonesAJS = [];
 
@@ -2467,15 +3702,19 @@ function renderizarBotonesPorRol() {
         case 'ADMIN_SISTEMA':
         case 'DUEÑO':
             botonesAJS = [
-                catalogoBotones.agregarPaciente, catalogoBotones.listaPacientes,
-                catalogoBotones.inventario, catalogoBotones.nuevoEstudio,
-                catalogoBotones.laboratorio, catalogoBotones.finanzas
+                catalogoBotones.recetas,
+                catalogoBotones.agregarPaciente,
+                catalogoBotones.listaPacientes,
+                catalogoBotones.inventario,
+                catalogoBotones.nuevoEstudio,
+                catalogoBotones.laboratorio,
+                catalogoBotones.finanzas
             ];
             break;
 
         case 'ADMINISTRATIVO':
-            // Sigue con acceso a la operación del día a día y dinero, más el Navbar de equipo arriba
             botonesAJS = [
+                catalogoBotones.recetas,
                 catalogoBotones.agregarPaciente, 
                 catalogoBotones.listaPacientes, 
                 catalogoBotones.finanzas
@@ -2484,6 +3723,7 @@ function renderizarBotonesPorRol() {
 
         case 'STAFF_CLINICO':
             botonesAJS = [
+                catalogoBotones.recetas,
                 catalogoBotones.listaPacientes, 
                 catalogoBotones.nuevoEstudio, 
                 catalogoBotones.laboratorio
@@ -2491,27 +3731,245 @@ function renderizarBotonesPorRol() {
             break;
 
         case 'OPERATIVO':
-            botonesAJS = []; 
+            botonesAJS = [
+                catalogoBotones.recetas
+            ]; 
             break;
 
         default:
-            botonesAJS = [catalogoBotones.listaPacientes];
+            botonesAJS = [
+                catalogoBotones.recetas,
+                catalogoBotones.listaPacientes
+            ];
             break;
     }
 
     contenedor.innerHTML = botonesAJS.join('');
 }
 
+// Función para calcular edad desde fecha de nacimiento
+function calcularEdadQuick(fechaNac) {
+    if (!fechaNac) return 'N/E';
+    const hoy = new Date();
+    const nac = new Date(fechaNac);
+    let edad = hoy.getFullYear() - nac.getFullYear();
+    const m = hoy.getMonth() - nac.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+    return edad > 0 ? `${edad} años` : 'Menor a 1 año';
+}
 
-function cargarHorariosEnModal(dataHorarios) {
-    const contenedor = document.getElementById('contenedorHorarios');
+function abrirBuscadorExpressPacientes(elementoBoton) {
+    let popover = document.getElementById('popoverQuickSearch');
     
-    // 1. Limpieza radical
-    while (contenedor.firstChild) {
-        contenedor.removeChild(contenedor.firstChild);
+    if (!popover) {
+        popover = document.createElement('div');
+        popover.id = 'popoverQuickSearch';
+        popover.className = 'quick-popover-card';
+        document.body.appendChild(popover);
     }
 
-    // 2. Parseo seguro
+    popover.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 0.85rem; font-weight: 800; color: #0f766e; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Búsqueda Express</span>
+            <button onclick="cerrarBuscadorExpress()" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: #94a3b8;">✕</button>
+        </div>
+        
+        <input type="text" id="inputQuickPaciente" placeholder="Expediente, Nombre, CURP o Teléfono..." 
+               style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 600; box-sizing: border-box; outline: none; margin-bottom: 10px;">
+        
+        <div id="resultadosQuickPaciente" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+            <small style="color: #94a3b8; text-align: center; display: block; padding: 10px 0;">Escribe para buscar expediente en sede...</small>
+        </div>
+
+        <div id="panelAbanicoAcciones" class="abanico-acciones">
+            <div style="grid-column: span 2; margin-bottom: 6px;">
+                <p id="lblPacienteSeleccionado" style="font-size: 0.8rem; font-weight: 800; color: #0f766e; margin: 0; text-transform: uppercase;"></p>
+                <p id="lblDetallesPaciente" style="font-size: 0.72rem; color: #64748b; margin: 2px 0 0 0; font-weight: 600;"></p>
+            </div>
+            
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('receta')">📋 Crear Receta</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('nota')">📝 Crear Nota</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('imagen')">📡 Estudio de Imagen</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('laboratorio')">🧪 Estudio Laboratorio</button>
+            <button class="btn-abanico" onclick="ejecutarAccionExpress('historial')" style="grid-column: span 2; background: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 800;">📁 Ver Historial Completo</button>
+        </div>
+    `;
+
+    // POSICIONAMIENTO CONTEXTUAL
+    if (elementoBoton) {
+        const rect = elementoBoton.getBoundingClientRect();
+        const scrollY = window.scrollY || window.pageYOffset;
+        const scrollX = window.scrollX || window.pageXOffset;
+
+        let topPos = rect.top + scrollY - 240; 
+        if (topPos < scrollY + 10) {
+            topPos = rect.bottom + scrollY + 10;
+        }
+
+        let leftPos = rect.left + scrollX + (rect.width / 2) - 190;
+        if (leftPos < 10) leftPos = 10;
+        if (leftPos + 390 > window.innerWidth) leftPos = window.innerWidth - 400;
+
+        popover.style.top = `${topPos}px`;
+        popover.style.left = `${leftPos}px`;
+    }
+
+    setTimeout(() => popover.classList.add('activo'), 10);
+    const input = document.getElementById('inputQuickPaciente');
+    if (input) input.focus();
+
+    // LISTENER DE BÚSQUEDA CORREGIDO (CONSULTA DESDE PACIENTES_MAESTROS CON INNER JOIN A EXPEDIENTES_CLINICOS)
+    input.addEventListener('input', async (e) => {
+        const texto = e.target.value.trim().toUpperCase();
+        const contenedorRes = document.getElementById('resultadosQuickPaciente');
+        
+        const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('id_clinica');
+
+        const panelAbanico = document.getElementById('panelAbanicoAcciones');
+        if (panelAbanico) panelAbanico.classList.remove('desplegado');
+
+        if (texto.length < 2) {
+            contenedorRes.innerHTML = `<small style="color: #94a3b8; text-align: center; display: block; padding: 10px 0;">Escribe expediente, nombre, CURP o teléfono...</small>`;
+            return;
+        }
+
+        contenedorRes.innerHTML = `<small style="color: #0f766e; text-align: center; display: block; padding: 10px 0;">Buscando expedientes en sede...</small>`;
+
+        try {
+            // Buscamos en pacientes_maestros garantizando que exista en expedientes_clinicos de la sede activa
+            const { data: pacientes, error } = await fisioNet
+                .from('pacientes_maestros')
+                .select(`
+                    id,
+                    nombre,
+                    apellido_paterno,
+                    apellido_materno,
+                    curp,
+                    fecha_nacimiento,
+                    genero,
+                    telefono,
+                    expedientes_clinicos!inner (
+                        id,
+                        folio_personalizado,
+                        numero_consecutivo,
+                        id_clinica
+                    )
+                `)
+                .eq('expedientes_clinicos.id_clinica', idClinicaActiva)
+                .or(`nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,curp.ilike.%${texto}%,telefono.ilike.%${texto}%`);
+
+            if (error) throw error;
+
+            contenedorRes.innerHTML = '';
+
+            if (pacientes && pacientes.length > 0) {
+                pacientes.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'quick-res-item';
+                    
+                    const edadStr = calcularEdadQuick(p.fecha_nacimiento);
+                    const curpStr = p.curp ? p.curp : 'SIN CURP';
+                    
+                    // Extraer expediente de la sede activa
+                    const expRel = Array.isArray(p.expedientes_clinicos) 
+                        ? p.expedientes_clinicos.find(e => String(e.id_clinica) === String(idClinicaActiva)) || p.expedientes_clinicos[0]
+                        : p.expedientes_clinicos;
+
+                    const folioExp = (expRel && expRel.folio_personalizado) 
+                        ? expRel.folio_personalizado 
+                        : (expRel && expRel.numero_consecutivo ? `EXP-${expRel.numero_consecutivo}` : `EXP-${p.id}`);
+
+                    div.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 800; color: #0f172a; font-size: 0.82rem;">${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}</span>
+                            <span style="background: #e0f2fe; color: #0369a1; font-size: 0.68rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; font-family: monospace;">📁 ${folioExp}</span>
+                        </div>
+                        <div style="font-size: 0.72rem; color: #64748b; margin-top: 3px;">
+                            <span>🎂 ${edadStr}</span> | <span style="font-family: monospace;">🆔 ${curpStr}</span>
+                        </div>
+                    `;
+                    
+                    div.onclick = () => seleccionarPacienteExpress({
+                        ...p,
+                        genero: p.genero || '',
+                        folio_expediente: folioExp
+                    });
+
+                    contenedorRes.appendChild(div);
+                });
+            } else {
+                contenedorRes.innerHTML = `<small style="color: #ef4444; text-align: center; display: block; padding: 10px 0;">No existe expediente activo en esta sede.</small>`;
+            }
+        } catch (err) {
+            console.error("Error al consultar expedientes clínicas:", err);
+            contenedorRes.innerHTML = `<small style="color: #ef4444; text-align: center; display: block; padding: 10px 0;">Error al consultar expedientes.</small>`;
+        }
+    });
+}
+
+let pacienteSeleccionadoQuick = null;
+
+function seleccionarPacienteExpress(paciente) {
+    pacienteSeleccionadoQuick = {
+        ...paciente,
+        genero: paciente.genero || paciente.sexo || ''
+    };
+
+    const edadStr = calcularEdadQuick(paciente.fecha_nacimiento);
+    const folioExp = paciente.folio_expediente ? paciente.folio_expediente : `EXP-${paciente.id}`;
+
+    document.getElementById('lblPacienteSeleccionado').innerText = `👤 ${paciente.nombre} ${paciente.apellido_paterno}`;
+    document.getElementById('lblDetallesPaciente').innerText = `Expediente: ${folioExp} | Edad: ${edadStr}`;
+    
+    document.getElementById('panelAbanicoAcciones').classList.add('desplegado');
+}
+
+function cerrarBuscadorExpress() {
+    const popover = document.getElementById('popoverQuickSearch');
+    if (popover) {
+        popover.classList.remove('activo');
+        pacienteSeleccionadoQuick = null;
+    }
+}
+
+window.ejecutarAccionExpress = function(tipo) {
+    if (!pacienteSeleccionadoQuick) {
+        alert("Por favor selecciona un paciente de la lista primero.");
+        return;
+    }
+
+    // Guardar contexto en localStorage
+    localStorage.setItem('paciente_seleccionado_id', pacienteSeleccionadoQuick.id);
+    localStorage.setItem('id_paciente_activo', pacienteSeleccionadoQuick.id);
+    localStorage.setItem('paciente_precargado', JSON.stringify(pacienteSeleccionadoQuick));
+
+    cerrarBuscadorExpress();
+
+    // Redirección directa por ruta
+    switch (tipo) {
+        case 'receta':
+            window.location.href = 'portal-recetas.html';
+            break;
+        case 'nota':
+            window.location.href = 'historia-clinica.html';
+            break;
+        case 'imagen':
+            window.location.href = 'portal-gabinete.html';
+            break;
+        case 'laboratorio':
+            window.location.href = 'portal-laboratorio.html';
+            break;
+        case 'historial':
+            window.location.href = 'historial-evolucion.html';
+            break;
+    }
+};
+function cargarHorariosEnModal(dataHorarios) {
+    const contenedor = document.getElementById('contenedorHorarios');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = '';
+
     let horarios;
     try {
         horarios = typeof dataHorarios === 'string' ? JSON.parse(dataHorarios) : dataHorarios;
@@ -2520,33 +3978,853 @@ function cargarHorariosEnModal(dataHorarios) {
         return;
     }
 
-    // 3. Renderizado corregido
-    horarios.forEach(h => {
+    if (!Array.isArray(horarios) || horarios.length === 0) return;
+
+    // 1. Normalizar estructura
+    const horariosNormalizados = horarios.map(h => ({
+        dia: parseInt(h.dia, 10),
+        inicio: h.inicio,
+        fin: h.fin
+    })).filter(h => !isNaN(h.dia));
+
+    // 2. Agrupar bloques por combinación exacta de (inicio - fin)
+    const mapaTurnos = {};
+    horariosNormalizados.forEach(h => {
+        const claveTurno = `${h.inicio}_${h.fin}`;
+        if (!mapaTurnos[claveTurno]) {
+            mapaTurnos[claveTurno] = { inicio: h.inicio, fin: h.fin, dias: [] };
+        }
+        mapaTurnos[claveTurno].dias.push(h.dia);
+    });
+
+    const diasLV = [1, 2, 3, 4, 5];
+    let horariosAgrupados = [];
+
+    // 3. Evaluar cada turno detectado
+    Object.values(mapaTurnos).forEach(turno => {
+        const diasDelTurno = turno.dias;
+        // Verificar si este turno específico ocurre los 5 días de Lunes a Viernes
+        const esTurnoCompletoLV = diasLV.every(d => diasDelTurno.includes(d));
+
+        if (esTurnoCompletoLV) {
+            // Se condensa como Lunes a Viernes
+            horariosAgrupados.push({ dia: 'LV', inicio: turno.inicio, fin: turno.fin });
+
+            // Si hay días adicionales fuera de L-V (ej. Sábado 6 o Domingo 0) con este mismo turno
+            diasDelTurno.filter(d => d === 6 || d === 0).forEach(dExtra => {
+                horariosAgrupados.push({ dia: dExtra, inicio: turno.inicio, fin: turno.fin });
+            });
+        } else {
+            // Si no son los 5 días continuos, se muestran los días individualmente
+            diasDelTurno.forEach(d => {
+                horariosAgrupados.push({ dia: d, inicio: turno.inicio, fin: turno.fin });
+            });
+        }
+    });
+
+    // 4. Renderizar tarjetas en el modal
+    horariosAgrupados.forEach(h => {
+        const valDia = String(h.dia);
         const div = document.createElement('div');
         div.className = 'bloque-horario';
-        // Agregué tus estilos CSS para que no pierdas el diseño
-        div.style = "background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; position: relative;";
+        div.style.cssText = "background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; position: relative;";
         
         div.innerHTML = `
-            <select class="dia-semana" style="width: 100%; margin-bottom:10px; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                <option value="LV" ${h.dia === 'LV' ? 'selected' : ''}>Lunes a Viernes</option>
-                <option value="1" ${h.dia == 1 ? 'selected' : ''}>Lunes</option>
-                <option value="2" ${h.dia == 2 ? 'selected' : ''}>Martes</option>
-                <option value="3" ${h.dia == 3 ? 'selected' : ''}>Miércoles</option>
-                <option value="4" ${h.dia == 4 ? 'selected' : ''}>Jueves</option>
-                <option value="5" ${h.dia == 5 ? 'selected' : ''}>Viernes</option>
-                <option value="6" ${h.dia == 6 ? 'selected' : ''}>Sábado</option>
-                <option value="0" ${h.dia == 0 ? 'selected' : ''}>Domingo</option>
+            <select class="dia-semana" style="width: 100%; margin-bottom:10px; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #1e293b;">
+                <option value="LV" ${valDia === 'LV' ? 'selected' : ''}>LUNES A VIERNES</option>
+                <option value="1" ${valDia === '1' ? 'selected' : ''}>LUNES</option>
+                <option value="2" ${valDia === '2' ? 'selected' : ''}>MARTES</option>
+                <option value="3" ${valDia === '3' ? 'selected' : ''}>MIÉRCOLES</option>
+                <option value="4" ${valDia === '4' ? 'selected' : ''}>JUEVES</option>
+                <option value="5" ${valDia === '5' ? 'selected' : ''}>VIERNES</option>
+                <option value="6" ${valDia === '6' ? 'selected' : ''}>SÁBADO</option>
+                <option value="0" ${valDia === '0' ? 'selected' : ''}>DOMINGO</option>
             </select>
             <div style="display:flex; align-items:center; gap:8px;">
-                <input type="time" class="h-ini" value="${h.inicio}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
-                <span style="color: #94a3b8; font-size: 0.8rem;">a</span>
-                <input type="time" class="h-fin" value="${h.fin}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                <input type="time" class="h-ini" value="${h.inicio}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
+                <span style="color: #94a3b8; font-size: 0.8rem; font-weight: bold;">a</span>
+                <input type="time" class="h-fin" value="${h.fin}" style="flex:1; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600;">
             </div>
         `;
         
         contenedor.appendChild(div);
     });
-
-    console.log("Se renderizaron", horarios.length, "horarios correctamente.");
 }
+
+// Función en el Dashboard para enviar al portal correcto
+function atenderSolicitudDesdeDashboard(tipoSolicitud, pacienteObj) {
+    // 1. Guardamos el objeto del paciente en el almacenamiento local convertido a texto (JSON)
+    localStorage.setItem('paciente_precargado', JSON.stringify(pacienteObj));
+    
+    // 2. Redirigimos al portal correspondiente
+    if (tipoSolicitud === 'LABORATORIO') {
+        window.location.href = 'portal-laboratorio.html';
+    } else if (tipoSolicitud === 'GABINETE') {
+        window.location.href = 'portal-gabinete.html';
+    }
+}
+
+// Agrega esto en tu función de inicialización general (ej. al cargar el DOM)
+function iniciarCanalSalaEspera() {
+    fisioNet
+        .channel('cambios-solicitudes-citas')
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // INSERT, UPDATE, DELETE
+                schema: 'public',
+                table: 'solicitudes_citas'
+            },
+            (payload) => {
+               // console.log("🔔 Cambio detectado en solicitudes:", payload);
+                // Recarga la sala de espera automáticamente para cualquier cambio en pendientes
+                if (typeof cargarSalaEspera === 'function') {
+                    cargarSalaEspera();
+                }
+            }
+        )
+        .subscribe();
+}
+
+
+
+window.abrirFiltroLimpieza = async (id, tipoOrigen = 'agenda') => {
+    if (!id || id === 'undefined') {
+        alert("⚠️ El ID de la cita no es válido.");
+        return;
+    }
+
+    const modal = document.getElementById('modalLimpieza');
+    if (!modal) {
+        alert("⚠️ No se encontró el modal de limpieza (#modalLimpieza) en el HTML.");
+        return;
+    }
+
+    // 🎯 Guardar el origen en el dataset del modal para que 'confirmarLimpiezaYProcesar' sepa qué tabla actualizar
+    modal.dataset.origen = (tipoOrigen === 'solicitud') ? 'SOLICITUD' : 'AGENDA';
+
+    document.getElementById('limpiezaIdSolicitud').value = id;
+    document.getElementById('limpiezaIdPacienteExistente').value = '';
+    
+    const badgeVinculado = document.getElementById('badgePacienteVinculado');
+    if (badgeVinculado) badgeVinculado.style.display = 'none';
+
+    let nombreTexto = "";
+
+    if (tipoOrigen === 'solicitud') {
+        // Consulta en solicitudes_citas
+        const { data: sol } = await fisioNet
+            .from('solicitudes_citas')
+            .select('id, nombre, apellido_p, apellido_m')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (sol) {
+            nombreTexto = `${sol.nombre || ''} ${sol.apellido_p || ''} ${sol.apellido_m || ''}`.trim();
+        }
+    } else {
+        // Consulta en agenda_maestra
+        const { data: cita } = await fisioNet
+            .from('agenda_maestra')
+            .select('id_cita, notas_logistica')
+            .eq('id_cita', id)
+            .maybeSingle();
+
+        if (cita) {
+            nombreTexto = (cita.notas_logistica || "").replace("Evento desde celular: ", "");
+        }
+    }
+
+    // Separar nombre completo en partes para autocompletar el formulario
+    const partes = nombreTexto.trim().split(" ");
+    const nom = partes[0] || "";
+    const pat = partes[1] || "";
+    const mat = partes.slice(2).join(" ") || "";
+
+    const inputNom = document.getElementById('limpiezaNombre');
+    const inputPat = document.getElementById('limpiezaPaterno');
+    const inputMat = document.getElementById('limpiezaMaterno');
+
+    if (inputNom) inputNom.value = nom.toUpperCase();
+    if (inputPat) inputPat.value = pat.toUpperCase();
+    if (inputMat) inputMat.value = mat.toUpperCase();
+
+    modal.style.display = 'flex';
+
+    if (nom.length >= 2) {
+        ejecutarBusquedaSugerenciasModal(nom.toUpperCase());
+    }
+};
+
+
+
+window.confirmarLimpiezaYProcesar = async () => {
+    const btnGuardar = document.querySelector("#modalLimpieza button[onclick='confirmarLimpiezaYProcesar()']");
+    if (btnGuardar) btnGuardar.disabled = true;
+
+    try {
+        const idSolicitud = document.getElementById('limpiezaIdSolicitud').value;
+        const idPacienteExistente = document.getElementById('limpiezaIdPacienteExistente').value;
+        const nom = document.getElementById('limpiezaNombre').value.trim().toUpperCase();
+        const pat = document.getElementById('limpiezaPaterno').value.trim().toUpperCase();
+        const mat = document.getElementById('limpiezaMaterno').value.trim().toUpperCase();
+        const clinicaId = localStorage.getItem('id_clinica_activa');
+        
+        // Leemos el origen desde el dataset del modal (o del input hidden)
+        const modal = document.getElementById('modalLimpieza');
+        const origen = modal.dataset.origen || 'SOLICITUD'; // 'SOLICITUD' o 'AGENDA'
+
+        if (!idSolicitud) {
+            alert("⚠️ No se pudo determinar el ID de la cita.");
+            return;
+        }
+
+        if (!nom || (!pat && !idPacienteExistente)) {
+            alert("⚠️ El Nombre y el Apellido Paterno son obligatorios.");
+            return;
+        }
+
+        const { data: { user } } = await fisioNet.auth.getUser();
+        let idPacienteFinal = idPacienteExistente;
+
+        // 1. CREAR PACIENTE MAESTRO SI ES NUEVO
+        if (!idPacienteFinal) {
+            const { data: nPac, error: errPac } = await fisioNet
+                .from('pacientes_maestros')
+                .insert([{
+                    nombre: nom,
+                    apellido_paterno: pat,
+                    apellido_materno: mat,
+                    id_clinica: clinicaId,
+                    creado_por: user?.id
+                }])
+                .select('id')
+                .single();
+
+            if (errPac) throw new Error("Error creando paciente: " + errPac.message);
+            idPacienteFinal = nPac.id;
+        }
+
+        document.getElementById('modalLimpieza').style.display = 'none';
+
+        // 2. EJECUTAR ACCIÓN SEGÚN EL ORIGEN REAL
+        if (origen === 'AGENDA') {
+            // ==========================================
+            // 📱 CASO 3: REGISTRO CELULAR / PRIVADO
+            // ==========================================
+            const { error: errAg } = await fisioNet
+                .from('agenda_maestra')
+                .update({ id_paciente: idPacienteFinal })
+                .eq('id_cita', idSolicitud);
+
+            if (errAg) throw errAg;
+
+        } else {
+            // ==========================================
+            // 🟡 CASO 2: PROSPECTO (solicitudes_citas)
+            // ==========================================
+            // A) Traer los datos de la solicitud
+            const { data: solExistente, error: errGetSol } = await fisioNet
+                .from('solicitudes_citas')
+                .select('*')
+                .eq('id', idSolicitud)
+                .single();
+
+            if (errGetSol) throw errGetSol;
+
+            // B) Cambiar estado a APROBADO
+            const { error: errSol } = await fisioNet
+                .from('solicitudes_citas')
+                .update({
+                    nombre: nom,
+                    apellido_p: pat,
+                    apellido_m: mat,
+                    estado: 'APROBADO'
+                })
+                .eq('id', idSolicitud);
+
+            if (errSol) throw errSol;
+
+            // C) Insertar en agenda_maestra
+            const { error: errInsAg } = await fisioNet
+                .from('agenda_maestra')
+                .insert([{
+                    id_paciente: idPacienteFinal,
+                    id_profesional: user.id,
+                    id_clinica: clinicaId,
+                    fecha: solExistente.fecha_cita,
+                    hora_inicio_cita: solExistente.hora_cita,
+                    modalidad: 'CONSULTORIO',
+                    estatus: 'PENDIENTE',
+                    estado: 'ACTIVO',
+                    google_event_id: solExistente.google_event_id || null
+                }]);
+
+            if (errInsAg) throw errInsAg;
+        }
+
+        alert("✅ Cita vinculada exitosamente.");
+
+        if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+        if (typeof cargarSalaEspera === 'function') await cargarSalaEspera();
+
+    } catch (e) {
+        console.error("❌ Error en el proceso:", e);
+        alert("Ocurrió un error: " + (e.message || "Error al procesar"));
+    } finally {
+        if (btnGuardar) btnGuardar.disabled = false;
+    }
+};
+
+// Función aislada para buscar coincidencias sin duplicar código
+async function ejecutarBusquedaSugerenciasModal(texto) {
+    const contenedorSugerencias = document.getElementById('sugerenciasLimpiezaModal');
+    if (!contenedorSugerencias) return;
+
+    if (texto.length < 2) { 
+        contenedorSugerencias.innerHTML = ''; 
+        return; 
+    }
+
+    const clinicaId = localStorage.getItem('id_clinica_activa');
+    const filtroOr = `nombre.ilike.%${texto}%,apellido_paterno.ilike.%${texto}%,apellido_materno.ilike.%${texto}%,telefono.ilike.%${texto}%`;
+
+    let query = fisioNet.from('pacientes_maestros')
+        .select('id, nombre, apellido_paterno, apellido_materno, telefono')
+        .or(filtroOr)
+        .limit(5);
+
+    if (clinicaId) {
+        query = query.eq('id_clinica', clinicaId);
+    }
+
+    const { data: pacientes, error } = await query;
+
+    if (error) {
+        console.error("Error en la consulta de sugerencias:", error);
+        return;
+    }
+
+    contenedorSugerencias.innerHTML = '';
+
+    if (pacientes && pacientes.length > 0) {
+        pacientes.forEach(p => {
+            const div = document.createElement('div');
+            div.style.cssText = "padding:10px 12px; cursor:pointer; border-bottom:1px solid #f1f5f9; font-size:0.8rem; font-weight:700; color:#1e293b; transition: background 0.15s;";
+            div.onmouseover = () => div.style.background = '#f0fdf4';
+            div.onmouseout = () => div.style.background = '#ffffff';
+
+            const telInfo = p.telefono ? ` <span style="color:#64748b; font-size:0.75rem;">(📞 ${p.telefono})</span>` : '';
+            div.innerHTML = `👤 ${p.nombre} ${p.apellido_paterno || ''} ${p.apellido_materno || ''}${telInfo}`.trim();
+
+            div.onclick = () => {
+                document.getElementById('limpiezaNombre').value = (p.nombre || '').toUpperCase();
+                document.getElementById('limpiezaPaterno').value = (p.apellido_paterno || '').toUpperCase();
+                document.getElementById('limpiezaMaterno').value = (p.apellido_materno || '').toUpperCase();
+                document.getElementById('limpiezaIdPacienteExistente').value = p.id;
+
+                const badgeVinculado = document.getElementById('badgePacienteVinculado');
+                if (badgeVinculado) badgeVinculado.style.display = 'flex';
+                
+                contenedorSugerencias.innerHTML = '';
+            };
+            contenedorSugerencias.appendChild(div);
+        });
+    }
+}
+
+// Event listener sobre el input de nombre
+document.getElementById('limpiezaNombre')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.toUpperCase();
+    const texto = e.target.value.trim();
+    
+    // Si se modifica manualmente el texto, limpiar la vinculación previa
+    document.getElementById('limpiezaIdPacienteExistente').value = '';
+    const badgeVinculado = document.getElementById('badgePacienteVinculado');
+    if (badgeVinculado) badgeVinculado.style.display = 'none';
+
+    ejecutarBusquedaSugerenciasModal(texto);
+});
+
+window.desvincularPacienteModal = () => {
+    document.getElementById('limpiezaIdPacienteExistente').value = '';
+    const badgeVinculado = document.getElementById('badgePacienteVinculado');
+    if (badgeVinculado) badgeVinculado.style.display = 'none';
+};
+
+
+
+window.confirmarHorarioEnSala = async (idSolicitud, accion) => {
+    const nuevoEstado = accion === 'APROBAR' ? 'CONFIRMADO' : 'RECHAZADO';
+    
+    if (accion === 'RECHAZAR' && !confirm("¿Estás seguro de rechazar esta solicitud?")) return;
+    
+    // Solo actualizamos el estado, no tocamos los nombres aún
+    await fisioNet.from('solicitudes_citas').update({ estado: nuevoEstado }).eq('id', idSolicitud);
+    
+    // Recargamos los paneles
+    if (typeof cargarSolicitudesRecibidas === 'function') cargarSolicitudesRecibidas();
+    if (typeof cargarSalaEspera === 'function') cargarSalaEspera();
+    if (typeof cargarAgenda === 'function') await cargarAgenda('semana');
+};
+
+
+
+
+
+
+
+async function verificarYPedirNotificaciones() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    // Si el permiso aún no se ha pedido (es 'default'), podemos pedirlo o mostrar un aviso
+    if (Notification.permission === 'default') {
+        // Opcional: Puedes mostrar un botón o pedirlo directamente
+        const permiso = await Notification.requestPermission();
+        if (permiso === 'granted') {
+          //  console.log('¡Notificaciones activadas con éxito!');
+            registrarSuscripcionPushEnSupabase();
+        }
+    }
+}
+
+async function registrarSuscripcionPushEnSupabase() {
+    try {
+        const registro = await navigator.serviceWorker.ready;
+        
+        // 🔑 Tu Llave Pública VAPID 
+        // (Nota: Necesitas generar un par de llaves VAPID; puedes usar herramientas online gratuitas 
+        // o generarlas con Node.js, y poner aquí tu llave pública en formato Uint8Array)
+        const publicVapidKey = 'BIxTihYT48GMKpAUqmTUy56KemyUAjW-tPVgWh_cy_uhJjUDgirmnR7ymPFsOyUWEOk-6F7EPLjOIgTCsWBy_bs'; 
+        const convertedVapidKey = urlBase64ToUint8Array(publicVapidKey);
+
+        // Suscribimos al navegador al servidor push
+        const suscripcion = await registro.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedVapidKey
+        });
+
+        const usuarioId = localStorage.getItem('usuarioId');
+        const subJson = suscripcion.toJSON();
+
+  // Guardamos o actualizamos la suscripción en Supabase basada en el endpoint único del dispositivo
+        const { error } = await fisioNet
+            .from('push_subscriptions')
+            .upsert({
+                id_profesional: usuarioId,
+                endpoint: subJson.endpoint,
+                p256dh: subJson.keys.p256dh,
+                auth: subJson.keys.auth
+            }, { onConflict: 'endpoint' });
+
+        if (error) console.error("Error al guardar suscripción push en Supabase:", error);
+       // else console.log("📱 Dispositivo registrado con éxito para recibir notificaciones push.");
+
+    } catch (err) {
+       // console.error('Error en el proceso de suscripción push:', err);
+    }
+}
+
+// 🛠️ Función auxiliar obligatoria para traducir la llave VAPID
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+ for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+}
+    return outputArray;
+}
+
+
+
+export async function cargarSedes() {
+    try {
+        const { data: { session } } = await fisioNet.auth.getSession();
+        if (!session) return;
+
+        // 1. Obtener los IDs de las clínicas donde el usuario es colaborador activo
+        const { data: vinculos, error: errVinculos } = await fisioNet
+            .from('colaboradores_clinica')
+            .select('id_clinica')
+            .eq('id_profesional', session.user.id)
+            .eq('estado', 'ACTIVO');
+
+        if (errVinculos) console.warn("Error consultando colaboraciones:", errVinculos.message);
+
+        const idsClinicasColab = (vinculos || []).map(v => v.id_clinica);
+
+        // 2. Consultar clínicas donde es dueño O donde es colaborador
+        let query = fisioNet
+            .from('clinicas')
+            .select('id, nombre_clinica, color_institucional, id_clinica_padre, id_dueno')
+            .eq('estado', true);
+
+        if (idsClinicasColab.length > 0) {
+            query = query.or(`id_dueno.eq.${session.user.id},id.in.(${idsClinicasColab.join(',')})`);
+        } else {
+            query = query.eq('id_dueno', session.user.id);
+        }
+
+        const { data: clinicas, error } = await query.order('nombre_clinica', { ascending: true });
+
+        if (error) throw error;
+
+        sedesDisponibles = clinicas || [];
+        const select = document.getElementById('selectSedeActual');
+        if (!select) return;
+
+        select.innerHTML = '';
+
+        if (sedesDisponibles.length === 0) {
+            select.innerHTML = `<option value="">Sin sucursales registradas</option>`;
+            return;
+        }
+
+        // 3. Poblar el selector de sedes
+        sedesDisponibles.forEach(c => {
+            const option = document.createElement('option');
+            option.value = c.id;
+            option.textContent = c.nombre_clinica;
+            select.appendChild(option);
+        });
+
+        // 4. Determinar sede activa (localStorage o primera disponible)
+        let sedeGuardada = localStorage.getItem('id_clinica_activa');
+        const existeSede = sedesDisponibles.some(c => c.id === sedeGuardada);
+
+        if (!sedeGuardada || !existeSede) {
+            const sedeInic = sedesDisponibles[0];
+            sedeGuardada = sedeInic.id;
+            localStorage.setItem('id_clinica_activa', sedeInic.id);
+            localStorage.setItem('nombre_clinica', sedeInic.nombre_clinica);
+            if (sedeInic.color_institucional) {
+                localStorage.setItem('clinica_color', sedeInic.color_institucional);
+            }
+        }
+
+        select.value = sedeGuardada;
+        
+        // 5. Vincular evento para cambiar de sede al seleccionar
+        select.removeEventListener('change', manejarCambioSedeSelect);
+        select.addEventListener('change', manejarCambioSedeSelect);
+
+        // Aplicar color e interfaz
+        aplicarColorSede(sedeGuardada);
+
+    } catch (err) {
+        console.error("❌ Error al cargar sucursales:", err.message);
+        const select = document.getElementById('selectSedeActual');
+        if (select) {
+            select.innerHTML = `<option value="">Error al cargar sedes</option>`;
+        }
+    }
+}
+
+// Handler auxiliar para el selector HTML
+function manejarCambioSedeSelect(e) {
+    cambiarSedeActiva(e.target.value);
+}
+
+/**
+ * Cambia la sede activa en memoria/localStorage y recarga los componentes operativos
+ */
+export function cambiarSedeActiva(sedeId) {
+    if (!sedeId) return;
+
+    const sedeSeleccionada = sedesDisponibles.find(s => s.id === sedeId);
+    if (!sedeSeleccionada) return;
+
+    // 1. Guardar la nueva sede activa en localStorage
+    localStorage.setItem('id_clinica_activa', sedeSeleccionada.id);
+    localStorage.setItem('clinica_activa_id', sedeSeleccionada.id);
+    localStorage.setItem('fisiocid_id_clinica', sedeSeleccionada.id);
+    localStorage.setItem('nombre_clinica', sedeSeleccionada.nombre_clinica);
+
+    if (sedeSeleccionada.color_institucional) {
+        localStorage.setItem('clinica_color', sedeSeleccionada.color_institucional);
+        localStorage.setItem('fisiocid_color', sedeSeleccionada.color_institucional);
+    }
+
+    // 2. Recarga limpia para actualizar interfaz, agenda, cajas y permisos al instante
+    window.location.reload();
+}
+
+/**
+ * Aplica el color institucional dinámico
+ */
+function aplicarColorSede(sedeId) {
+    const sedeObj = sedesDisponibles.find(s => s.id === sedeId);
+    if (sedeObj && sedeObj.color_institucional) {
+        document.documentElement.style.setProperty('--primary', sedeObj.color_institucional);
+        document.documentElement.style.setProperty('--medical-blue', sedeObj.color_institucional);
+    }
+}
+
+/**
+ * Control del Modal de Nueva Sucursal
+ */
+window.abrirModalNuevaSede = function() {
+    document.getElementById('modalNuevaSede').style.display = 'flex';
+};
+
+window.cerrarModalNuevaSede = function() {
+    document.getElementById('modalNuevaSede').style.display = 'none';
+    document.getElementById('formNuevaSede').reset();
+};
+
+/**
+ * Procesa la creación de una nueva sucursal con la especialidad DINÁMICA del usuario
+ */
+document.getElementById('formNuevaSede')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btnSubmit = document.getElementById('btnGuardarSede');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Guardando...';
+
+    try {
+        const { data: { session } } = await fisioNet.auth.getSession();
+        if (!session) return;
+
+        // 1. Obtener la especialidad REAL del usuario (desde localStorage o Supabase)
+        let especialidadUsuario = localStorage.getItem('especialidadUsuario');
+
+        if (!especialidadUsuario || especialidadUsuario === 'null') {
+            const { data: perfilProf } = await fisioNet
+                .from('perfiles_profesionales')
+                .select('especialidad')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+            especialidadUsuario = perfilProf?.especialidad || 'FISIOTERAPIA';
+        }
+
+        // 2. Obtener el ID de la clínica matriz desde el perfil general
+        const { data: perfilGen } = await fisioNet
+            .from('perfiles')
+            .select('id_clinica_principal')
+            .eq('id', session.user.id)
+            .single();
+
+        const idMatriz = perfilGen?.id_clinica_principal || localStorage.getItem('id_clinica_activa');
+
+        // 3. Crear el nuevo registro en la tabla "clinicas" con datos reales
+        const nuevaSucursal = {
+            nombre_clinica: document.getElementById('sedeNombre').value.trim().toUpperCase(),
+            direccion: document.getElementById('sedeDireccion').value.trim(),
+            telefono_contacto: document.getElementById('sedeTelefono').value.trim(),
+            color_institucional: document.getElementById('sedeColor').value,
+            especialidad_principal: especialidadUsuario.toUpperCase().trim(), // 🎯 Especialidad Dinámica
+            id_dueno: session.user.id,
+            id_clinica_padre: idMatriz, // 🔗 Enlace con la clínica matriz
+            estado: true,
+            plan_actual: 'GRATUITO'
+        };
+
+        const { data: clinicaCreada, error: errClinica } = await fisioNet
+            .from('clinicas')
+            .insert([nuevaSucursal])
+            .select()
+            .single();
+
+        if (errClinica) throw errClinica;
+
+        // 4. Crear el vínculo como Administrador en "colaboradores_clinica"
+        const nuevoColaborador = {
+            id_clinica: clinicaCreada.id,
+            id_profesional: session.user.id,
+            rol_sistema: 'ADMIN_SISTEMA',
+            cargo_clinico: 'ADMINISTRADOR',
+            estado: 'ACTIVO',
+            fecha_inicio: new Date().toISOString().split('T')[0],
+            tipo_vinculo: 'INTERNO'
+        };
+
+        const { error: errColab } = await fisioNet
+            .from('colaboradores_clinica')
+            .insert([nuevoColaborador]);
+
+        if (errColab) throw errColab;
+
+      // ... (dentro de formNuevaSede, al finalizar la creación exitosa)
+
+        alert('✅ Sucursal registrada correctamente. Cambiando a la nueva sede...');
+        
+        // 1. Guardar la nueva clínica como la activa en el sistema
+        localStorage.setItem('id_clinica_activa', clinicaCreada.id);
+        localStorage.setItem('nombre_clinica', clinicaCreada.nombre_clinica);
+        if (clinicaCreada.color_institucional) {
+            localStorage.setItem('clinica_color', clinicaCreada.color_institucional);
+        }
+
+        // 2. Recargar para que todo el dashboard tome el contexto de la nueva sede
+        window.location.reload();
+
+    } catch (err) {
+        alert('❌ Error al guardar la sucursal: ' + err.message);
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = '✅ Registrar Sede';
+    }
+});
+
+function evaluarAccesoElementosUI(permitido) {
+    const btnNuevaSede = document.getElementById('btnNuevaSede');
+    const btnMiEquipo = document.getElementById('btnMiEquipo');
+    const bannerUpgrade = document.getElementById('bannerUpgradeSedes');
+
+    if (permitido) {
+        // 👑 ES DUEÑO / ADMIN: Se muestran funciones de gestión y se oculta la promoción
+        if (btnNuevaSede) btnNuevaSede.classList.remove('ocultar-rol');
+        if (btnMiEquipo) btnMiEquipo.classList.remove('ocultar-rol');
+        if (bannerUpgrade) bannerUpgrade.style.setProperty('display', 'none', 'important');
+    } else {
+        // 👤 ES INDEPENDIENTE / STAFF: Se ocultan los módulos de gestión y se activa el llamado a cambiar de plan
+        if (btnNuevaSede) btnNuevaSede.classList.add('ocultar-rol');
+        if (btnMiEquipo) btnMiEquipo.classList.add('ocultar-rol');
+        if (bannerUpgrade) bannerUpgrade.style.setProperty('display', 'flex', 'important');
+    }
+}
+
+
+// Búsqueda en tiempo real dentro del modal
+window.buscarPacienteExistente = async (criterio) => {
+    const contenedor = document.getElementById('listaResultadosBusqueda');
+    if (criterio.trim().length < 3) {
+        contenedor.innerHTML = '';
+        return;
+    }
+
+    const { data: pacientes } = await fisioNet
+        .from('pacientes_maestros')
+        .select('id, nombre, paterno, materno, telefono')
+        .or(`nombre.ilike.%${criterio}%,paterno.ilike.%${criterio}%,telefono.ilike.%${criterio}%`)
+        .limit(5);
+
+    contenedor.innerHTML = pacientes.map(p => `
+        <div onclick="vincularCitaAPaciente('${p.id}')" style="padding:8px; border-bottom:1px solid #eee; cursor:pointer; background:#f9fafb;">
+            <strong>${p.nombre} ${p.paterno || ''} ${p.materno || ''}</strong> <small>(${p.telefono || 'Sin Tel'})</small>
+        </div>
+    `).join('');
+};
+
+// Asignar id_paciente a la cita sin tocar la tabla de pacientes
+window.vincularCitaAPaciente = async (idPaciente) => {
+    const idCita = document.getElementById('limpiezaIdCita').value;
+
+    const { error } = await fisioNet
+        .from('agenda_maestra')
+        .update({ id_paciente: idPaciente })
+        .eq('id_cita', idCita);
+
+    if (error) {
+        alert("Error al vincular: " + error.message);
+    } else {
+        alert("¡Cita vinculada exitosamente con el paciente existente!");
+        document.getElementById('modalLimpieza').style.display = 'none';
+        if (typeof cargarCitas === 'function') cargarCitas(); // Recargar tabla
+    }
+};
+
+window.guardarComoNuevoPaciente = async () => {
+    const idCita = document.getElementById('limpiezaIdCita').value;
+    const nombre = document.getElementById('limpiezaNombre').value.trim();
+    const paterno = document.getElementById('limpiezaPaterno').value.trim();
+    const materno = document.getElementById('limpiezaMaterno').value.trim();
+
+    if (!nombre) {
+        alert("El nombre es obligatorio.");
+        return;
+    }
+
+    // 1. Insertar en pacientes_maestros (Genera un nuevo UUID automáticamente)
+    const { data: nuevoPaciente, error: errorPaciente } = await fisioNet
+        .from('pacientes_maestros')
+        .insert([{ nombre, paterno, materno }])
+        .select()
+        .single();
+
+    if (errorPaciente) {
+        alert("Error al crear paciente: " + errorPaciente.message);
+        return;
+    }
+
+    // 2. Vincular el nuevo id_paciente a la cita en agenda_maestra
+    const { error: errorAgenda } = await fisioNet
+        .from('agenda_maestra')
+        .update({ id_paciente: nuevoPaciente.id })
+        .eq('id_cita', idCita);
+
+    if (errorAgenda) {
+        alert("Paciente creado, pero hubo un error al vincular la cita.");
+    } else {
+        alert("¡Paciente creado y cita vinculada correctamente!");
+        document.getElementById('modalLimpieza').style.display = 'none';
+        if (typeof cargarCitas === 'function') cargarCitas();
+    }
+};
+
+// Número central de tu bot de Meta
+const NUMERO_CENTRAL_META = "5215662971816"; 
+
+function abrirModalWhatsApp() {
+    const modal = document.getElementById('whatsappModal');
+    modal.style.display = 'flex';
+ 
+    const idProf = localStorage.getItem('usuarioId') || '';
+    const nombreDoc = localStorage.getItem('nombre_completo') || 'Doctor/a';
+    
+    if (!idProf) {
+        alert('Por favor, inicia sesión correctamente para generar tu enlace de WhatsApp.');
+        return;
+    }
+ 
+    // 💡 Generamos un código corto y elegante al vuelo basado en el UUID (ej. "A82F9")
+    const tokenLimpio = btoa(idProf).replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toUpperCase();
+ 
+    // Mensaje estético, amigable y limpio para el paciente
+    const textoMensaje = `Hola, quisiera agendar una cita con ${nombreDoc}. (Ref #${tokenLimpio})`;
+ 
+    const enlaceWp = `https://wa.me/5215662971816?text=${encodeURIComponent(textoMensaje)}`;
+ 
+    document.getElementById('inputEnlaceWp').value = enlaceWp;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(enlaceWp)}`;
+    document.getElementById('qrEnlaceDoctor').src = qrUrl;
+}
+ 
+function cerrarModalWhatsApp() {
+    const modal = document.getElementById('whatsappModal');
+    modal.style.display = 'none';
+    const copiadoMsg = document.getElementById('copiadoMsg');
+    if (copiadoMsg) copiadoMsg.style.display = 'none';
+}
+ 
+window.copiarEnlaceWhatsapp = function() {
+    const inputEnlace = document.getElementById('inputEnlaceWp'); 
+    if (!inputEnlace) return;
+ 
+    navigator.clipboard.writeText(inputEnlace.value || inputEnlace.innerText)
+        .then(() => {
+            alert('¡Enlace copiado al portapapeles!');
+        })
+        .catch(err => {
+            console.error('Error al copiar: ', err);
+        });
+};
+
+window.buscarColegasFisioCid = buscarColegasFisioCid;
+window.verDetalleColega = verDetalleColega;
+window.enviarSolicitudColaboracion = enviarSolicitudColaboracion;
+window.abrirModalWhatsApp = abrirModalWhatsApp;
+window.cerrarModalWhatsApp = cerrarModalWhatsApp;
+window.abrirModalNuevaSede = abrirModalNuevaSede;
+window.cerrarModalNuevaSede = cerrarModalNuevaSede;
+window.lanzarLaboratorioGeneral = lanzarLaboratorioGeneral;
+window.abrirConfiguracionAlianza = abrirConfiguracionAlianza;
+window.guardarCambiosAlianza = guardarCambiosAlianza;
+window.abrirBuscadorExpressPacientes = abrirBuscadorExpressPacientes;
+window.cerrarBuscadorExpress = cerrarBuscadorExpress;
+window.atenderSolicitudDesdeDashboard = atenderSolicitudDesdeDashboard;
+window.abrirFiltroLimpieza = abrirFiltroLimpieza;
+window.cerrarModalColega = cerrarModalColega;
