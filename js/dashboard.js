@@ -2406,8 +2406,9 @@ async function inicializarFormularioConvenio() {
 }
 
 window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
+ 
   if (!idSolicitud || idSolicitud === 'undefined') return;
-
+ 
   // Obtener datos del paciente para la notificación
     let telefonoPaciente = '';
     let nombrePaciente = '';
@@ -2471,27 +2472,22 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
         contenedor.innerHTML = `<div style="text-align:center; width:100%; color:#3b82f6; font-size: 0.75rem; font-weight: bold;"><i class="fas fa-spinner fa-spin"></i> Buscando horarios...</div>`;
  
         try {
-            // 🟢 Corrección exacta basada en tus columnas: id_profesional, id_clinica y estado
-            const [ocupadasRes, colabRes] = await Promise.all([
+            const [ocupadasRes, perfilRes] = await Promise.all([
                 fisioNet.from('agenda_maestra').select('hora_inicio_cita').eq('fecha', fechaElegida).eq('id_clinica', clinicaId).eq('estado', 'ACTIVO'),
-                fisioNet.from('colaboradores_clinica')
-                    .select('horario_atencion, intervalo_cita')
-                    .eq('id_profesional', user.id)
-                    .eq('id_clinica', clinicaId)
-                    .eq('estado', 'ACTIVO')
-                    .single()
+                // 🟢 CAMBIADO: Ahora consulta 'colaboradores_clinica' filtrando por id_profesional e id_clinica
+                fisioNet.from('colaboradores_clinica').select('horario_atencion, intervalo_cita').eq('id_profesional', user.id).eq('id_clinica', clinicaId).single()
             ]);
  
             const ocupadas = ocupadasRes.data;
-            const colab = colabRes.data;
+            const perfil = perfilRes.data;
  
-            if (!colab?.horario_atencion) {
-                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">No hay un horario configurado para ti en esta clínica o el registro no está activo.</p>`;
+            if (!perfil?.horario_atencion) {
+                contenedor.innerHTML = `<p style="color:#ef4444; text-align:center; width:100%; font-size: 0.75rem;">Configura tus horarios en tu perfil o configuración de colaborador primero.</p>`;
                 return;
             }
  
-            const config = JSON.parse(colab.horario_atencion);
-            const intervalo = parseInt(colab.intervalo_cita) || 30;
+            const config = JSON.parse(perfil.horario_atencion);
+            const intervalo = parseInt(perfil.intervalo_cita) || 30;
             const diaNum = new Date(fechaElegida + "T12:00:00").getDay();
             const bloquesHoy = config.filter(h => Number(h.dia) === diaNum);
  
@@ -2527,6 +2523,7 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                 btnHora.onclick = async () => { 
                     modalReagendar.remove();
                     try {
+                        // 0. Cancelar cualquier otra solicitud duplicada o vieja de este paciente
                         if (telefonoPaciente && idProfSolicitado) {
                             await fisioNet.from('solicitudes_citas')
                                 .update({ estado: 'CANCELADO' })
@@ -2536,8 +2533,10 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                                 .neq('id', idSolicitud);
                         }
  
+                        // 🕒 Asegurar formato 24 horas
                         const horaFormateada24 = typeof convertirA24Hrs === 'function' ? convertirA24Hrs(hora) : `${hora}:00`;
  
+                        // 1. Actualizar la solicitud actual con la nueva fecha y hora en formato 24h
                         const { error } = await fisioNet.from('solicitudes_citas')
                             .update({ 
                                 fecha_cita: fechaElegida,
@@ -2548,6 +2547,7 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
  
                         if (error) throw error;
  
+                        // 2. Cambiar la sesión del bot a ESPERANDO_CONFIRMACION_CAMBIO
                         if (telefonoPaciente) {
                             await fisioNet.from('sesiones_whatsapp_bot').upsert({
                                 telefono_paciente: telefonoPaciente,
@@ -2557,6 +2557,7 @@ window.proponerNuevoHorarioPrompt = async (idSolicitud) => {
                                 dato_temporal: hora
                             }, { onConflict: 'telefono_paciente' });
  
+                            // 3. ENVIAR EL MENSAJE AUTOMÁTICO AL PACIENTE VÍA WHATSAPP
                             const mensajeTexto = `Hola *${nombrePaciente}*, te hemos propuesto un nuevo horario para tu cita: 📅 *${fechaElegida}* a las ⏰ *${hora}*. ¿Te parece bien este horario? Responde 'Sí' para confirmar.`;
  
                             const { error: fnError } = await fisioNet.functions.invoke('send-whatsapp', {
