@@ -3187,25 +3187,22 @@ async function buscarColegasFisioCid() {
             return;
         }
 
-        grid.innerHTML = ''; 
+     grid.innerHTML = ''; 
 
         colegas.forEach(c => {
             const fotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo)}&background=random`;
             
             const card = document.createElement('div');
-            card.className = 'card-colega p-3 bg-white border rounded-3 shadow-sm mb-2';
+            card.className = 'col-md-6 col-lg-4 mb-3';
             card.innerHTML = `
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center gap-3">
-                        <img src="${fotoUrl}" class="rounded-circle" width="45" height="45" alt="Avatar">
-                        <div>
-                            <h6 class="mb-0 fw-bold text-dark">${c.nombre_completo.toUpperCase()}</h6>
-                            <small class="text-muted"><i class="fas fa-user-md me-1"></i>${c.especialidad || 'ESPECIALISTA'}</small>
+                <div class="card h-100 shadow-sm border-0 p-3" style="cursor: pointer; background: #ffffff; border-radius: 12px;" onclick="verDetalleColega('${c.id}')">
+                    <div class="d-flex align-items-center">
+                        <img src="${fotoUrl}" class="rounded-circle me-3" width="50" height="50" style="object-fit: cover;" alt="Avatar">
+                        <div style="overflow: hidden;">
+                            <h6 class="mb-1 fw-bold text-dark text-truncate" style="font-size: 0.95rem;">${c.nombre_completo.toUpperCase()}</h6>
+                            <small class="text-muted d-block text-truncate"><i class="fas fa-user-md me-1"></i>${c.especialidad || 'ESPECIALISTA'}</small>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="enviarSolicitudColaboracion('${c.id}')">
-                        <i class="fas fa-user-plus me-1"></i> Invitar
-                    </button>
                 </div>
             `;
             grid.appendChild(card);
@@ -3217,63 +3214,7 @@ async function buscarColegasFisioCid() {
     }
 }
 
-async function verDetalleColega(idColega) {
-    const modal = document.getElementById('modalPerfilColega');
-    
-    try {
-        const { data: { user } } = await fisioNet.auth.getUser();
 
-        const { data: perfiles, error } = await fisioNet
-            .from('perfiles_profesionales')
-            .select(`
-                nombre_completo, 
-                cedula_profesional, 
-                cedulas_adicionales, 
-                especialidad, 
-                institucion_egreso, 
-                telefono_contacto, 
-                correo_institucional, 
-                direccion_consultorio, 
-                costo_consulta_base
-            `)
-            .eq('id', idColega);
-
-        if (error) throw error;
-
-        if (perfiles && perfiles.length > 0) {
-            const c = perfiles[0];
-            
-            document.getElementById('modalColegaNombre').innerText = c.nombre_completo || 'Sin Nombre';
-            document.getElementById('modalColegaEspecialidad').innerText = c.especialidad || 'MÉDICO';
-            document.getElementById('modalColegaInstitucion').innerText = c.institucion_egreso || 'No especificada';
-            document.getElementById('modalColegaCedula').innerText = (c.cedula_profesional || 'Sin registro') + (c.cedulas_adicionales ? ` | ${c.cedulas_adicionales}` : '');
-
-            const txtClinica = document.getElementById('modalColegaClinica');
-            if (txtClinica) txtClinica.innerText = c.direccion_consultorio || 'Consultorio Privado';
-            
-            const txtCosto = document.getElementById('modalColegaCosto');
-            if (txtCosto) txtCosto.innerText = c.costo_consulta_base ? `$${c.costo_consulta_base} MXN` : 'A convenir';
-
-            gestionarEnlaceContacto('modalColegaEmail', c.correo_institucional, 'mailto:');
-            gestionarEnlaceContacto('modalColegaTelefono', c.telefono_contacto, 'tel:');
-
-            const btnEnlazar = document.getElementById('btnEnlazarModal');
-            if (btnEnlazar) {
-                // 🚫 Si estoy viendo MI PROPIO perfil, ocultar o desactivar el botón
-                if (user && user.id === idColega) {
-                    btnEnlazar.style.display = 'none';
-                } else {
-                    btnEnlazar.style.display = 'block';
-                    btnEnlazar.onclick = () => enviarSolicitudColaboracion(idColega);
-                }
-            }
-
-            modal.style.display = 'flex';
-        }
-    } catch (err) {
-        console.error("❌ Error de vinculación con Supabase:", err);
-    }
-}
 
 function gestionarEnlaceContacto(idElemento, valor, prefijo) {
     const el = document.getElementById(idElemento);
@@ -3288,8 +3229,78 @@ function gestionarEnlaceContacto(idElemento, valor, prefijo) {
     }
 }
 
+async function verDetalleColega(idColega) {
+    const modal = document.getElementById('modalPerfilColega');
+    
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+
+        // 🔍 Quitamos 'logo_url' de la consulta porque no existe en la tabla de Supabase
+        const { data: perfiles, error } = await fisioNet
+            .from('perfiles_profesionales')
+            .select(`
+                nombre_completo, 
+                cedula_profesional, 
+                especialidad, 
+                institucion_egreso, 
+                telefono_contacto, 
+                correo_institucional, 
+                direccion_consultorio, 
+                costo_consulta_base
+            `)
+            .eq('id', idColega);
+
+        if (error) throw error;
+
+        if (perfiles && perfiles.length > 0) {
+            const c = perfiles[0];
+            
+            // Textos principales
+            document.getElementById('modalColegaNombre').innerText = c.nombre_completo || 'Sin Nombre';
+            document.getElementById('modalColegaEspecialidad').innerText = c.especialidad || 'MEDICO';
+            document.getElementById('modalColegaInstitucion').innerText = c.institucion_egreso || 'No especificada';
+            document.getElementById('modalColegaCedula').innerText = c.cedula_profesional || 'Sin registro';
+
+            // Generamos la foto/avatar automático por iniciales de forma segura
+            const fotoModal = document.getElementById('modalColegaFoto');
+            if (fotoModal) {
+                fotoModal.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre_completo || 'Doctor')}&background=random`;
+            }
+
+            const txtClinica = document.getElementById('modalColegaClinica');
+            if (txtClinica) txtClinica.innerText = c.direccion_consultorio || 'Consultorio Privado';
+            
+            const txtCosto = document.getElementById('modalColegaCosto');
+            if (txtCosto) txtCosto.innerText = c.costo_consulta_base ? `$${c.costo_consulta_base} MXN` : 'A convenir';
+
+            gestionarEnlaceContacto('modalColegaEmail', c.correo_institucional, 'mailto:');
+            gestionarEnlaceContacto('modalColegaTelefono', c.telefono_contacto, 'tel:');
+
+            // GESTIÓN DEL BOTÓN DE ENLACE EN EL MODAL
+            const btnEnlazar = document.getElementById('btnEnlazarModal');
+            if (btnEnlazar) {
+                if (user && user.id === idColega) {
+                    btnEnlazar.style.display = 'none';
+                } else {
+                    btnEnlazar.style.display = 'flex';
+                    btnEnlazar.innerHTML = '🤝 ENVIAR SOLICITUD DE ENLACE';
+                    btnEnlazar.onclick = () => enviarSolicitudColaboracion(idColega);
+                }
+            }
+
+            if (modal) modal.style.display = 'flex';
+        }
+    } catch (err) {
+        console.error("❌ Error al cargar detalle del colega:", err);
+    }
+}
+
+// Función para cerrar el modal limpiamente
 function cerrarModalColega() {
-    document.getElementById('modalPerfilColega').style.display = 'none';
+    const modal = document.getElementById('modalPerfilColega');
+    if (modal) {
+        modal.style.display = 'none';
+    }
 }
 
 
@@ -4802,16 +4813,18 @@ window.copiarEnlaceWhatsapp = function() {
         });
 };
 
+window.buscarColegasFisioCid = buscarColegasFisioCid;
+window.verDetalleColega = verDetalleColega;
+window.enviarSolicitudColaboracion = enviarSolicitudColaboracion;
 window.abrirModalWhatsApp = abrirModalWhatsApp;
 window.cerrarModalWhatsApp = cerrarModalWhatsApp;
 window.abrirModalNuevaSede = abrirModalNuevaSede;
 window.cerrarModalNuevaSede = cerrarModalNuevaSede;
 window.lanzarLaboratorioGeneral = lanzarLaboratorioGeneral;
-window.buscarColegasFisioCid = buscarColegasFisioCid;
-window.verDetalleColega = verDetalleColega;
 window.abrirConfiguracionAlianza = abrirConfiguracionAlianza;
 window.guardarCambiosAlianza = guardarCambiosAlianza;
 window.abrirBuscadorExpressPacientes = abrirBuscadorExpressPacientes;
 window.cerrarBuscadorExpress = cerrarBuscadorExpress;
 window.atenderSolicitudDesdeDashboard = atenderSolicitudDesdeDashboard;
 window.abrirFiltroLimpieza = abrirFiltroLimpieza;
+window.cerrarModalColega = cerrarModalColega;
