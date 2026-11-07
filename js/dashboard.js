@@ -366,14 +366,14 @@ async function aplicarIdentidadVisual() {
     if (clinicaId && (!colorClinica || colorClinica === 'null' || !logoClinica)) {
         const { data: clinica } = await fisioNet
             .from('clinicas')
-            .select('color_institucional, nombre_clinica, logo_url')
+            .select('color_institucional, nombre_clinica')
             .eq('id', clinicaId)
             .maybeSingle();
 
         if (clinica) {
             colorClinica = clinica.color_institucional;
             nombreClinica = clinica.nombre_clinica;
-            logoClinica = clinica.logo_url;
+           
 
             localStorage.setItem('clinica_color', colorClinica);
             localStorage.setItem('nombre_clinica', nombreClinica);
@@ -3267,7 +3267,7 @@ async function verDetalleColega(idColega) {
     try {
         const { data: { user } } = await fisioNet.auth.getUser();
 
-        // 🔍 Quitamos 'logo_url' de la consulta porque no existe en la tabla de Supabase
+     
         const { data: perfiles, error } = await fisioNet
             .from('perfiles_profesionales')
             .select(`
