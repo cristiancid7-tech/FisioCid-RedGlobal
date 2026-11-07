@@ -1214,76 +1214,110 @@ function siguienteTabSOAP(idTab) {
 
 
 
+<!-- Modal OTP Multicanal y Solicitud de Historia Clínica -->
 <div class="modal fade" id="modalSolicitudAcceso" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
-            
-            <div class="modal-header text-white" style="background: #0f172a; padding: 20px;">
-                <h5 class="modal-title d-flex align-items-center gap-2" style="font-weight: 800; font-size: 1.1rem;">
-                    <i class="fas fa-user-shield text-info"></i> AUTORIZACIÓN DE ACCESO
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
+  <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+          
+          <!-- Encabezado del Modal -->
+          <div class="modal-header text-white" style="background: #0f172a; padding: 20px;">
+              <h5 class="modal-title d-flex align-items-center gap-2" style="font-weight: 800; font-size: 1.1rem;">
+                  <i class="fas fa-user-shield text-info"></i> AUTORIZACIÓN DE ACCESO EN VIVO
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
 
-            <div class="modal-body" style="padding: 25px; background: #f8fafc;">
-                
-                <div class="text-center mb-4">
-                    <p class="text-muted small mb-3">El paciente debe ingresar el código de 6 dígitos que recibió en su dispositivo para autorizar la sesión.</p>
-                    <input type="text" id="otp-seguridad" class="form-control text-center mb-2" 
-                           placeholder="0 0 0 0 0 0" 
-                           style="font-size: 2rem; font-family: monospace; font-weight: 900; letter-spacing: 8px; border-radius: 12px; border: 2px solid #e2e8f0; color: #0f172a;">
-                </div>
+          <!-- Cuerpo del Modal -->
+          <div class="modal-body" style="padding: 25px; background: #f8fafc;">
+              
+              <!-- 1. Selector de Canal -->
+              <div class="mb-3">
+                  <label class="form-label fw-bold text-dark" style="font-size: 0.8rem;">Canal de Envío:</label>
+                  <select id="selectCanalOTP" class="form-select form-select-sm" onchange="cambiarCanalOTP()">
+                      <option value="CORREO_EN_VIVO">✉️ Correo Electrónico (Vía Resend en vivo)</option>
+                      <option value="SMS_EN_VIVO" selected>📱 Mensaje de Texto SMS (Frente al doctor)</option>
+                      <option value="FISIOCID_APP">🔔 Notificación Push / App FisioCid</option>
+                  </select>
+              </div>
 
-                <hr class="my-4" style="border-style: dashed;">
+              <!-- 2. Input dinámico para capturar el contacto -->
+              <div class="mb-3" id="divInputContactoDinamico">
+                  <label id="lblLabelContacto" class="form-label fw-bold text-dark" style="font-size: 0.8rem;">Celular a 10 dígitos (SMS en vivo):</label>
+                  <input type="text" id="inputContactoDinamico" class="form-control form-control-sm" placeholder="2383885291">
+              </div>
 
-                <h6 class="text-secondary fw-bold mb-3" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">
-                    ¿Qué información desea compartir hoy?
-                </h6>
+              <!-- 3. Botón para disparar y enviar el código -->
+              <div class="d-grid mb-3">
+                  <button type="button" class="btn btn-outline-primary btn-sm fw-bold py-2" onclick="dispararOTPEnVivo()">
+                      <i class="fas fa-paper-plane me-1"></i> Enviar Código de 6 Dígitos
+                  </button>
+              </div>
 
-                <div class="list-group shadow-sm" style="border-radius: 12px; overflow: hidden;">
-                    <label class="list-group-item d-flex justify-content-between align-items-center py-3">
-                        <div class="d-flex align-items-center gap-3">
-                            <i class="fas fa-file-medical text-primary"></i>
-                            <div>
-                                <div class="fw-bold small">Historial Maestro (Trauma/Fisio)</div>
-                                <div class="text-muted" style="font-size: 0.65rem;">Antecedentes, cirugías y patologías.</div>
-                            </div>
-                        </div>
-                        <input class="form-check-input me-1" type="checkbox" value="historial" id="check-historial" checked>
-                    </label>
+              <hr class="my-3" style="border-style: dashed;">
 
-                    <label class="list-group-item d-flex justify-content-between align-items-center py-3">
-                        <div class="d-flex align-items-center gap-3">
-                            <i class="fas fa-x-ray text-warning"></i>
-                            <div>
-                                <div class="fw-bold small">Estudios de Imagen (Radiografías/RM)</div>
-                                <div class="text-muted" style="font-size: 0.65rem;">Visualización de archivos multimedia.</div>
-                            </div>
-                        </div>
-                        <input class="form-check-input me-1" type="checkbox" value="imagenes" id="check-imagenes">
-                    </label>
+              <!-- 4. Ingreso del código dictado -->
+              <div class="text-center mb-4">
+                  <p class="text-muted small mb-2">Ingresa el código de 6 dígitos dictado por el paciente:</p>
+                  <input type="text" id="otp-seguridad" class="form-control text-center mb-1" 
+                         placeholder="000000" 
+                         maxlength="6"
+                         style="font-size: 1.8rem; font-family: monospace; font-weight: 900; letter-spacing: 8px; border-radius: 12px; border: 2px solid #e2e8f0; color: #0f172a;">
+              </div>
 
-                    <label class="list-group-item d-flex justify-content-between align-items-center py-3">
-                        <div class="d-flex align-items-center gap-3">
-                            <i class="fas fa-vial text-danger"></i>
-                            <div>
-                                <div class="fw-bold small">Estudios de Laboratorio</div>
-                                <div class="text-muted" style="font-size: 0.65rem;">Resultados de química sanguínea, etc.</div>
-                            </div>
-                        </div>
-                        <input class="form-check-input me-1" type="checkbox" value="laboratorio" id="check-laboratorio">
-                    </label>
-                </div>
-            </div>
+              <hr class="my-3" style="border-style: dashed;">
 
-            <div class="modal-footer border-0" style="background: #f1f5f9; padding: 15px 25px;">
-                <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal" style="font-size: 0.75rem;">CANCELAR</button>
-                <button type="button" id="btnValidarAcceso" class="btn btn-primary fw-bold px-4" style="font-size: 0.75rem; border-radius: 8px;">
-                    VALIDAR Y VER HISTORIAL
-                </button>
-            </div>
-        </div>
-    </div>
+              <!-- 5. Permisos / Información a compartir -->
+              <h6 class="text-secondary fw-bold mb-3" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">
+                  ¿Qué información desea compartir hoy?
+              </h6>
+
+              <div class="list-group shadow-sm" style="border-radius: 12px; overflow: hidden;">
+                  <label class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                      <div class="d-flex align-items-center gap-3">
+                          <i class="fas fa-file-medical text-primary"></i>
+                          <div>
+                              <div class="fw-bold small">Historial Maestro (Trauma/Fisio)</div>
+                              <div class="text-muted" style="font-size: 0.65rem;">Antecedentes, cirugías y patologías.</div>
+                          </div>
+                      </div>
+                      <input class="form-check-input me-1" type="checkbox" value="historial" id="check-historial" checked>
+                  </label>
+
+                  <label class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                      <div class="d-flex align-items-center gap-3">
+                          <i class="fas fa-x-ray text-warning"></i>
+                          <div>
+                              <div class="fw-bold small">Estudios de Imagen (Radiografías/RM)</div>
+                              <div class="text-muted" style="font-size: 0.65rem;">Visualización de archivos multimedia.</div>
+                          </div>
+                      </div>
+                      <input class="form-check-input me-1" type="checkbox" value="imagenes" id="check-imagenes">
+                  </label>
+
+                  <label class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                      <div class="d-flex align-items-center gap-3">
+                          <i class="fas fa-vial text-danger"></i>
+                          <div>
+                              <div class="fw-bold small">Estudios de Laboratorio</div>
+                              <div class="text-muted" style="font-size: 0.65rem;">Resultados de química sanguínea, etc.</div>
+                          </div>
+                      </div>
+                      <input class="form-check-input me-1" type="checkbox" value="laboratorio" id="check-laboratorio">
+                  </label>
+              </div>
+
+          </div>
+
+          <!-- Pie del Modal -->
+          <div class="modal-footer border-0" style="background: #f1f5f9; padding: 15px 25px;">
+              <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal" style="font-size: 0.75rem;">CANCELAR</button>
+              <button type="button" id="btnValidarAcceso" class="btn btn-primary fw-bold px-4" style="font-size: 0.75rem; border-radius: 8px;">
+                  VALIDAR Y VER HISTORIAL
+              </button>
+          </div>
+
+      </div>
+  </div>
 </div>
 
 <!-- MODAL PARA VINCULAR ESTUDIO DIRECTAMENTE AL PACIENTE Y MÉDICO -->

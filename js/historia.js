@@ -1,3 +1,6 @@
+// Variable global para rastrear la solicitud activa
+let solicitudOTPActivaId = null;
+let tokenSeguridadActivo = null;
 // ============================================================================
 // 🔒 A) LIMPIEZA DE PERMISOS OTP E INICIALIZACIÓN UNIFICADA
 // ============================================================================
@@ -690,7 +693,7 @@ function inicializarEscuchaMotivo() {
 // 🕵️ MOTOR OTP CON MEMORIA DE SESIÓN (SESIÓN AUTORIZADA)
 // ============================================================================
 
-let solicitudOTPActivaId = null;
+
 
 // Función para comprobar si la sesión actual del paciente ya fue autorizada
 function sesionEstaAutorizada(pacienteId) {
@@ -698,11 +701,17 @@ function sesionEstaAutorizada(pacienteId) {
     return sessionStorage.getItem(claveSesion) === 'true';
 }
 
-// A) BOTÓN SOLICITAR / VER HISTORIA (INTELIGENTE)
+// ==========================================
+// 🔑 GESTIÓN DE ACCESO A HISTORIAL CON OTP MULTicanal
+// ==========================================
+
+
+
+// A) BOTÓN SOLICITAR / VER HISTORIA (ABRE MODAL DE SELECCIÓN DE CANAL)
 document.getElementById('btnSolicitarHistoria')?.addEventListener('click', async (e) => {
     e.preventDefault();
     const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
-    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+    const pacienteData = window.pacienteCargado;
 
     if (!idPacienteLimpio) {
         alert("⚠️ Por favor selecciona un paciente válido.");
@@ -710,62 +719,123 @@ document.getElementById('btnSolicitarHistoria')?.addEventListener('click', async
     }
 
     // 🔓 SI YA FUE AUTORIZADO EN ESTA SESIÓN, ABRIR VISOR DIRECTAMENTE
-    if (sesionEstaAutorizada(idPacienteLimpio)) {
-        //console.log("🔓 [SESIÓN REUTILIZADA]: Paciente ya autorizado previamente. Abriendo visor sin OTP...");
+    if (typeof sesionEstaAutorizada === 'function' && sesionEstaAutorizada(idPacienteLimpio)) {
         await cargarYMostrarVisorExpediente(idPacienteLimpio);
         return;
     }
 
-    // 🔒 SI NO HA SIDO AUTORIZADO, GENERAR OTP Y MOSTRAR MODAL
-    const btnSolicitar = document.getElementById('btnSolicitarHistoria');
+    // Prellenar datos de contacto en el modal si existen
+    const inputContacto = document.getElementById('inputContactoDinamico');
+    if (inputContacto && pacienteData) {
+        inputContacto.value = pacienteData.telefono || pacienteData.correo_electronico || "";
+    }
 
-    try {
-        btnSolicitar.disabled = true;
-        btnSolicitar.innerText = "⌛ TRANSMITIENDO...";
-
-        const { data: { user } } = await fisioNet.auth.getUser();
-        const nombreDoc = document.getElementById('doc-nombre')?.innerText?.trim() || "DR. CRISTIAN MIGUEL CID ESPÍNDOLA";
-        const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-        //console.log("🔑 Generando nuevo OTP ->", codigoOTP);
-
-        const { data, error } = await fisioNet
-            .from('solicitudes_acceso_otp')
-            .insert([{
-                id_paciente: idPacienteLimpio,
-                id_profesional: user ? user.id : null,
-                nombre_profesional: nombreDoc,
-                codigo_otp: codigoOTP,
-                estado_solicitud: 'PENDIENTE',
-                permisos_concedidos: { notas: true, estudios: true, laboratorio: true },
-                id_clinica: idClinicaActiva || null,
-                expira_en: expiraEn
-            }])
-            .select();
-
-        if (error) throw error;
-
-        solicitudOTPActivaId = data[0].id;
-
-        const campoInput = document.getElementById('otp-seguridad');
-        if (campoInput) campoInput.value = "";
-
-        const modalEl = document.getElementById('modalSolicitudAcceso');
-        if (modalEl) {
-            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modalInstance.show();
-        }
-
-    } catch (err) {
-        console.error("💥 Error al solicitar acceso:", err.message);
-        alert("Error al solicitar acceso: " + err.message);
-    } finally {
-        btnSolicitar.disabled = false;
-        btnSolicitar.innerHTML = '📝🔍 SOLICITAR HISTORIA';
+    // 🔒 MOSTRAR MODAL DE SELECCIÓN DE CANAL Y VALIDACIÓN OTP
+    const modalEl = document.getElementById('modalSolicitudAcceso');
+    if (modalEl) {
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+    } else {
+        alert("⚠️ No se encontró el elemento 'modalSolicitudAcceso' en el DOM.");
     }
 });
 
+// 🔄 Cambiar dinámicamente el placeholder y etiqueta según el canal elegido
+function cambiarCanalOTP() {
+    const selectCanal = document.getElementById('selectCanalOTP');
+    const inputContacto = document.getElementById('inputContactoDinamico');
+    const labelContacto = document.getElementById('lblLabelContacto');
+    const pacienteData = window.pacienteCargado;
+
+    if (!selectCanal || !inputContacto || !labelContacto) return;
+
+    const canal = selectCanal.value;
+
+    if (canal === 'CORREO_EN_VIVO') {
+        labelContacto.innerText = "Correo Electrónico del Paciente:";
+        inputContacto.type = "email";
+        inputContacto.value = pacienteData?.correo_electronico || "";
+        inputContacto.placeholder = "correo@dominio.com";
+    } else if (canal === 'SMS_EN_VIVO') {
+        labelContacto.innerText = "Celular a 10 dígitos (SMS en vivo):";
+        inputContacto.type = "tel";
+        inputContacto.value = pacienteData?.telefono || "";
+        inputContacto.placeholder = "2383885291";
+    } else if (canal === 'FISIOCID_APP') {
+        labelContacto.innerText = "ID o Usuario en Red FisioCid:";
+        inputContacto.type = "text";
+        inputContacto.value = pacienteData?.nombre || "";
+        inputContacto.placeholder = "Usuario vinculado";
+    }
+}
+
+// 🚀 Disparar la generación y envío del OTP en tiempo real seleccionando el canal
+async function dispararOTPEnVivo() {
+    const canalElegido = document.getElementById('selectCanalOTP')?.value || 'SMS_EN_VIVO';
+    const contactoDestino = document.getElementById('inputContactoDinamico')?.value?.trim();
+    const pacienteData = window.pacienteCargado;
+    const idPacienteLimpio = idPaciente || pacienteData?.id;
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+    if (!contactoDestino) {
+        alert("⚠️ Por favor ingresa un contacto válido (correo o teléfono) para enviar el código.");
+        return;
+    }
+
+    if (!idPacienteLimpio) {
+        alert("⚠️ Error: No hay un paciente activo.");
+        return;
+    }
+
+    try {
+        const { data: { user } } = await fisioNet.auth.getUser();
+        const nombreDoc = document.getElementById('doc-nombre')?.innerText?.trim() || "DR. CRISTIAN MIGUEL CID ESPÍNDOLA";
+        
+        // Generar código de 6 dígitos aleatorio y tiempo de expiración (15 min)
+        const codigoOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiraEn = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+        // Determinar si es menor de edad para mandar al tutor
+        const idDestinatarioOTP = (pacienteData?.es_menor_edad && pacienteData?.id_tutor) 
+            ? pacienteData.id_tutor 
+            : idPacienteLimpio;
+
+        // 1. Guardar la solicitud en la tabla de auditoría con su canal y contacto
+        const { data, error: errOTP } = await fisioNet
+            .from('solicitudes_acceso_otp')
+            .insert([{
+                id_paciente: idDestinatarioOTP,
+                id_profesional: user ? user.id : null,
+                nombre_profesional: nombreDoc,
+                codigo_otp: codigoOTP,
+                canal_envio: canalElegido,
+                contacto_destino: contactoDestino,
+                permisos_concedidos: { notas: true, estudios: true, laboratorio: true, paciente_afectado_id: idPacienteLimpio },
+                estado_solicitud: 'PENDIENTE',
+                expira_en: expiraEn,
+                id_clinica: idClinicaActiva || null
+            }])
+            .select();
+
+        if (errOTP) throw errOTP;
+
+        solicitudOTPActivaId = data[0].id;
+        tokenSeguridadActivo = codigoOTP;
+
+        // 2. Si el canal es correo en vivo, disparamos la Edge Function con Resend
+        if (canalElegido === 'CORREO_EN_VIVO') {
+            await fisioNet.functions.invoke('enviar-otp-dinamico', {
+                body: { email: contactoDestino, codigo: codigoOTP, nombre: pacienteData?.nombre || 'Paciente' }
+            });
+        }
+
+        alert(`✅ ¡Código generado con éxito!\n\nSe ha enviado el token de 6 dígitos vía ${canalElegido} a: ${contactoDestino}.\nPídalo al paciente para ingresarlo abajo.`);
+
+    } catch (err) {
+        console.error("💥 Error al disparar OTP en vivo:", err);
+        alert("Error al enviar el código: " + err.message);
+    }
+}
 
 // B) VALIDAR Y REGISTRAR AUTORIZACIÓN EN SESIÓN
 document.addEventListener('click', async (e) => {
@@ -781,7 +851,7 @@ document.addEventListener('click', async (e) => {
     }
 
     if (!solicitudOTPActivaId) {
-        alert("⚠️ No hay una solicitud activa pendiente.");
+        alert("⚠️ No hay una solicitud activa pendiente. Genere un código primero.");
         return;
     }
 
@@ -797,24 +867,25 @@ document.addEventListener('click', async (e) => {
 
         if (errSelect) throw errSelect;
 
-        if (solicitud.codigo_otp === otpIngresado) {
+        // Validar contra la base de datos o el token activo en memoria
+        if (solicitud && (String(solicitud.codigo_otp) === String(otpIngresado) || String(tokenSeguridadActivo) === String(otpIngresado))) {
             const idPacienteLimpio = idPaciente || window.pacienteCargado?.id;
 
             // 1. Marcar estado APROBADO en DB
             await fisioNet
                 .from('solicitudes_acceso_otp')
-                .update({ 
+                .update({
                     estado_solicitud: 'APROBADO', 
                     fecha_autorizacion: new Date().toISOString() 
                 })
                 .eq('id', solicitudOTPActivaId);
 
-            // 2. 🔑 GUARDAR PERMISO DE SESIÓN LOCAL (Dura mientras el navegador/pestaña siga abierta)
+            // 2. 🔑 GUARDAR PERMISO DE SESIÓN LOCAL
             if (idPacienteLimpio) {
                 sessionStorage.setItem(`otp_aprobado_paciente_${idPacienteLimpio}`, 'true');
             }
 
-            // 3. Cambiar visualmente el botón a estado "Desbloqueado"
+            // 3. Cambiar visualmente el botón principal a estado "Autorizado"
             const btnSolicitar = document.getElementById('btnSolicitarHistoria');
             if (btnSolicitar) {
                 btnSolicitar.style.background = "#dcfce7";
@@ -830,15 +901,7 @@ document.addEventListener('click', async (e) => {
                 modalSolInstance.hide();
             }
 
-            // 5. Desbloquear botón de Asistente
-          //  const btnAsistente = document.getElementById('btn-asistente-exploracion');
-          //  if (btnAsistente) {
-           //     btnAsistente.disabled = false;
-           //     btnAsistente.style.opacity = "1";
-           //     btnAsistente.style.cursor = "pointer";
-           // }
-
-            // 6. Desplegar el Visor
+            // 5. Desplegar el Visor de Expediente
             await cargarYMostrarVisorExpediente(idPacienteLimpio);
 
         } else {
@@ -854,9 +917,8 @@ document.addEventListener('click', async (e) => {
     }
 });
 
-
 // ============================================================================
-// 📑 CARGAR Y MOSTRAR CONTENIDO DEL EXPEDIENTE DENTRO DEL MODAL (VERSIÓN PREMIUM)
+// 📑 CARGAR Y MOSTRAR CONTENIDO DEL EXPEDIENTE DENTRO DEL MODAL (CORREGIDO)
 // ============================================================================
 async function cargarYMostrarVisorExpediente(pacienteId) {
     const contenedorNotas = document.getElementById('listaNotasHistorial');
@@ -874,7 +936,6 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
     if (contenedorImagen) contenedorImagen.innerHTML = loaderHTML;
     if (contenedorLab) contenedorLab.innerHTML = loaderHTML;
 
-    // 1. Mostrar modal inmediatamente
     const modalVisorEl = document.getElementById('modalVisorExpediente');
     const modalInstance = bootstrap.Modal.getOrCreateInstance(modalVisorEl);
     modalInstance.show();
@@ -896,6 +957,8 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
                         day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                     });
 
+                    // Limpieza estricta de textos para evitar errores de sintaxis en HTML
+                 const exploracionLimpia = (n.exploracion_fisica || 'Sin registro').replace(/[\r\n]+/g, ' ').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     return `
                         <div class="card border-0 shadow-sm p-3 mb-1" style="border-left: 5px solid #3b82f6 !important; border-radius: 12px; background: white;">
                             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
@@ -915,7 +978,7 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
 
                             <div class="d-flex justify-content-end">
                                 <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3" 
-                                        onclick="inyectardatoEnConsulta('exploracion', 'HISTORIAL PREVIO (${fechaFmt}): ${n.exploracion_fisica || ''}')">
+                                    onclick="inyectardatoEnConsulta('exploracion', 'HISTORIAL PREVIO (${fechaFmt}): ${exploracionLimpia}')">
                                     ➕ Inyectar Exploración a Consulta
                                 </button>
                             </div>
@@ -927,13 +990,12 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
                     <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
                         <i class="fas fa-file-medical-alt fa-3x text-muted opacity-50 mb-3"></i>
                         <h6 class="fw-bold text-secondary">Sin notas de evolución registradas</h6>
-                        <small class="text-muted">Las futuras consultas guardadas por los especialistas aparecerán aquí.</small>
                     </div>
                 `;
             }
         }
 
-        // B) CONSULTAR ESTUDIOS DE GABINETE (IMAGEN Y LABS)
+        // B) CONSULTAR ESTUDIOS DE GABINETE
         const { data: estudios, error: errEstudios } = await fisioNet
             .from('estudios_gabinete')
             .select('*')
@@ -943,7 +1005,6 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
         if (errEstudios) throw errEstudios;
 
         if (estudios && estudios.length > 0) {
-            // Generar URLs firmadas frescas si las imágenes usan rutas privadas
             const estudiosFirmados = await Promise.all(estudios.map(async (est) => {
                 let urlFinal = est.archivo_url || '';
                 if (est.ruta_storage && !est.ruta_storage.startsWith('http')) {
@@ -958,136 +1019,60 @@ async function cargarYMostrarVisorExpediente(pacienteId) {
             const imagenes = estudiosFirmados.filter(e => e.tipo_estudio !== 'LABORATORIO CLÍNICO');
             const laboratorios = estudiosFirmados.filter(e => e.tipo_estudio === 'LABORATORIO CLÍNICO');
 
-            // --- RENDER IMAGENOLOGÍA ---
             if (contenedorImagen) {
-                if (imagenes.length > 0) {
-                    contenedorImagen.innerHTML = imagenes.map(img => {
-                        const fechaFmt = new Date(img.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-                        const jsonPayload = JSON.stringify(img).replace(/'/g, "&apos;");
+                contenedorImagen.innerHTML = imagenes.length > 0 ? imagenes.map(img => {
+                    const fechaFmt = new Date(img.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const jsonPayload = JSON.stringify(img).replace(/'/g, "&apos;");
+                    const descLimpia = (img.hallazgos_resumen || img.descripcion || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
-                        return `
-                            <div class="col-md-6">
-                              <div class="card h-100 border-0 shadow-sm p-3" style="border-top: 4px solid #3b82f6 !important; border-radius: 12px; background: white;">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <h6 class="fw-bold text-primary mb-0" style="font-size: 0.9rem;">🩻 ${img.tipo_estudio || 'ESTUDIO DE IMAGEN'}</h6>
-                                        <span class="badge bg-light text-dark border small">${fechaFmt}</span>
-                                    </div>
-
-                                    <p class="small text-secondary fw-semibold mb-3" style="min-height: 40px;">
-                                        ${img.hallazgos_resumen || img.descripcion || 'Sin interpretación previa disponible.'}
-                                    </p>
-
-                                    <div class="d-flex flex-column gap-2 mt-auto">
-                                        ${img.url_firmada ? `
-                                            <a href="${img.url_firmada}" target="_blank" class="btn btn-sm btn-info text-white fw-bold rounded-pill w-100">
-                                                🔗 Ver Archivo / Placa / PACS
-                                            </a>
-                                        ` : ''}
-
-                                        <button type="button" class="btn btn-sm btn-outline-dark fw-bold rounded-pill w-100" 
-                                                onclick="inyectardatoEnConsulta('exploracion', 'ESTUDIO (${img.tipo_estudio}): ${img.hallazgos_resumen || img.descripcion || ''}')">
-                                            ➕ Copiar Hallazgos a Consulta
-                                        </button>
-
-                                        <button type="button" class="btn btn-sm btn-success text-white fw-bold rounded-pill w-100" 
-                                                onclick='anexarEstudioAExpedienteClinica(${jsonPayload})'>
-                                            📥 Anexar a Expediente de mi Clínica
-                                        </button>
-                                    </div>
+                    return `
+                        <div class="col-md-6">
+                            <div class="card h-100 border-0 shadow-sm p-3" style="border-top: 4px solid #3b82f6 !important; border-radius: 12px; background: white;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-primary mb-0" style="font-size: 0.9rem;">🩻 ${img.tipo_estudio || 'ESTUDIO'}</h6>
+                                    <span class="badge bg-light text-dark border small">${fechaFmt}</span>
                                 </div>
-                            </div>
-                        `;
-                    }).join('');
-                } else {
-                    contenedorImagen.innerHTML = `
-                        <div class="col-12">
-                            <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
-                                <i class="fas fa-x-ray fa-3x text-muted opacity-50 mb-3"></i>
-                                <h6 class="fw-bold text-secondary">Sin estudios de imagenología registrados</h6>
+                                <p class="small text-secondary fw-semibold mb-3" style="min-height: 40px;">${img.hallazgos_resumen || img.descripcion || 'Sin interpretación'}</p>
+                                <div class="d-flex flex-column gap-2 mt-auto">
+                                    ${img.url_firmada ? `<a href="${img.url_firmada}" target="_blank" class="btn btn-sm btn-info text-white fw-bold rounded-pill w-100">🔗 Ver Archivo</a>` : ''}
+                                    <button type="button" class="btn btn-sm btn-outline-dark fw-bold rounded-pill w-100" onclick="inyectardatoEnConsulta('exploracion', 'ESTUDIO (${img.tipo_estudio}): ${descLimpia}')">➕ Copiar Hallazgos</button>
+                                    <button type="button" class="btn btn-sm btn-success text-white fw-bold rounded-pill w-100" onclick='anexarEstudioAExpedienteClinica(${jsonPayload})'>📥 Anexar a mi Clínica</button>
+                                </div>
                             </div>
                         </div>
                     `;
-                }
+                }).join('') : `<div class="col-12 text-center py-4 text-muted">Sin estudios de imagen</div>`;
             }
 
-            // --- RENDER LABORATORIOS ---
             if (contenedorLab) {
-                if (laboratorios.length > 0) {
-                    contenedorLab.innerHTML = laboratorios.map(lab => {
-                        const fechaFmt = new Date(lab.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-                        const jsonPayload = JSON.stringify(lab).replace(/'/g, "&apos;");
+                contenedorLab.innerHTML = laboratorios.length > 0 ? laboratorios.map(lab => {
+                    const fechaFmt = new Date(lab.fecha_registro).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const jsonPayload = JSON.stringify(lab).replace(/'/g, "&apos;");
+                    const descLimpia = (lab.hallazgos_resumen || lab.descripcion || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
-                        return `
-                            <div class="col-md-6">
-                                <div class="card h-100 border-0 shadow-sm p-3" style="border-top: 4px solid #ef4444 !important; border-radius: 12px; background: white;">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <h6 class="fw-bold text-danger mb-0" style="font-size: 0.9rem;">🧪 ${lab.tipo_estudio || 'ANÁLISIS DE LAB'}</h6>
-                                        <span class="badge bg-light text-dark border small">${fechaFmt}</span>
-                                    </div>
-
-                                    <p class="small text-secondary mb-3" style="min-height: 40px;">
-                                        ${lab.hallazgos_resumen || lab.descripcion || 'Sin reporte de resultados anexado.'}
-                                    </p>
-
-                                    <div class="d-flex flex-column gap-2 mt-auto">
-                                        ${lab.url_firmada ? `
-                                            <a href="${lab.url_firmada}" target="_blank" class="btn btn-sm btn-danger text-white fw-bold rounded-pill w-100">
-                                                📄 Ver Resultados en PDF
-                                            </a>
-                                        ` : ''}
-
-                                        <button type="button" class="btn btn-sm btn-outline-danger fw-bold rounded-pill w-100" 
-                                                onclick="inyectardatoEnConsulta('sintomas', 'LABORATORIO (${fechaFmt}): ${lab.hallazgos_resumen || lab.descripcion || ''}')">
-                                            ➕ Copiar a Síntomas / Acompañantes
-                                        </button>
-
-                                        <button type="button" class="btn btn-sm btn-success text-white fw-bold rounded-pill w-100" 
-                                                onclick='anexarEstudioAExpedienteClinica(${jsonPayload})'>
-                                            📥 Anexar a Expediente de mi Clínica
-                                        </button>
-                                    </div>
+                    return `
+                        <div class="col-md-6">
+                            <div class="card h-100 border-0 shadow-sm p-3" style="border-top: 4px solid #ef4444 !important; border-radius: 12px; background: white;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-danger mb-0" style="font-size: 0.9rem;">🧪 ${lab.tipo_estudio || 'LABORATORIO'}</h6>
+                                    <span class="badge bg-light text-dark border small">${fechaFmt}</span>
                                 </div>
-                            </div>
-                        `;
-                    }).join('');
-                } else {
-                    contenedorLab.innerHTML = `
-                        <div class="col-12">
-                            <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
-                                <i class="fas fa-vial fa-3x text-muted opacity-50 mb-3"></i>
-                                <h6 class="fw-bold text-secondary">Sin análisis de laboratorio registrados</h6>
+                                <p class="small text-secondary mb-3" style="min-height: 40px;">${lab.hallazgos_resumen || lab.descripcion || 'Sin reporte'}</p>
+                                <div class="d-flex flex-column gap-2 mt-auto">
+                                    ${lab.url_firmada ? `<a href="${lab.url_firmada}" target="_blank" class="btn btn-sm btn-danger text-white fw-bold rounded-pill w-100">📄 Ver PDF</a>` : ''}
+                                    <button type="button" class="btn btn-sm btn-outline-danger fw-bold rounded-pill w-100" onclick="inyectardatoEnConsulta('sintomas', 'LABORATORIO (${fechaFmt}): ${descLimpia}')">➕ Copiar a Síntomas</button>
+                                    <button type="button" class="btn btn-sm btn-success text-white fw-bold rounded-pill w-100" onclick='anexarEstudioAExpedienteClinica(${jsonPayload})'>📥 Anexar a mi Clínica</button>
+                                </div>
                             </div>
                         </div>
                     `;
-                }
-            }
-
-        } else {
-            if (contenedorImagen) {
-                contenedorImagen.innerHTML = `
-                    <div class="col-12">
-                        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
-                            <i class="fas fa-x-ray fa-3x text-muted opacity-50 mb-3"></i>
-                            <h6 class="fw-bold text-secondary">Sin estudios de imagenología registrados</h6>
-                        </div>
-                    </div>
-                `;
-            }
-            if (contenedorLab) {
-                contenedorLab.innerHTML = `
-                    <div class="col-12">
-                        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
-                            <i class="fas fa-vials fa-3x text-muted opacity-50 mb-3"></i>
-                            <h6 class="fw-bold text-secondary">Sin informes de laboratorio registrados</h6>
-                        </div>
-                    </div>
-                `;
+                }).join('') : `<div class="col-12 text-center py-4 text-muted">Sin laboratorios</div>`;
             }
         }
 
     } catch (e) {
         console.error("💥 Error crítico al recuperar el visor:", e);
-        const errHTML = `<div class="alert alert-danger text-center font-monospace">Error al cargar datos: ${e.message || 'Error de conexión'}</div>`;
+        const errHTML = `<div class="alert alert-danger text-center font-monospace">Error al cargar datos: ${e.message}</div>`;
         if (contenedorNotas) contenedorNotas.innerHTML = errHTML;
         if (contenedorImagen) contenedorImagen.innerHTML = errHTML;
         if (contenedorLab) contenedorLab.innerHTML = errHTML;
