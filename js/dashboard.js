@@ -357,9 +357,6 @@ async function actualizarInterfazSede() {
 }
 
 
-
-
-
 async function aplicarIdentidadVisual() {
     let clinicaId = localStorage.getItem('id_clinica_activa');
     let colorClinica = localStorage.getItem('clinica_color');
@@ -397,15 +394,45 @@ async function aplicarIdentidadVisual() {
         if (txtSede) txtSede.innerText = `SEDE ACTIVA: ${nombreClinica.toUpperCase()}`;
     }
     
+    // 🎯 CARGA SEGURA DEL LOGOTIPO PRIVADO MEDIANTE URL FIRMADA
     const imgLogo = document.getElementById('logoClinicaDashboard');
     if (imgLogo) {
         if (logoClinica && logoClinica !== 'null' && logoClinica !== '') {
-            imgLogo.src = logoClinica;
-            imgLogo.style.display = 'block';
-            imgLogo.onerror = () => { imgLogo.style.display = 'none'; };
+            try {
+                // Generamos la URL firmada temporal de 15 min desde el bucket privado
+                const urlFirmadaTemporal = await obtenerUrlTemporalSegura(logoClinica);
+                if (urlFirmadaTemporal) {
+                    imgLogo.src = urlFirmadaTemporal;
+                    imgLogo.style.display = 'block';
+                    imgLogo.onerror = () => { imgLogo.style.display = 'none'; };
+                } else {
+                    imgLogo.style.display = 'none';
+                }
+            } catch (err) {
+                console.warn("No se pudo cargar el logo de forma segura:", err);
+                imgLogo.style.display = 'none';
+            }
         } else {
             imgLogo.style.display = 'none';
         }
+    }
+}
+
+async function obtenerUrlTemporalSegura(rutaInternaStorage) {
+    if (!rutaInternaStorage) return "";
+
+    try {
+        // ⏳ 900 segundos = 15 minutos exactos de vigencia para el bucket privado
+        const { data, error } = await fisioNet.storage
+            .from('assets_clinicos')
+            .createSignedUrl(rutaInternaStorage, 900); 
+
+        if (error) throw error;
+        return data.signedUrl; 
+
+    } catch (err) {
+        console.error("Error al generar URL firmada:", err);
+        return "";
     }
 }
 

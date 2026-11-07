@@ -272,13 +272,18 @@
                    <input type="color" id="colorTema" class="form-control form-control-color" 
                     oninput="aplicarColorEnVivo(this.value)">
                     </div>
-                    <div class="col-md-8 mb-3">
-                        <label class="form-label small fw-bold">LOGOTIPO (LINK URL)</label>
-                        <div class="text-center mb-2">
-                            <img id="previewLogo" src="" alt="PREVISUALIZACIÓN" class="d-none" style="max-height: 80px;">
-                        </div>
-                        <input type="url" id="logoUrl" class="form-control no-caps" placeholder="https://tuweb.com/logo.png">
-                    </div>
+                   <!-- 🎨 SECCIÓN LOGOTIPO -->
+<!-- LOGOTIPO -->
+<div class="col-md-8 mb-3">
+    <label class="form-label small fw-bold">LOGOTIPO DE LA CLÍNICAS</label>
+    <div class="text-center mb-2">
+        <img id="previewLogo" src="" alt="PREVISUALIZACIÓN" class="d-none img-thumbnail" style="max-height: 80px;">
+    </div>
+    <input type="file" id="inputLogoFile" class="form-control form-control-sm" accept="image/png, image/jpeg" onchange="manejarSubidaAsset('inputLogoFile', 'logo')">
+    <input type="hidden" id="logoUrl">
+</div>
+
+
                 </div>
 
                   <div class="mb-3">
@@ -352,10 +357,15 @@
                         </select>
                     </div>
 
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold">FIRMA DIGITALIZADA (URL DE IMAGEN PNG)</label>
-                        <input type="url" id="firmaUrl" class="form-control no-caps" placeholder="https://tuweb.com/firma.png">
-                    </div>
+          <div class="col-md-4">
+    <label class="form-label small fw-bold">FIRMA DIGITALIZADA (IMAGEN PNG)</label>
+    <div class="text-center mb-1">
+        <img id="previewFirma" src="" alt="PREV. FIRMA" class="d-none img-thumbnail" style="max-height: 50px;">
+    </div>
+    <!-- 🟢 CORREGIDO: Apunta a 'manejarSubidaAsset' con 'inputFirmaFile' y 'firma' -->
+    <input type="file" id="inputFirmaFile" class="form-control form-control-sm" accept="image/png" onchange="manejarSubidaAsset('inputFirmaFile', 'firma')">
+    <input type="hidden" id="firmaUrl">
+</div>
                 </div>
 
                 <hr class="my-3">

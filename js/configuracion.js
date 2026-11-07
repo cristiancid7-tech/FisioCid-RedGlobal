@@ -109,10 +109,57 @@ document.addEventListener('DOMContentLoaded', async () => {
             const inputEspecialidad = document.getElementById('especialidad');
 
             if (inputNombre) inputNombre.value = perfil.nombre_completo || '';
-            if (inputTelefono) inputTelefono.value = perfil.teléfono_contacto || perfil.telefono_contacto || '';
-            if (inputInstitucion) inputInstitucion.value = perfil.institución_egreso || perfil.institucion_egreso || '';
-            if (inputCedula) inputCedula.value = perfil.cedula_profesional || '';
-            if (inputEspecialidad) inputEspecialidad.value = perfil.especialidad || '';
+if (inputTelefono) inputTelefono.value = perfil.teléfono_contacto || perfil.telefono_contacto || '';
+if (inputInstitucion) inputInstitucion.value = perfil.institución_egreso || perfil.institucion_egreso || '';
+if (inputCedula) inputCedula.value = perfil.cedula_profesional || '';
+
+// 🎯 CORRECCIÓN PARA EL SELECT DE ESPECIALIDAD
+if (inputEspecialidad && perfil.especialidad) {
+    const valorPerfil = perfil.especialidad.trim();
+    let optionEncontrada = false;
+    
+    // Intentamos buscar una opción que coincida exacto o en mayúsculas
+    for (let i = 0; i < inputEspecialidad.options.length; i++) {
+        if (inputEspecialidad.options[i].value.toUpperCase() === valorPerfil.toUpperCase() ||
+            inputEspecialidad.options[i].text.toUpperCase() === valorPerfil.toUpperCase()) {
+            inputEspecialidad.selectedIndex = i;
+            optionEncontrada = true;
+            break;
+        }
+    }
+    
+    // Si la especialidad guardada no está en la lista estática del select, la inyectamos temporalmente para que no se pierda
+    if (!optionEncontrada && valorPerfil !== "") {
+        const nuevaOpt = document.createElement('option');
+        nuevaOpt.value = valorPerfil;
+        nuevaOpt.text = valorPerfil;
+        inputEspecialidad.add(nuevaOpt);
+        inputEspecialidad.value = valorPerfil;
+    }
+}
+// Para el Logotipo de la Clínica:
+if (clinica.logo_url) {
+    document.getElementById('logoUrl').value = clinica.logo_url;
+    obtenerUrlTemporalSegura(clinica.logo_url).then(url => {
+        const imgLogo = document.getElementById('previewLogo');
+        if (imgLogo && url) {
+            imgLogo.src = url;
+            imgLogo.classList.remove('d-none');
+        }
+    });
+}
+
+// Para la Firma Digital del Perfil:
+if (perfil.firma_digital_url) {
+    document.getElementById('firmaUrl').value = perfil.firma_digital_url;
+    obtenerUrlTemporalSegura(perfil.firma_digital_url).then(url => {
+        const imgFirma = document.getElementById('previewFirma');
+        if (imgFirma && url) {
+            imgFirma.src = url;
+            imgFirma.classList.remove('d-none');
+        }
+    });
+}
 
             // 🔒 Candado de Identidad
             if (perfil.identidad_confirmada === true) {
@@ -613,3 +660,80 @@ document.getElementById('nombreClinica')?.addEventListener('blur', () => {
         if (typeof actualizarVistaPrevia === "function") actualizarVistaPrevia();
     }
 });
+
+async function manejarSubidaAsset(fileInputId, tipo) {
+    // 1. Subir al bucket privado asegurando la carpeta por auth.uid()
+    const rutaInterna = await subirAssetPrivadoSeguro(fileInputId, tipo);
+    if (!rutaInterna) return;
+
+    // 2. Asignar la ruta interna al input oculto que se guardará en BD
+    const hiddenId = tipo === 'logo' ? 'logoUrl' : 'firmaUrl';
+    document.getElementById(hiddenId).value = rutaInterna;
+
+    // 3. Como el bucket es privado, generamos una URL temporal firmada (15 min) para verla en pantalla
+    const urlTemporal = await obtenerUrlTemporalSegura(rutaInterna);
+
+    // 4. Pintar la previsualización visual inmediata
+    const previewId = tipo === 'logo' ? 'previewLogo' : 'previewFirma';
+    const img = document.getElementById(previewId);
+    if (img && urlTemporal) {
+        img.src = urlTemporal;
+        img.classList.remove('d-none');
+    }
+
+    alert(`✅ ¡${tipo === 'logo' ? 'Logotipo' : 'Firma'} cargado con éxito y listo para guardar!`);
+}
+async function subirAssetPrivadoSeguro(fileInputId, tipoCategoria) {
+    const fileInput = document.getElementById(fileInputId);
+    if (!fileInput.files || fileInput.files.length === 0) return null;
+
+    const file = fileInput.files[0];
+    
+    // Obtenemos el usuario autenticado actual de Supabase
+    const { data: { user }, error: userErr } = await fisioNet.auth.getUser();
+    if (userErr || !user) {
+        alert("⚠️ Error: Sesión no válida para subida segura.");
+        return null;
+    }
+
+    const userId = user.id; // ID único del usuario autenticado
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${tipoCategoria}_${Date.now()}.${fileExt}`;
+    
+    // 📂 Estructura ordenada: auth.uid() / categoria / archivo.png
+    const filePath = `${userId}/${tipoCategoria}/${fileName}`;
+
+    try {
+        const { data, error } = await fisioNet.storage
+            .from('assets_clinicos') // 👈 Apuntando a tu bucket privado
+            .upload(filePath, file, { upsert: true });
+
+        if (error) throw error;
+
+        console.log("📁 Archivo guardado privadamente en:", data.path);
+        return data.path; // Guardas esta ruta en tu base de datos de configuración
+
+    } catch (err) {
+        console.error("Error en subida privada:", err);
+        alert("❌ Error al subir de forma segura: " + err.message);
+        return null;
+    }
+}
+
+async function obtenerUrlTemporalSegura(rutaInternaStorage) {
+    if (!rutaInternaStorage) return "";
+
+    try {
+        // ⏳ 900 segundos = 15 minutos exactos de vigencia
+        const { data, error } = await fisioNet.storage
+            .from('assets_clinicos')
+            .createSignedUrl(rutaInternaStorage, 900); 
+
+        if (error) throw error;
+        return data.signedUrl; 
+
+    } catch (err) {
+        console.error("Error al generar URL firmada:", err);
+        return "";
+    }
+}

@@ -23,19 +23,44 @@ async function aplicarEstiloCamaleon() {
     document.documentElement.style.setProperty('--bg-banner', soft);
 }
 async function cargarPaciente() {
-    const { data: p } = await fisioNet.from('pacientes_maestros').select('*').eq('id', pacienteId).single();
+    const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
+
+    // 1. Consultar datos maestros del paciente
+    const { data: p, error: errP } = await fisioNet.from('pacientes_maestros').select('*').eq('id', pacienteId).single();
     
+    if (errP || !p) {
+        console.error("Error al cargar datos maestros del paciente:", errP);
+        return;
+    }
+
+    // 2. 🔍 CONSULTAR EL FOLIO REAL EN LA TABLA DE EXPEDIENTES CLÍNICOS DE ESTA CLÍNICA
+    let folioSede = 'S/F';
+    if (idClinicaActiva) {
+        const { data: expSede, error: errExp } = await fisioNet
+            .from('expedientes_clinicos')
+            .select('folio_personalizado, numero_consecutivo')
+            .eq('id_paciente', pacienteId)
+            .eq('id_clinica', idClinicaActiva)
+            .maybeSingle();
+
+        if (expSede && expSede.folio_personalizado) {
+            folioSede = expSede.folio_personalizado; // Ej: COF-MIA-2026-0001
+        }
+    }
+
     if (p) {
-        // 1. Folio con estilo Integrado
+        // 1. Folio con estilo Integrado (Usando el folio real de expedientes_clinicos)
         const folioBadge = `<span style="background: #fdf2f2; color: #b38888; border: 1px solid #f1dada; padding: 2px 10px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 0.8rem; font-weight: 800; margin-right: 12px; box-shadow: inset 0 0 5px rgba(0,0,0,0.02);">
-            ${p.numero_expediente_sede || 'S/F'}
+            ${folioSede}
         </span>`;
 
         const elementoNombre = document.getElementById('nombre');
-        elementoNombre.style.display = "flex";
-        elementoNombre.style.alignItems = "center";
-        elementoNombre.style.border = "none"; 
-        elementoNombre.innerHTML = `${folioBadge} ${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.toUpperCase();
+        if (elementoNombre) {
+            elementoNombre.style.display = "flex";
+            elementoNombre.style.alignItems = "center";
+            elementoNombre.style.border = "none";
+            elementoNombre.innerHTML = `${folioBadge} ${p.nombre} ${p.apellido_paterno} ${p.apellido_materno || ''}`.toUpperCase();
+        }
         
         // 🚀 LÓGICA DE EDAD
         let edadTexto = "";
@@ -45,6 +70,7 @@ async function cargarPaciente() {
         
         let años = hoy.getFullYear() - cumple.getFullYear();
         let meses = hoy.getMonth() - cumple.getMonth();
+
         if (meses < 0 || (meses === 0 && hoy.getDate() < cumple.getDate())) {
             años--;
             meses += 12;
@@ -54,15 +80,17 @@ async function cargarPaciente() {
         else if (años < 2) edadTexto = `${(años * 12) + meses} MESES`;
         else edadTexto = `${años} AÑOS`;
         
-        // 3. Datos base con tipografía más elegante
+        // 3. Datos base con tipografía elegante
         const generoTxt = p.genero === 'HOMBRE' ? 'HOMBRE' : (p.genero === 'MUJER' ? 'MUJER' : 'NO ESPECIFICADO');
-        document.getElementById('datosBase').innerText = `${generoTxt} | ${edadTexto} | CURP: ${p.curp || 'N/A'}`;
+        const datosBaseEl = document.getElementById('datosBase');
+        if (datosBaseEl) {
+            datosBaseEl.innerText = `${generoTxt} | ${edadTexto} | CURP: ${p.curp || 'N/A'}`;
+        }
 
-        // ============================================================================
         // 🎯 DISPARADOR MAESTRO PARA EL PORTAL DE PACIENTES
-        // ============================================================================
-        // Le pasamos el registro "p" que acabamos de bajar de Supabase
-        inicializarGestionPortalPaciente(p); 
+        if (typeof inicializarGestionPortalPaciente === 'function') {
+            inicializarGestionPortalPaciente(p);
+        }
     }
 }
 async function cargarNotas() {
@@ -577,8 +605,9 @@ async function procesarAltaPortalPaciente(boton) {
 window.lineaTiempoGlobalCache = []; 
 window.tipoSeccionActiva = 'notas'; // Por defecto arranca en notas clínicas
 
-async function cargarLineaTiempoClinica(idPaciente) {
-    if (!idPaciente) return;
+async function cargarLineaTiempoClinica(parametroBusqueda) {
+    if (!parametroBusqueda) return;
+
     const contenedor = document.getElementById('contenedorLineaTiempoHistorial');
     if (!contenedor) return;
 
@@ -586,10 +615,9 @@ async function cargarLineaTiempoClinica(idPaciente) {
         contenedor.innerHTML = `
             <div class="p-4 text-center text-muted">
                 <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
-                Sincronizando expediente clínico, recetas, imágenes PACS y laboratorios de esta sede...
+                Sincronizando expediente y validando seguridad de la sede...
             </div>`;
 
-        // 🏢 OBTENEMOS LA CLÍNICA ACTIVA DEL MÉDICO EN ESTA SESIÓN
         const idClinicaActiva = localStorage.getItem('id_clinica_activa') || localStorage.getItem('clinica_activa_id');
 
         if (!idClinicaActiva) {
@@ -597,35 +625,34 @@ async function cargarLineaTiempoClinica(idPaciente) {
             return;
         }
 
-        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Todas filtradas estrictamente por id_clinica)
+        let idPacienteReal = null;
+
+        // 🧠 DETECCIÓN INTELIGENTE: ¿Es un número consecutivo o un UUID de paciente?
+        const esNumero = !isNaN(parametroBusqueda);
+
+        let queryExp = fisioNet.from('expedientes_clinicos').select('id_paciente, numero_consecutivo').eq('id_clinica', idClinicaActiva);
+
+        if (esNumero) {
+            queryExp = queryExp.eq('numero_consecutivo', Number(parametroBusqueda));
+        } else {
+            queryExp = queryExp.eq('id_paciente', parametroBusqueda);
+        }
+
+        const { data: expedienteSede, error: errExp } = await queryExp.maybeSingle();
+
+        if (errExp || !expedienteSede) {
+            contenedor.innerHTML = `<div class="p-4 text-center text-danger small">🚫 No se encontró un expediente vinculado en esta clínica para el parámetro: <b>${parametroBusqueda}</b>.</div>`;
+            return;
+        }
+
+        idPacienteReal = expedienteSede.id_paciente;
+
+        // 🚀 CONSULTA PARALELA CUÁDRUPLE (Estrictamente blindada por clínica)
         const [promesaNotas, promesaRecetas, promesaEstudios, promesaLaboratorio] = await Promise.all([
-            // 1. Notas clínicas
-            fisioNet.from('historial_clinico')
-                .select('*')
-                .eq('id_paciente', idPaciente)
-                .eq('id_clinica', idClinicaActiva) // 🔒 Blindaje por clínica activa
-                .order('fecha_nota', { ascending: false }),
-                
-            // 2. Recetas médicas
-            fisioNet.from('recetas_medicas')
-                .select('*')
-                .eq('id_paciente', idPaciente)
-                .eq('id_clinica', idClinicaActiva) // 🔒 Blindaje por clínica activa
-                .order('fecha_creacion', { ascending: false }),
-                
-            // 3. Estudios de Gabinete (PACS)
-            fisioNet.from('estudios_gabinete')
-                .select('*')
-                .eq('paciente_id', idPaciente)
-                .eq('id_clinica', idClinicaActiva) // 🔒 ¡AÑADIDO! Blindaje por clínica activa
-                .order('fecha_registro', { ascending: false }),
-                
-            // 4. Estudios de Laboratorio
-            fisioNet.from('estudios_laboratorio')
-                .select('*')
-                .eq('paciente_id', idPaciente)
-                .eq('id_clinica', idClinicaActiva) // 🔒 ¡AÑADIDO! Blindaje por clínica activa
-                .order('created_at', { ascending: false })
+            fisioNet.from('historial_clinico').select('*').eq('id_paciente', idPacienteReal).eq('id_clinica', idClinicaActiva).order('fecha_nota', { ascending: false }),
+            fisioNet.from('recetas_medicas').select('*').eq('id_paciente', idPacienteReal).eq('id_clinica', idClinicaActiva).order('fecha_creacion', { ascending: false }),
+            fisioNet.from('estudios_gabinete').select('*').eq('paciente_id', idPacienteReal).eq('id_clinica', idClinicaActiva).order('fecha_registro', { ascending: false }),
+            fisioNet.from('estudios_laboratorio').select('*').eq('paciente_id', idPacienteReal).eq('id_clinica', idClinicaActiva).order('created_at', { ascending: false })
         ]);
 
         const dataNotas = promesaNotas.data || [];
@@ -633,66 +660,49 @@ async function cargarLineaTiempoClinica(idPaciente) {
         const dataEstudios = promesaEstudios.data || [];
         const dataLaboratorio = promesaLaboratorio.data || [];
 
-        // 🏷️ NORMALIZACIÓN DE NOTAS
+        // 🏷️ NORMALIZACIÓN Y FUSIÓN CRONOLÓGICA
         const notasFormateadas = dataNotas.map(nota => ({
             id_registro: nota.id_nota,
             fecha_cruda: nota.fecha_nota,
             titulo: nota.motivo_consulta || 'Consulta de Evolución',
-            contenido: nota.nota_evolucion || 'Sin contenido en la nota.',
+            contenido: nota.nota_evolucion || 'Sin contenido.',
             tipo_registro: 'NOTA_EVOLUCION',
             fecha_orden: new Date(nota.fecha_nota || new Date()),
             raw: nota 
         }));
 
-        // 💊 NORMALIZACIÓN DE RECETAS
-        const recetasFormateadas = dataRecetas.map(receta => {
-            let resumenMeds = "";
-            if (receta.medicamentos && Array.isArray(receta.medicamentos)) {
-                resumenMeds = receta.medicamentos.map((m, idx) => `${idx + 1}. ${m.nombre} (${m.dosis} | ${m.frecuencia})`).join(' | ');
-            }
-            return {
-                id_registro: receta.id,
-                fecha_cruda: receta.fecha_creacion,
-                titulo: `Receta / Folio: ${receta.folio_expediente || 'S/F'}`,
-                contenido: `Diagnóstico: ${receta.diagnostico || 'N/A'} | Fármacos: ${resumenMeds} | Indicaciones: ${receta.indicaciones_generales || 'N/A'}`,
-                tipo_registro: 'RECETA_MEDICA',
-                fecha_orden: new Date(receta.fecha_creacion || new Date()),
-                raw: receta
-            };
-        });
+        const recetasFormateadas = dataRecetas.map(receta => ({
+            id_registro: receta.id,
+            fecha_cruda: receta.fecha_creacion,
+            titulo: `Receta / Folio: ${receta.folio_expediente || 'S/F'}`,
+            contenido: `Diagnóstico: ${receta.diagnostico || 'N/A'}`,
+            tipo_registro: 'RECETA_MEDICA',
+            fecha_orden: new Date(receta.fecha_creacion || new Date()),
+            raw: receta
+        }));
 
-        // 🩻 NORMALIZACIÓN DE GABINETE
         const estudiosFormateados = dataEstudios.map(estudio => ({
             id_registro: estudio.id,
             fecha_cruda: estudio.fecha_registro,
             titulo: estudio.tipo_estudio || 'Estudio de Gabinete',
-            contenido: estudio.diagnostico_radiologico || estudio.zona_anatomica || 'Estudio de imagen cargado.',
-            archivo_url: estudio.archivo_url,
-            especialista: estudio.especialista_nombre || 'Sede FisioCid',
-            zona: estudio.zona_anatomica || 'Zona General',
-            estado: estudio.estado_dictamen || 'PENDIENTE',
+            contenido: estudio.diagnostico_radiologico || 'Imagen cargada.',
             tipo_registro: 'ESTUDIO_GABINETE',
             fecha_orden: new Date(estudio.fecha_registro || new Date())
         }));
 
-        // 🧪 NORMALIZACIÓN DE LABORATORIO
         const laboratoriosFormateados = dataLaboratorio.map(lab => ({
             id_registro: lab.id,
             fecha_cruda: lab.created_at,
             titulo: lab.estudios_etiquetas || 'Análisis Clínico',
-            contenido: lab.observaciones || 'Resultados de laboratorio registrados.',
-            archivo_url: lab.archivo_pdf_url,
-            especialista: lab.especialista_quimico || 'Laboratorio',
-            estado: lab.estado || 'COMPLETADO',
+            contenido: lab.observaciones || 'Resultados registrados.',
             tipo_registro: 'ESTUDIO_LABORATORIO',
             fecha_orden: new Date(lab.created_at || new Date())
         }));
 
-        // 🔀 FUSIÓN Y ORDEN CRONOLÓGICO GLOBAL
         window.lineaTiempoGlobalCache = [
-            ...notasFormateadas, 
-            ...recetasFormateadas, 
-            ...estudiosFormateados, 
+            ...notasFormateadas,
+            ...recetasFormateadas,
+            ...estudiosFormateados,
             ...laboratoriosFormateados
         ].sort((a, b) => b.fecha_orden - a.fecha_orden);
         
@@ -700,7 +710,7 @@ async function cargarLineaTiempoClinica(idPaciente) {
 
     } catch (err) {
         console.error("❌ Error crítico en Motor FisioCid:", err.message);
-        contenedor.innerHTML = '<div class="p-3 text-center text-danger small">Error al compilar el expediente híbrido.</div>';
+        contenedor.innerHTML = '<div class="p-3 text-center text-danger small">Error al compilar el expediente.</div>';
     }
 }
 
